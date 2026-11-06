@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The ground, "bg" in apps/web/app/globals.css -->
+    <color name="ground">#F1F4F2</color>
+</resources>
