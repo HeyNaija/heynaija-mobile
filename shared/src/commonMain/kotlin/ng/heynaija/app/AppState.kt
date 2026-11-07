@@ -79,7 +79,7 @@ class AppState(val platform: Platform) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     init {
-        if (platform.debug) Servers.current = Server.byKey(platform.settings.get(SERVER))
+        Servers.current = if (platform.debug) Server.byKey(platform.settings.get(SERVER)) else Server.Production
     }
 
     private var token: String? = platform.secure.get(TOKEN)

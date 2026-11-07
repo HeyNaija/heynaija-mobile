@@ -125,7 +125,33 @@ class HeyNaijaApiTest {
     }
 
     @Test
-    fun mediaUrlsAddTheSize() {
-        assertEquals("https://staging.heynaija.ng/media/posts/p1/640.webp", mediaUrl("/media/posts/p1", "640"))
+    fun mediaUrlsAddTheSizeOnEachServer() {
+        val was = Servers.current
+        try {
+            Servers.current = Server.Production
+            assertEquals("https://heynaija.ng/media/posts/p1/640.webp", mediaUrl("/media/posts/p1", "640"))
+            Servers.current = Server.Staging
+            assertEquals("https://staging.heynaija.ng/media/posts/p1/640.webp", mediaUrl("/media/posts/p1", "640"))
+            // The dev stack's bucket is served at its own root.
+            Servers.current = Server.Local
+            assertEquals("http://127.0.0.1:9100/heynaija-media/posts/p1/640.webp", mediaUrl("/media/posts/p1", "640"))
+        } finally {
+            Servers.current = was
+        }
+    }
+
+    @Test
+    fun videoFilesAreAbsoluteWhereverTheServerNamesThem() {
+        val was = Servers.current
+        try {
+            Servers.current = Server.Production
+            // Production and staging name them on their media domain already.
+            assertEquals("https://media.heynaija.ng/videos/v1/poster.webp", mediaFile("https://media.heynaija.ng/videos/v1/poster.webp"))
+            // The dev stack has no MEDIA_ORIGIN and sends a path.
+            Servers.current = Server.Local
+            assertEquals("http://127.0.0.1:9100/heynaija-media/videos/v1/hls/master.m3u8", mediaFile("/media/videos/v1/hls/master.m3u8"))
+        } finally {
+            Servers.current = was
+        }
     }
 }

@@ -25,6 +25,16 @@ data class Server(
     val googleClientId: String? = HEYNAIJA_GOOGLE_CLIENT,
 ) {
     companion object {
+        /** heynaija.ng: what release builds always use, and a debug build can choose. */
+        val Production = Server(
+            key = "production",
+            label = "Production",
+            api = "https://heynaija.ng/api",
+            kratos = "https://heynaija.ng/kratos",
+            media = "https://heynaija.ng",
+            web = "https://heynaija.ng",
+        )
+
         val Staging = Server(
             key = "staging",
             label = "Staging",
@@ -48,8 +58,9 @@ data class Server(
             web = "http://127.0.0.1:3000",
         )
 
-        val all = listOf(Staging, Local)
+        val all = listOf(Production, Staging, Local)
 
+        /** A debug build's choice, kept between launches; staging until one is made. */
         fun byKey(key: String?): Server = all.firstOrNull { it.key == key } ?: Staging
     }
 }
@@ -57,9 +68,9 @@ data class Server(
 /** The web client every HeyNaija server's Kratos uses for Google (staging, production and the dev stack's `.env`). */
 private const val HEYNAIJA_GOOGLE_CLIENT = "567185521629-rk7666tosiga37ljdvvi4tkivl3b0jil.apps.googleusercontent.com"
 
-/** The server the app talks to. A debug build can switch it in Settings. */
+/** The server the app talks to: production in a release build; a debug build can switch it in Settings. */
 object Servers {
-    var current: Server = Server.Staging
+    var current: Server = Server.Production
 }
 
 /**

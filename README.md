@@ -80,8 +80,9 @@ use the dev stack on your computer.
 
 ### Against the dev stack
 
-A debug build has a **Server** choice in Settings (the gear on Home): Staging,
-or This computer. "This computer" expects the web repository's dev stack
+A release build always talks to production (heynaija.ng). A debug build has a
+**Server** choice in Settings (the gear on Home): Production, Staging (the
+default), or This computer. "This computer" expects the web repository's dev stack
 (`pnpm infra:up` and `pnpm dev:api`): the API on port 4000, Kratos on 4533 and
 the media bucket on 9100. The iOS simulator reaches them as they are. The
 Android emulator needs the ports forwarded first:
