@@ -25,6 +25,12 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v6
+      # Firebase's settings, for push (ADR 0023 in the web repository). Pull requests
+      # from forks get no secrets; the app then builds without push.
+      - name: Add google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > androidApp/google-services.json; fi
       - name: Test the shared code and build the Android app
         run: ./gradlew :shared:testAndroidHostTest :androidApp:assembleDebug
 

@@ -2,4 +2,6 @@
 <resources>
     <!-- The ground, "bg" in apps/web/app/globals.css -->
     <color name="ground">#F1F4F2</color>
+    <!-- "accent": the tint of notifications' icon. -->
+    <color name="accent">#258153</color>
 </resources>

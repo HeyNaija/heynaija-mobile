@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,6 +48,7 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.ui.Card
 import ng.heynaija.app.ui.Confirm
 import ng.heynaija.app.ui.Field
+import ng.heynaija.app.notifications.rememberPushSwitch
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
 import ng.heynaija.app.ui.MenuRow
@@ -131,6 +133,8 @@ fun NotificationSettingsScreen() {
     val scope = rememberCoroutineScope()
     var prefs by remember { mutableStateOf<Map<String, Boolean>?>(null) }
     var failed by remember { mutableStateOf(false) }
+    val push by app.push.collectAsStateWithLifecycle()
+    val switch = rememberPushSwitch(app)
     LaunchedEffect(Unit) {
         try {
             prefs = app.api.notificationPreferences()
@@ -169,12 +173,30 @@ fun NotificationSettingsScreen() {
                 Group(listOf {
                     Toggle("Email me what I missed", current["email"] ?: false, detail = "At most one email every half hour, only for what you have not seen in the app.") { set("email", it) }
                 })
-                Text(
-                    "Notifications on your phone come once push is set up for the apps. Until then, the count on the bell shows what is new.",
-                    Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = HeyNaija.colors.muted,
-                )
+                if (push.available) {
+                    SectionTitle("ON THIS PHONE")
+                    Group(buildList {
+                        add {
+                            Toggle(
+                                "Push notifications",
+                                push.on,
+                                detail = when {
+                                    push.on -> "Shown here as they happen, and not emailed as well."
+                                    switch.blocked -> "Notifications are off for HeyNaija in your phone’s settings."
+                                    else -> "Off. Your notifications wait in the app, and email if you chose it."
+                                },
+                            ) { if (it) switch.turnOn() else switch.turnOff() }
+                        }
+                        if (switch.blocked) add { MenuRow("Open your phone’s settings", Icons.Gear) { switch.permission.openSettings() } }
+                    })
+                } else {
+                    Text(
+                        "Notifications on your phone are not available in this version of the app. The count on the bell shows what is new.",
+                        Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = HeyNaija.colors.muted,
+                    )
+                }
             }
         }
     }

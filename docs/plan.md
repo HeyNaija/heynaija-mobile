@@ -40,6 +40,16 @@ What the apps do now, what comes next, and what the backend
   Gist, hidden by its host), and a reply's notification opens it in its Gist.
 - **Notifications** in the app, with the count on the tab, and which kinds you
   get (and email) in Settings.
+- **Push notifications on Android** (ADR 0023 in the web repository), through
+  Firebase Cloud Messaging. Offered once at the top of Notifications and in
+  Settings, never asked for at start; the system's permission is asked for only
+  then (Android 13 and later). The server seals each message with a key the app
+  made, so Firebase carries it without reading it; the app opens it, drops one
+  that is not for the member signed in, shows it (a newer one about the same post
+  replaces it) and opens its link in the app when tapped. Signing out takes the
+  phone off the server and gives up the token. The build reads
+  `androidApp/google-services.json`, which is not in git: CI writes it from the
+  `GOOGLE_SERVICES_JSON` secret, and a build without it has no push.
 - **Search** for people, communities and posts, with trending topics.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and
@@ -54,17 +64,16 @@ What the apps do now, what comes next, and what the backend
    Review Guideline 4.8:** an iOS app that offers Google sign-in must also offer
    Sign in with Apple (or a sign-in that meets the same privacy rules). Signing
    in by emailed code alone needs neither, so the apps offer only that for now.
-3. **Push to phones.** ADR 0011 covers web push only. The apps need endpoints
-   to register an FCM token (Android) or an APNs token (iOS), and the API needs
-   to send through FCM and APNs. That needs a Firebase project and an Apple
-   push key first.
+3. **Push to the iOS app.** Android's is ADR 0023 (FCM). iOS needs the Apple
+   developer account, an APNs key, and a second push service (`apns`) in the
+   API's `push_devices`.
 4. **Links that open the app.** For `heynaija.ng/p/...` links to open in the
    app, the web app has to serve `/.well-known/assetlinks.json` (Android App
    Links) and `/.well-known/apple-app-site-association` (iOS Universal Links).
 
 ## Next in the app
 
-1. Push notifications (after 3 above).
+1. Push notifications on iOS (after 3 above).
 2. Gists with the phone locked or another app open. Today the sound can stop,
    and the room says to keep the screen open, as the web does. Listening on
    needs iOS's audio background mode, and on Android a foreground service with a

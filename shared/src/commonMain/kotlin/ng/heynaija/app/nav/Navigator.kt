@@ -122,6 +122,21 @@ class Navigator {
         return false
     }
 
+    /**
+     * Opens [route] from outside the app, from a tapped notification: a tab's own
+     * screen as that tab, anything else over the Notifications tab, so that Back
+     * leads to the list it came from.
+     */
+    fun openFromNotification(route: Route) {
+        val root = Tab.entries.firstOrNull { it.root == route }
+        val target = root ?: Tab.Notifications
+        if (target != tab) {
+            motion = Motion.Tab
+            tab = target
+        }
+        if (root == null) push(route)
+    }
+
     fun select(target: Tab) {
         if (target == tab) {
             val stack = stacks.getValue(tab)

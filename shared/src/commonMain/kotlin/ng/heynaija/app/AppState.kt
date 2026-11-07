@@ -22,7 +22,11 @@ import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
+import ng.heynaija.app.nav.routeOf
+import ng.heynaija.app.platform.KeyValueStore
 import ng.heynaija.app.platform.Platform
+import ng.heynaija.app.platform.PushDevice
+import ng.heynaija.app.platform.PushEvents
 
 /** Who is using the app. [Unknown] only while the app starts. */
 sealed interface Account {
@@ -42,6 +46,27 @@ sealed interface PostChange {
 private const val TOKEN = "session_token"
 private const val ME = "me"
 private const val SERVER = "server"
+// The push token the server was last given, and whether the member turned push off here.
+private const val PUSH_TOKEN = "push_token"
+private const val PUSH_OFF = "push_off"
+private const val PUSH_OFFER_DISMISSED = "push_offer_dismissed"
+
+/**
+ * Push on this phone: whether the server and this build can push to it at all
+ * ([available]), whether they do now ([on]), and whether the member turned it off
+ * in Settings ([off]).
+ */
+data class PushState(val available: Boolean = false, val on: Boolean = false, val off: Boolean = false, val offerDismissed: Boolean = false)
+
+/**
+ * Who the app is signed in as, from what it keeps: for code that runs without the
+ * app open, such as showing a push notification. Null when signed out.
+ */
+fun savedMemberId(secure: KeyValueStore, settings: KeyValueStore): String? {
+    if (secure.get(TOKEN) == null) return null
+    val me = settings.get(ME) ?: return null
+    return runCatching { HeyNaijaApi.json.decodeFromString(Me.serializer(), me).id }.getOrNull()
+}
 
 /**
  * The app's one state holder: the session, the API, navigation, and the events
@@ -68,6 +93,16 @@ class AppState(val platform: Platform) {
     private val _changes = MutableSharedFlow<PostChange>(extraBufferCapacity = 16)
     val changes: SharedFlow<PostChange> = _changes.asSharedFlow()
 
+    private val _push = MutableStateFlow(
+        PushState(off = platform.settings.get(PUSH_OFF) != null, offerDismissed = platform.settings.get(PUSH_OFFER_DISMISSED) != null),
+    )
+    val push: StateFlow<PushState> = _push.asStateFlow()
+
+    init {
+        scope.launch { PushEvents.newToken.collect { syncPush() } }
+        scope.launch { PushEvents.arrived.collect { refreshMe() } }
+    }
+
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     /** Short notes for the snackbar: "Posted", or why something did not work. */
     val messages: SharedFlow<String> = _messages.asSharedFlow()
@@ -90,7 +125,10 @@ class AppState(val platform: Platform) {
         }
         val cached = platform.settings.get(ME)?.let { runCatching { HeyNaijaApi.json.decodeFromString(Me.serializer(), it) }.getOrNull() }
         _account.value = cached?.let { Account.SignedIn(it) } ?: Account.Unknown
-        scope.launch { refreshMe(firstLoad = cached == null) }
+        scope.launch {
+            refreshMe(firstLoad = cached == null)
+            syncPush()
+        }
     }
 
     /** Asks `/v1/me` again: for the unread count, a changed profile, or a finished welcome. */
@@ -124,11 +162,13 @@ class AppState(val platform: Platform) {
         platform.secure.set(TOKEN, newToken)
         refreshMe(firstLoad = true)
         navigator.reset()
+        syncPush()
     }
 
     /** Ends the session here and in Kratos. */
     suspend fun signOut() {
         val ending = token ?: return
+        platform.push?.let { stopPush(it) }
         runCatching { api.logout() }
         kratos.logout(ending)
         forget()
@@ -140,6 +180,88 @@ class AppState(val platform: Platform) {
         platform.settings.set(ME, null)
         _account.value = Account.SignedOut
         navigator.reset()
+        // Whatever the server still sends to this phone is refused from now on, and
+        // the next member's notifications are sealed with a new key.
+        platform.push?.let { push ->
+            scope.launch { push.deleteToken() }
+            push.forgetKey()
+        }
+        platform.settings.set(PUSH_TOKEN, null)
+        platform.settings.set(PUSH_OFF, null)
+        _push.value = PushState(offerDismissed = _push.value.offerDismissed)
+    }
+
+    /**
+     * Push to this phone (ADR 0023 in the web repository). Run when the app starts
+     * signed in, after signing in, when the push service changes the token, and
+     * when the member turns push on or off: the server gets this installation's
+     * current token for the member signed in or, when notifications may not show
+     * here or the member turned them off, loses it, so that email carries them.
+     */
+    suspend fun syncPush() {
+        val push = platform.push ?: return
+        if (token == null) return
+        val available = try {
+            api.pushesToApp()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return
+        }
+        val off = platform.settings.get(PUSH_OFF) != null
+        _push.update { it.copy(available = available, off = off) }
+        if (!available) return
+        if (off || !push.allowed()) {
+            stopPush(push)
+            _push.update { it.copy(on = false) }
+            return
+        }
+        val device = push.token() ?: return
+        try {
+            api.registerPushDevice(push.service, device, push.key())
+            platform.settings.set(PUSH_TOKEN, device)
+            _push.update { it.copy(on = true) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (platform.debug) println("HeyNaija: push registration failed: ${e.message}")
+        }
+    }
+
+    /** The app came back to the front: notifications may have been allowed or blocked in the system's settings. */
+    fun pushMayHaveChanged() {
+        val push = platform.push ?: return
+        val state = _push.value
+        if (state.available && !state.off && push.allowed() != state.on) scope.launch { syncPush() }
+    }
+
+    /** The member turned push on or off in Settings, or on from the offer in Notifications. */
+    suspend fun setPushOff(off: Boolean) {
+        platform.settings.set(PUSH_OFF, if (off) "1" else null)
+        syncPush()
+    }
+
+    fun dismissPushOffer() {
+        platform.settings.set(PUSH_OFFER_DISMISSED, "1")
+        _push.update { it.copy(offerDismissed = true) }
+    }
+
+    /** Takes this phone's push back from the server, while the session still works. */
+    private suspend fun stopPush(push: PushDevice) {
+        val registered = platform.settings.get(PUSH_TOKEN) ?: return
+        try {
+            api.removePushDevice(push.service, registered)
+            platform.settings.set(PUSH_TOKEN, null)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Tried again next time; the server keeps pushing until then.
+        }
+    }
+
+    /** A tapped notification's link: opened on the Notifications tab, where it would have been seen. */
+    fun openLink(link: String) {
+        navigator.openFromNotification(routeOf(link, Servers.current.web) ?: Route.Notifications)
     }
 
     val currentToken: String? get() = token

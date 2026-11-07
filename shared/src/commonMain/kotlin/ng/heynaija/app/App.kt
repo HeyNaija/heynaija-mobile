@@ -61,6 +61,7 @@ import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.Tab
 import ng.heynaija.app.notifications.NotificationsScreen
 import ng.heynaija.app.platform.Platform
+import ng.heynaija.app.platform.PushEvents
 import ng.heynaija.app.profile.EditProfileScreen
 import ng.heynaija.app.profile.MeScreen
 import ng.heynaija.app.profile.ProfileScreen
@@ -99,6 +100,7 @@ private fun Root(app: AppState) {
     // Coming back to the app: the unread count may have moved.
     LifecycleResumeEffect(Unit) {
         app.scope.launch { app.refreshMe() }
+        app.pushMayHaveChanged()
         onPauseOrDispose {}
     }
     Box(Modifier.fillMaxSize().background(HeyNaija.colors.bg)) {
@@ -122,6 +124,15 @@ private fun Shell(app: AppState) {
     val account by app.account.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { app.messages.collect { snackbar.showSnackbar(it) } }
     BackHandler(enabled = navigator.canPop) { navigator.pop() }
+    // A tapped notification, whether it started the app or found it open.
+    val opened by PushEvents.opened.collectAsStateWithLifecycle()
+    LaunchedEffect(opened, account) {
+        val link = opened ?: return@LaunchedEffect
+        if (account is Account.SignedIn) {
+            app.openLink(link)
+            PushEvents.handled(link)
+        }
+    }
 
     Scaffold(
         containerColor = HeyNaija.colors.bg,

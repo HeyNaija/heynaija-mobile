@@ -7,9 +7,10 @@ behind them are in [HeyNaija/heynaija](https://github.com/HeyNaija/heynaija).
 **Status:** in development, not in the stores yet. Members can sign in and
 join with an invite, read the feeds, threads, profiles and communities, post
 with pictures, polls and video, reply, like, repost, quote, bookmark, search,
-get notifications in the app, and listen and speak in Gists, the live audio
-rooms. [docs/plan.md](docs/plan.md) has what is done, what is left (push, Gists
-in the background), and what the backend still needs.
+get notifications in the app and, on Android, as push notifications, and listen
+and speak in Gists, the live audio rooms. [docs/plan.md](docs/plan.md) has what
+is done, what is left (push on iOS, Gists in the background), and what the
+backend still needs.
 
 ## How it fits together
 
@@ -99,6 +100,11 @@ microphone (System Settings, Privacy & Security, Microphone).
 
 Sign-in codes land in Mailpit, at http://127.0.0.1:8026. Make an invite with
 `pnpm invite:create` in the web repository.
+
+Push on the emulator needs a Google Play system image, `google-services.json`
+at `androidApp/google-services.json` (from the Firebase console; git ignores it),
+and the dev API started with `FCM_SERVICE_ACCOUNT` set to the project's service
+account key in base64 (`docs/deployment/app-push.md` in the web repository).
 
 ## Licence
 

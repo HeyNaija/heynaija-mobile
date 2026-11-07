@@ -345,6 +345,30 @@ class HeyNaijaApi(
     suspend fun setNotificationPreference(key: String, on: Boolean): Map<String, Boolean> =
         send("PUT", "/notifications/preferences", buildJsonObject { put(key, on) }).body()
 
+    /** Whether this server pushes notifications to the app (ADR 0023 in the web repository). */
+    suspend fun pushesToApp(): Boolean = get<PushKey>("/push/key").app
+
+    /**
+     * Pushes the member's notifications to this installation from now on: its
+     * [token] with the push service ([service], "fcm"), and the [key] the server
+     * seals what it sends with. [ApiException] 404 when the server does not push to the app.
+     */
+    suspend fun registerPushDevice(service: String, token: String, key: String) {
+        send("POST", "/push/devices", buildJsonObject {
+            put("service", service)
+            put("token", token)
+            put("key", key)
+        })
+    }
+
+    /** Stops pushing to this installation: before signing out. */
+    suspend fun removePushDevice(service: String, token: String) {
+        send("POST", "/push/devices/remove", buildJsonObject {
+            put("service", service)
+            put("token", token)
+        })
+    }
+
     // Safety
 
     /** [target] is `"postId" to id` or `"handle" to handle`. */

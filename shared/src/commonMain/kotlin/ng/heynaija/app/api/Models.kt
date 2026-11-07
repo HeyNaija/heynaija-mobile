@@ -474,3 +474,7 @@ val REPORT_REASONS = listOf(
     "illegal" to "Illegal content",
     "other" to "Something else",
 )
+
+/** `GET /v1/push/key`: the browsers' key, which the app does not use, and whether the app is pushed to. */
+@Serializable
+data class PushKey(val publicKey: String? = null, val app: Boolean = false)

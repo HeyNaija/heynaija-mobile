@@ -180,6 +180,7 @@ fun NotificationsScreen() {
     }
     val viewModel = viewModel(key = "notifications") { NotificationsViewModel(app) }
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val push by app.push.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     val now = rememberNow()
     LaunchedEffect(list) {
@@ -205,6 +206,7 @@ fun NotificationsScreen() {
                     contentPadding = PaddingValues(ListGutter),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
                     if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
                     items(state.items, key = { it.id }) { NotificationRow(it, now) }
                     if (state.loading && state.items.isNotEmpty()) item {

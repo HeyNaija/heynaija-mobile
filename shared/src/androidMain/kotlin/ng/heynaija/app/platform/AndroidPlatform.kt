@@ -11,12 +11,23 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-fun androidPlatform(context: Context, debug: Boolean) = Platform(
-    secure = KeystoreStore(context.getSharedPreferences("heynaija_secure", Context.MODE_PRIVATE)),
-    settings = PrefsStore(context.getSharedPreferences("heynaija", Context.MODE_PRIVATE)),
-    debug = debug,
-    gistAudio = LiveKitGistAudioFactory(context, debug),
-)
+fun androidPlatform(context: Context, debug: Boolean, push: (secure: KeyValueStore) -> PushDevice? = { null }): Platform {
+    val secure = androidSecureStore(context)
+    return Platform(
+        secure = secure,
+        settings = androidSettingsStore(context),
+        debug = debug,
+        gistAudio = LiveKitGistAudioFactory(context, debug),
+        push = push(secure),
+    )
+}
+
+/** The session token and the push key, encrypted by the Keystore; for push, which runs without the app. */
+fun androidSecureStore(context: Context): KeyValueStore =
+    KeystoreStore(context.getSharedPreferences("heynaija_secure", Context.MODE_PRIVATE))
+
+fun androidSettingsStore(context: Context): KeyValueStore =
+    PrefsStore(context.getSharedPreferences("heynaija", Context.MODE_PRIVATE))
 
 private class PrefsStore(private val prefs: SharedPreferences) : KeyValueStore {
     override fun get(key: String): String? = prefs.getString(key, null)
