@@ -182,7 +182,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
     }
 
     init {
-        if (route.replyTo == null) viewModelScope.launch {
+        if (route.replyTo == null && route.gist == null) viewModelScope.launch {
             runCatching { app.api.communities() }.onSuccess { all ->
                 _state.update { s -> s.copy(joined = all.filter { it.viewerIsMember }.map { CommunityRef(it.slug, it.name) }) }
             }
@@ -296,6 +296,8 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
     fun canPost(s: ComposeState): Boolean {
         val length = visibleLength(s.text.trim())
         if (s.posting || length > TEXT_MAX) return false
+        // A Gist's replies are text only.
+        if (route.gist != null) return length > 0
         if (s.images.any { !it.ready }) return false
         if (s.video != null) return s.video.ready
         val poll = s.poll
@@ -309,7 +311,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
         _state.update { it.copy(posting = true, error = null) }
         viewModelScope.launch {
             try {
-                val created = app.api.createPost(
+                val created = if (route.gist != null) app.api.createGistReply(route.gist, s.text.trim(), route.replyTo?.id) else app.api.createPost(
                     NewPost(
                         text = s.text.trim(),
                         replyTo = route.replyTo?.id,
@@ -323,7 +325,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                 )
                 app.emit(PostChange.Created(created.id))
                 route.replyTo?.let { parent -> app.emit(PostChange.Updated(parent.copy(replyCount = parent.replyCount + 1))) }
-                app.say(if (route.replyTo != null) "Reply posted" else "Posted")
+                app.say(if (route.replyTo != null || route.gist != null) "Reply posted" else "Posted")
                 onDone()
             } catch (e: CancellationException) {
                 throw e
@@ -348,6 +350,7 @@ fun ComposeScreen(route: Route.Compose) {
     val pickVideo = rememberVideoPicker { viewModel.addVideo(it) }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val reply = route.replyTo
+    val gist = route.gist
     val length = visibleLength(state.text.trim())
     // The field keeps the cursor, which the @mention suggestions need.
     var field by remember { mutableStateOf(TextFieldValue(state.text)) }
@@ -361,7 +364,7 @@ fun ComposeScreen(route: Route.Compose) {
     Column(Modifier.fillMaxSize().background(colors.bg).imePadding()) {
         TopBar(
             when {
-                reply != null -> "Reply"
+                reply != null || gist != null -> "Reply"
                 route.quote != null -> "Quote"
                 else -> "New post"
             },
@@ -369,7 +372,7 @@ fun ComposeScreen(route: Route.Compose) {
             backIcon = Icons.Close,
             actions = {
                 PrimaryButton(
-                    if (reply != null) "Reply" else "Post",
+                    if (reply != null || gist != null) "Reply" else "Post",
                     { viewModel.post { app.navigator.pop() } },
                     Modifier.padding(end = 8.dp),
                     enabled = viewModel.canPost(state),
@@ -378,17 +381,17 @@ fun ComposeScreen(route: Route.Compose) {
             },
         )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            if (reply != null) ReplyingTo(reply)
+            if (reply != null) ReplyingTo(reply) else if (gist != null) ReplyingToGist()
             Row {
                 Avatar(me.handle, me.avatar, 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    if (reply == null && route.quote == null) Audience(state, viewModel)
+                    if (reply == null && route.quote == null && gist == null) Audience(state, viewModel)
                     Box {
                         if (state.text.isEmpty()) {
                             Text(
                                 when {
-                                    reply != null -> "Write your reply"
+                                    reply != null || gist != null -> "Write your reply"
                                     state.poll != null -> "Ask a question"
                                     else -> "What is on your mind?"
                                 },
@@ -431,17 +434,18 @@ fun ComposeScreen(route: Route.Compose) {
         }
         HorizontalDivider(color = colors.line)
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp).heightIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToolButton(Icons.Image, "Add pictures", enabled = state.images.size < IMAGES_MAX && state.poll == null && state.video == null) {
+            // A Gist's replies are text only, as on the web.
+            if (gist == null) ToolButton(Icons.Image, "Add pictures", enabled = state.images.size < IMAGES_MAX && state.poll == null && state.video == null) {
                 pick(IMAGES_MAX - state.images.size)
             }
             // One video, not in replies, and only while video is open to this member (ADR 0019).
-            if (reply == null && me.videoLimits != null && me.has("videoPosts")) {
+            if (reply == null && gist == null && me.videoLimits != null && me.has("videoPosts")) {
                 ToolButton(Icons.Video, "Add a video", enabled = state.images.isEmpty() && state.poll == null && state.video == null) { pickVideo() }
             }
-            if (reply == null && route.quote == null && me.has("polls")) {
+            if (reply == null && route.quote == null && gist == null && me.has("polls")) {
                 ToolButton(Icons.Vote, if (state.poll == null) "Add a poll" else "Remove the poll", enabled = state.images.isEmpty() && state.video == null, active = state.poll != null) {
                     viewModel.togglePoll()
                 }
@@ -496,6 +500,15 @@ private fun Post.asQuote() = QuotedPost(
     images = images,
     createdAt = createdAt,
 )
+
+@Composable
+private fun ReplyingToGist() {
+    Row(Modifier.padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Live, null, Modifier.size(18.dp), tint = HeyNaija.colors.accentStrong)
+        Spacer(Modifier.width(8.dp))
+        Text("Replying to this Gist", style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+    }
+}
 
 @Composable
 private fun ReplyingTo(post: Post) {

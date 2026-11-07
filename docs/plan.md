@@ -25,6 +25,19 @@ What the apps do now, what comes next, and what the backend
   deleting; mentions, hashtags and links in the text; link cards; pictures full
   screen with zoom; videos in the platform's own player.
 - **Safety:** reporting posts and members, muting and blocking.
+- **Gists**, the live audio rooms (ADR 0017 in the web repository), for members
+  the `gists` flag lets in: Live now on Home, starting one from the bar, and the
+  room as on the web: host, stage and listeners, joining to listen, asking to
+  speak, the microphone (asked for only then), and the host's and co-hosts'
+  controls (let speak, mute, make co-host, back to the listeners, remove, lock,
+  requests on or off, end), and reporting the Gist. The room follows the web's join, reconnect and leave
+  rules (`gist-session.ts`) and polls as it does. Sound goes through LiveKit:
+  its Android SDK, and on iOS its Swift SDK behind a small Swift wrapper in
+  `iosApp` (`GistAudio.swift`) that implements the shared `GistAudio` interface.
+  The screen stays awake while in a room; the sound keeps playing on other
+  screens of the app and stops when the member goes back out of the room.
+  Replies to a Gist use the post card and composer (text only, liked through the
+  Gist, hidden by its host), and a reply's notification opens it in its Gist.
 - **Notifications** in the app, with the count on the tab, and which kinds you
   get (and email) in Settings.
 - **Search** for people, communities and posts, with trending topics.
@@ -52,13 +65,18 @@ What the apps do now, what comes next, and what the backend
 ## Next in the app
 
 1. Push notifications (after 3 above).
-2. Gists, with LiveKit's Android and Swift SDKs. The Swift SDK has no
-   Objective-C interface, so the iOS side needs a small Swift wrapper in
-   `iosApp` that the shared code calls through a protocol.
+2. Gists with the phone locked or another app open. Today the sound can stop,
+   and the room says to keep the screen open, as the web does. Listening on
+   needs iOS's audio background mode, and on Android a foreground service with a
+   notification (of the microphone type while speaking, from Android 14).
+   The web's Connection sheet (route, loss and jitter) and microphone settings
+   are not in the room yet.
 3. The ideas board, and continuing a video upload after the app was closed.
 4. Opening shared links in the app (after 4 above).
 5. Store listings: Play Console and App Store Connect accounts, privacy labels,
    age rating (18 and over during the beta), and signing keys kept out of the repo.
+   LiveKit's WebRTC library makes the Android debug APK about 75 MB with every
+   processor type in it; the Play Store's app bundles ship only the one a phone needs.
 
 ## Decisions still open
 

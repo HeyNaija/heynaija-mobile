@@ -21,8 +21,11 @@ sealed interface Route {
     /** The member's own profile, or a prompt to sign in. */
     data object Me : Route
 
-    /** A post and its conversation; [post] shows at once while the rest loads. */
-    data class Thread(val id: String, val post: Post? = null) : Route
+    /**
+     * A post and its conversation; [post] shows at once while the rest loads. With
+     * [gist], a reply in that Gist and the replies under it.
+     */
+    data class Thread(val id: String, val post: Post? = null, val gist: String? = null) : Route
     data class Profile(val handle: String) : Route
     data class Community(val slug: String) : Route
     data class Hashtag(val tag: String) : Route
@@ -31,9 +34,12 @@ sealed interface Route {
     data object EditProfile : Route
     data object NotificationSettings : Route
     data object DeleteAccount : Route
+    /** A live audio room: who is on stage, joining and speaking, and its replies. */
+    data class Gist(val id: String) : Route
 
     // Full screen, without the tab bar.
-    data class Compose(val replyTo: Post? = null, val quote: Post? = null, val community: CommunityRef? = null) : Route
+    /** A new post, reply or quote; with [gist], a reply in that Gist (to [replyTo], or to the Gist itself). */
+    data class Compose(val replyTo: Post? = null, val quote: Post? = null, val community: CommunityRef? = null, val gist: String? = null) : Route
     data class Images(val images: List<PostImage>, val start: Int) : Route
     data class Video(val url: String) : Route
     /** [target] is `"postId" to id` or `"handle" to handle`. */

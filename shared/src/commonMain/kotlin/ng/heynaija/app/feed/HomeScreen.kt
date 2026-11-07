@@ -31,10 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ng.heynaija.app.Account
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.gists.LiveNow
+import ng.heynaija.app.gists.LiveNowViewModel
+import ng.heynaija.app.gists.StartGistDialog
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.PostList
 import ng.heynaija.app.posts.PostListViewModel
@@ -69,10 +73,22 @@ fun HomeScreen() {
         mutableStateOf(feeds.firstOrNull { it.name == app.platform.settings.get(FEED) } ?: Feed.Discover)
     }
     val lists = remember { mutableMapOf<Feed, LazyListState>() }
+    // Gists, for members on their list (ADR 0017): Live now above every feed, and starting one from the bar.
+    val gists = (account as? Account.SignedIn)?.me?.has("gists") == true
+    val liveNow = viewModel(key = "live-now") { LiveNowViewModel(app.api) }
+    val live by liveNow.items.collectAsStateWithLifecycle()
+    if (gists) {
+        LifecycleResumeEffect(liveNow) {
+            liveNow.start()
+            onPauseOrDispose { liveNow.stop() }
+        }
+    }
+    var starting by remember { mutableStateOf(false) }
+    if (starting) StartGistDialog(onDismiss = { starting = false })
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            WordmarkBar()
+            WordmarkBar(onStartGist = if (gists) ({ starting = true }) else null)
             Tabs(feeds, feed) {
                 feed = it
                 app.platform.settings.set(FEED, it.name)
@@ -101,6 +117,7 @@ fun HomeScreen() {
                     bottomPadding = 72.dp,
                 ) {
                     if (!member) item(key = "visitor") { VisitorCard() }
+                    if (gists && live.isNotEmpty()) item(key = "live-now") { LiveNow(live) }
                 }
             }
         }
@@ -116,9 +133,9 @@ fun HomeScreen() {
     }
 }
 
-/** The wordmark on the ground, like the web's top bar; settings sit on the right for members. */
+/** The wordmark on the ground, like the web's top bar; starting a Gist and settings sit on the right for members. */
 @Composable
-private fun WordmarkBar() {
+private fun WordmarkBar(onStartGist: (() -> Unit)?) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     Column(Modifier.background(colors.bg).statusBarsPadding()) {
@@ -129,6 +146,11 @@ private fun WordmarkBar() {
                 modifier = Modifier.height(30.dp),
             )
             Spacer(Modifier.weight(1f))
+            if (onStartGist != null) {
+                Box(Modifier.size(44.dp).clickable(onClick = onStartGist), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Live, "Start a Gist", Modifier.size(22.dp), tint = colors.muted)
+                }
+            }
             // Visitors on a debug build need it too, to pick the server.
             if (app.me != null || app.platform.debug) {
                 Box(Modifier.size(44.dp).clickable { app.navigator.push(Route.Settings) }, contentAlignment = Alignment.Center) {

@@ -47,10 +47,11 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 import platform.posix.memcpy
 
-fun iosPlatform(debug: Boolean) = Platform(
+fun iosPlatform(debug: Boolean, gistAudio: GistAudioFactory?) = Platform(
     secure = KeychainStore("ng.heynaija.app"),
     settings = DefaultsStore(),
     debug = debug,
+    gistAudio = gistAudio,
 )
 
 private class DefaultsStore : KeyValueStore {

@@ -73,10 +73,16 @@ fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: 
 private const val PREVIEW_LINES = 10
 
 /**
+ * A reply in a Gist: it opens, is answered and is liked through the Gist, and is
+ * never reposted, bookmarked or shared. Its host may hide it.
+ */
+data class GistReplyContext(val id: String, val viewerIsHost: Boolean)
+
+/**
  * A post as lists show it, laid out like the web's: the avatar sits beside the
  * name only, and the text, media and actions use the card's whole width.
  * [focused]: the post a thread is about, larger and complete. [compact]: a reply
- * in a thread, smaller and without the community chip.
+ * in a thread, smaller and without the community chip. [gist]: a reply in a Gist.
  */
 @Composable
 fun PostCard(
@@ -86,34 +92,42 @@ fun PostCard(
     focused: Boolean = false,
     compact: Boolean = false,
     pinned: Boolean = false,
+    gist: GistReplyContext? = null,
 ) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     if (post.deleted || post.unavailable) {
         Card(modifier) {
-            Text(
-                "This post is no longer available.",
-                Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                fontStyle = FontStyle.Italic,
-                color = colors.muted,
-            )
+            Row(Modifier.padding(start = 16.dp, end = 8.dp).heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (post.hiddenByHost) "The host hid this reply." else "This post is no longer available.",
+                    Modifier.weight(1f).padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = FontStyle.Italic,
+                    color = colors.muted,
+                )
+                if (post.hiddenByHost && gist?.viewerIsHost == true) {
+                    TextButton(onClick = { app.hideGistReply(gist.id, post, hidden = false) }) {
+                        Text("Show reply", style = MaterialTheme.typography.labelLarge, color = colors.accentStrong)
+                    }
+                }
+            }
         }
         return
     }
-    val open = { app.navigator.push(Route.Thread(post.id, post)) }
+    val open = { app.navigator.push(Route.Thread(post.id, post, gist?.id)) }
     Card(modifier, onClick = if (focused) null else open) {
         Column(Modifier.padding(start = 14.dp, end = 6.dp, top = if (compact) 10.dp else 14.dp)) {
             Column(Modifier.padding(end = 8.dp)) {
                 ContextLine(post, pinned)
                 if (!focused && !compact) ReplyContextLine(post)
             }
-            Header(post, now, focused, compact)
+            Header(post, now, focused, compact, gist)
             Column(Modifier.padding(end = 8.dp)) {
                 Body(post, focused, compact, open)
             }
             if (focused) FocusedMeta(post)
-            Actions(post, compact)
+            Actions(post, compact, gist)
         }
     }
 }
@@ -175,7 +189,7 @@ private fun ReplyContextLine(post: Post) {
 }
 
 @Composable
-private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean) {
+private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean, gist: GistReplyContext?) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     val toProfile = { app.navigator.push(Route.Profile(post.authorHandle)) }
@@ -209,7 +223,7 @@ private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean)
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        PostMenu(post)
+        PostMenu(post, gist)
     }
     if (post.community != null && !compact && post.reason != "community") {
         Row(Modifier.padding(top = 8.dp)) {
@@ -477,9 +491,9 @@ private fun LinkCard(preview: LinkPreview, modifier: Modifier) {
     }
 }
 
-/** Reply, repost, like on the left; bookmark and share on the right, over a hairline. */
+/** Reply, repost, like on the left; bookmark and share on the right, over a hairline. A Gist's reply: reply and like. */
 @Composable
-private fun Actions(post: Post, compact: Boolean) {
+private fun Actions(post: Post, compact: Boolean, gist: GistReplyContext?) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     val share = rememberShare()
@@ -489,17 +503,18 @@ private fun Actions(post: Post, compact: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Action(Icons.Bubble, post.replyCount, if (post.replyCount == 1) "1 reply" else "${post.replyCount} replies", enabled = post.viewerCanReply || app.me == null) {
-            app.requireMember { app.navigator.push(Route.Compose(replyTo = post)) }
+            app.requireMember { app.navigator.push(Route.Compose(replyTo = post, gist = gist?.id)) }
         }
-        RepostAction(post)
+        if (gist == null) RepostAction(post)
         Action(
             if (post.viewerLiked) Icons.HeartFilled else Icons.Heart,
             post.likeCount,
             if (post.viewerLiked) "Unlike" else "Like",
             // Pressed reads in the deep green, as on the web, not a red heart.
             tint = if (post.viewerLiked) colors.accentStrong else colors.muted,
-        ) { app.toggleLike(post) }
+        ) { app.toggleLike(post, gist?.id) }
         Spacer(Modifier.weight(1f))
+        if (gist != null) return@Row
         if (!compact) {
             Action(
                 if (post.viewerBookmarked) Icons.BookmarkFilled else Icons.Bookmark,
@@ -568,9 +583,9 @@ private fun RepostAction(post: Post) {
     }
 }
 
-/** The "..." menu: the author's own choices, or report, mute and block. */
+/** The "..." menu: the author's own choices, or report, mute and block; a Gist's host may hide a reply. */
 @Composable
-private fun PostMenu(post: Post) {
+private fun PostMenu(post: Post, gist: GistReplyContext?) {
     val app = LocalApp.current
     val me = app.me ?: return
     val colors = HeyNaija.colors
@@ -584,7 +599,7 @@ private fun PostMenu(post: Post) {
         ) { Icon(Icons.Dots, "Post options", Modifier.size(20.dp), tint = colors.muted) }
         DropdownMenu(open, onDismissRequest = { open = false }) {
             if (own) {
-                if (post.replyParentId == null) {
+                if (post.replyParentId == null && gist == null) {
                     DropdownMenuItem(
                         text = { Text(if (post.pinnedOnProfile) "Unpin from your profile" else "Pin to your profile") },
                         leadingIcon = { Icon(Icons.Pin, null, Modifier.size(18.dp)) },
@@ -601,6 +616,12 @@ private fun PostMenu(post: Post) {
                     onClick = { open = false; confirm = "delete" },
                 )
             } else {
+                if (gist?.viewerIsHost == true) {
+                    DropdownMenuItem(
+                        text = { Text("Hide reply") },
+                        onClick = { open = false; app.hideGistReply(gist.id, post, hidden = true) },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Report post") },
                     leadingIcon = { Icon(Icons.Flag, null, Modifier.size(18.dp)) },

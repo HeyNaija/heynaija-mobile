@@ -161,9 +161,9 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
     }
 }
 
-/** Where pressing it goes (apps/web/lib/notification-target.ts); Gists are not in the app yet. */
+/** Where pressing it goes (apps/web/lib/notification-target.ts): a reply in a Gist opens in its Gist. */
 private fun target(n: Notification): Route? = when (n.kind) {
-    "reply", "like", "repost", "quote", "mention", "post_restored" -> n.post?.takeIf { it.gistId == null }?.let { Route.Thread(it.id) }
+    "reply", "like", "repost", "quote", "mention", "post_restored" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
     "follow" -> n.actor?.let { Route.Profile(it.handle) }
     "avatar_removed", "profile_cleared" -> Route.EditProfile
     "moderator_revoked" -> n.community?.let { Route.Community(it.slug) }

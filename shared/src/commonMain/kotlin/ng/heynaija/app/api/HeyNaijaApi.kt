@@ -13,6 +13,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -125,6 +126,7 @@ class HeyNaijaApi(
             when (method) {
                 "POST" -> client.post(url(path), build)
                 "PUT" -> client.put(url(path), build)
+                "PATCH" -> client.patch(url(path), build)
                 else -> client.delete(url(path), build)
             },
         )
@@ -388,6 +390,91 @@ class HeyNaijaApi(
         val answer = send("POST", "/signup/age", buildJsonObject { put("birthDate", birthDate) }).body<JsonObject>()
         return (answer["outcome"]?.jsonPrimitive?.contentOrNull ?: "not_a_date") to
             (answer["joinAge"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 18)
+    }
+
+    // Gists (ADR 0017): every route answers 404 to a member who may not see the Gist, or Gists at all.
+
+    /** The live Gists the member may join, newest first. */
+    suspend fun liveGists(): List<LiveGist> = get<LiveGists>("/gists/live").items
+
+    /** Starts a Gist now, with the member as host; 409 `already_hosting` when one of theirs is live. */
+    suspend fun startGist(title: String): GistView = send("POST", "/gists", buildJsonObject { put("title", title) }).body()
+
+    suspend fun gist(id: String): GistView = get("/gists/${seg(id)}")
+
+    /** A LiveKit token and the member's role. Also the call that reconnects. */
+    suspend fun joinGist(id: String): GistJoin = send("POST", "/gists/${seg(id)}/join").body()
+
+    suspend fun leaveGist(id: String) { send("POST", "/gists/${seg(id)}/leave") }
+
+    /** Once connected: sets the member's LiveKit permissions to their role, so a speaker may publish. */
+    suspend fun syncGist(id: String) { send("POST", "/gists/${seg(id)}/sync") }
+
+    suspend fun setSpeakRequest(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/gists/${seg(id)}/speak-request") }
+
+    /** Host and co-hosts: requests to speak, oldest first. */
+    suspend fun speakRequests(id: String): List<SpeakRequest> = get<SpeakRequests>("/gists/${seg(id)}/requests").items
+
+    /** Host and co-hosts: who is listening. */
+    suspend fun gistListeners(id: String): List<Person> = get<GistPeople>("/gists/${seg(id)}/listeners").items
+
+    /** Lets a listener speak (approving a request, or inviting them). */
+    suspend fun addSpeaker(id: String, memberId: String) { send("PUT", "/gists/${seg(id)}/speakers/${seg(memberId)}") }
+
+    /** Back to the listeners; a speaker can do this to themselves. */
+    suspend fun demoteSpeaker(id: String, memberId: String) { send("DELETE", "/gists/${seg(id)}/speakers/${seg(memberId)}") }
+
+    suspend fun addCohost(id: String, memberId: String) { send("PUT", "/gists/${seg(id)}/cohosts/${seg(memberId)}") }
+
+    suspend fun muteInGist(id: String, memberId: String) { send("POST", "/gists/${seg(id)}/members/${seg(memberId)}/mute") }
+
+    suspend fun removeFromGist(id: String, memberId: String) { send("DELETE", "/gists/${seg(id)}/members/${seg(memberId)}") }
+
+    /** Host only: lock the room, or open and close requests to speak. */
+    suspend fun gistSettings(id: String, locked: Boolean? = null, requestsOpen: Boolean? = null): GistView =
+        send("PATCH", "/gists/${seg(id)}", buildJsonObject {
+            locked?.let { put("locked", it) }
+            requestsOpen?.let { put("requestsOpen", it) }
+        }).body()
+
+    /** Host only: ends it for everyone. */
+    suspend fun endGist(id: String) { send("POST", "/gists/${seg(id)}/end") }
+
+    // A Gist's replies: posts read and written only through the Gist.
+
+    suspend fun gistReplies(id: String, cursor: String? = null): GistReplies = get("/gists/${seg(id)}/replies") {
+        parameter("order", "newest")
+        if (cursor != null) parameter("cursor", cursor)
+    }
+
+    suspend fun gistReply(id: String, postId: String): Post = get("/gists/${seg(id)}/replies/${seg(postId)}")
+
+    /** The replies under one reply in a Gist. */
+    suspend fun gistReplyBranch(id: String, postId: String, cursor: String? = null): ReplyPage =
+        get("/gists/${seg(id)}/replies/${seg(postId)}/replies") {
+            parameter("order", "newest")
+            if (cursor != null) parameter("cursor", cursor)
+        }
+
+    /** At the top of the Gist's replies, or under [replyTo], a reply in the same Gist. Text only. */
+    suspend fun createGistReply(id: String, text: String, replyTo: String? = null): Created =
+        send("POST", "/gists/${seg(id)}/replies", buildJsonObject {
+            put("text", text)
+            replyTo?.let { put("replyTo", it) }
+        }).body()
+
+    suspend fun setGistReplyLike(id: String, postId: String, on: Boolean) {
+        send(if (on) "PUT" else "DELETE", "/gists/${seg(id)}/replies/${seg(postId)}/like")
+    }
+
+    /** Host only: hides a reply from everyone, or shows it again. */
+    suspend fun hideGistReply(id: String, postId: String, hidden: Boolean) {
+        send(if (hidden) "PUT" else "DELETE", "/gists/${seg(id)}/replies/${seg(postId)}/hide")
+    }
+
+    /** Host only: 'everyone', 'following', 'mentioned' or 'off'. */
+    suspend fun setGistReplyAudience(id: String, audience: String) {
+        send("PUT", "/gists/${seg(id)}/replies/audience", buildJsonObject { put("audience", audience) })
     }
 
     // Deleting the account (docs/adr/0016)

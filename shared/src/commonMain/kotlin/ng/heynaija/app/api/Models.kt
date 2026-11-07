@@ -88,6 +88,8 @@ data class Post(
     val repostedBy: Reposter? = null,
     /** In Discover, when [reason] is 'network': who the reader follows that took part. */
     val via: Via? = null,
+    /** A Gist reply its host hid: sent as [unavailable] when replies hang under it. */
+    val hiddenByHost: Boolean = false,
 )
 
 @Serializable
@@ -220,6 +222,8 @@ data class ThreadPage(
 data class ReplyPage(
     val replies: List<Post> = emptyList(),
     val cursor: String? = null,
+    /** The replies under a reply in a Gist: whether the reader hosts it. */
+    val viewerIsHost: Boolean = false,
 )
 
 @Serializable
@@ -366,6 +370,90 @@ data class UploadStatus(val status: String)
 
 @Serializable
 data class Created(val id: String)
+
+// Gists (live audio rooms, ADR 0017), after apps/web/lib/gists.ts.
+
+/** Someone in a Gist. The API sends no avatar here, so their initial stands in. */
+@Serializable
+data class Person(val id: String, val handle: String, val displayName: String? = null) {
+    val name get() = displayName?.trim()?.takeIf { it.isNotEmpty() } ?: "@$handle"
+}
+
+/** A co-host or speaker; [role] is 'cohost' or 'speaker'. */
+@Serializable
+data class GistSpeaker(val id: String, val handle: String, val displayName: String? = null, val role: String = "speaker") {
+    val person get() = Person(id, handle, displayName)
+}
+
+@Serializable
+data class GistCommunity(val id: String, val slug: String, val name: String)
+
+/** [role] is 'host', 'cohost', 'speaker', 'listener', or null before joining. */
+@Serializable
+data class GistViewer(val role: String? = null, val requestedToSpeak: Boolean = false)
+
+/** What `GET /v1/gists/:id` answers. [status] is 'scheduled', 'live' or 'ended'. */
+@Serializable
+data class GistView(
+    val id: String,
+    val title: String,
+    val status: String,
+    val community: GistCommunity? = null,
+    val host: Person,
+    /** Co-hosts and speakers; the host is not repeated. */
+    val speakers: List<GistSpeaker> = emptyList(),
+    val locked: Boolean = false,
+    val requestsOpen: Boolean = true,
+    val listenerCap: Int = 0,
+    val listenerCount: Int = 0,
+    val peakListeners: Int = 0,
+    val startedAt: String? = null,
+    val endedAt: String? = null,
+    val viewer: GistViewer = GistViewer(),
+)
+
+/** A Gist in the Live now list (`GET /v1/gists/live`). */
+@Serializable
+data class LiveGist(
+    val id: String,
+    val title: String,
+    val host: Person,
+    val community: GistCommunity? = null,
+    val listenerCount: Int = 0,
+    val startedAt: String? = null,
+)
+
+@Serializable
+data class LiveGists(val items: List<LiveGist> = emptyList())
+
+/** A LiveKit token and server for the room, and the member's role in it. */
+@Serializable
+data class GistJoin(val url: String, val token: String, val role: String, val gist: GistView)
+
+@Serializable
+data class SpeakRequest(val id: String, val handle: String, val displayName: String? = null, val requestedAt: String? = null) {
+    val person get() = Person(id, handle, displayName)
+}
+
+@Serializable
+data class SpeakRequests(val items: List<SpeakRequest> = emptyList())
+
+@Serializable
+data class GistPeople(val items: List<Person> = emptyList())
+
+/**
+ * The top level of a Gist's replies. [replyAudience] is 'everyone', 'following',
+ * 'mentioned' or 'off'.
+ */
+@Serializable
+data class GistReplies(
+    val replies: List<Post> = emptyList(),
+    val cursor: String? = null,
+    val count: Int = 0,
+    val viewerCanReply: Boolean = false,
+    val viewerIsHost: Boolean = false,
+    val replyAudience: String = "everyone",
+)
 
 /** Kinds of activity a member can turn off, with the words Settings shows for them. */
 val NOTIFICATION_KINDS = listOf(

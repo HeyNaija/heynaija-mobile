@@ -24,6 +24,10 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        // LiveKit's audio routing (com.github.davidliu:audioswitch) is published only there.
+        maven("https://jitpack.io") {
+            mavenContent { includeGroup("com.github.davidliu") }
+        }
     }
 }
 

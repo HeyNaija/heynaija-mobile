@@ -15,6 +15,7 @@ fun androidPlatform(context: Context, debug: Boolean) = Platform(
     secure = KeystoreStore(context.getSharedPreferences("heynaija_secure", Context.MODE_PRIVATE)),
     settings = PrefsStore(context.getSharedPreferences("heynaija", Context.MODE_PRIVATE)),
     debug = debug,
+    gistAudio = LiveKitGistAudioFactory(context, debug),
 )
 
 private class PrefsStore(private val prefs: SharedPreferences) : KeyValueStore {

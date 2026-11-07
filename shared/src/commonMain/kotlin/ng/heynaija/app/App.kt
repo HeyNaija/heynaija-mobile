@@ -52,6 +52,7 @@ import ng.heynaija.app.communities.CommunitiesScreen
 import ng.heynaija.app.communities.CommunityScreen
 import ng.heynaija.app.compose.ComposeScreen
 import ng.heynaija.app.feed.HomeScreen
+import ng.heynaija.app.gists.GistScreen
 import ng.heynaija.app.media.ImageViewer
 import ng.heynaija.app.media.VideoScreen
 import ng.heynaija.app.nav.Entry
@@ -160,7 +161,7 @@ private fun Screen(entry: Entry) {
         Route.Communities -> CommunitiesScreen()
         Route.Notifications -> NotificationsScreen()
         Route.Me -> MeScreen()
-        is Route.Thread -> ThreadScreen(route.id, route.post)
+        is Route.Thread -> ThreadScreen(route.id, route.post, route.gist)
         is Route.Profile -> ProfileScreen(route.handle)
         is Route.Community -> CommunityScreen(route.slug)
         is Route.Hashtag -> HashtagScreen(route.tag)
@@ -169,6 +170,7 @@ private fun Screen(entry: Entry) {
         Route.EditProfile -> EditProfileScreen()
         Route.NotificationSettings -> NotificationSettingsScreen()
         Route.DeleteAccount -> DeleteAccountScreen()
+        is Route.Gist -> GistScreen(route.id)
         is Route.Compose -> ComposeScreen(route)
         is Route.Images -> ImageViewer(route.images, route.start)
         is Route.Video -> VideoScreen(route.url)

@@ -17,6 +17,8 @@ class Platform(
     val settings: KeyValueStore,
     /** A debug build: Settings offers the dev stack as a server. */
     val debug: Boolean,
+    /** A Gist's sound; null where there is none (tests), and Gists then say they cannot play. */
+    val gistAudio: GistAudioFactory? = null,
 )
 
 /** A picture chosen to post or to use as a profile photo, ready to upload. */

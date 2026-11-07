@@ -4,5 +4,7 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>HeyNaija uses the microphone only when you speak in a Gist and turn your microphone on.</string>
 </dict>
 </plist>

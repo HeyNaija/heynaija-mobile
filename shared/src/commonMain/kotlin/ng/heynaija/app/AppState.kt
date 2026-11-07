@@ -178,10 +178,27 @@ class AppState(val platform: Platform) {
         }
     }
 
-    fun toggleLike(post: Post) = requireMember {
+    /** A reply in a Gist ([gist]) is liked through the Gist. */
+    fun toggleLike(post: Post, gist: String? = null) = requireMember {
         val on = !post.viewerLiked
         act(post, post.copy(viewerLiked = on, likeCount = (post.likeCount + if (on) 1 else -1).coerceAtLeast(0)), "That like did not go through.") {
-            api.setLike(post.id, on)
+            if (gist != null) api.setGistReplyLike(gist, post.id, on) else api.setLike(post.id, on)
+        }
+    }
+
+    /** The Gist's host hides a reply from everyone, or shows it again. */
+    fun hideGistReply(gist: String, post: Post, hidden: Boolean) {
+        scope.launch {
+            try {
+                api.hideGistReply(gist, post.id, hidden)
+                // Shown again: the stub in hand has no text, so read the reply afresh.
+                emit(PostChange.Updated(if (hidden) post.copy(unavailable = true, hiddenByHost = true) else api.gistReply(gist, post.id)))
+                say(if (hidden) "Reply hidden" else "Reply shown")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say((e as? ApiException)?.message?.takeIf { e.code != null } ?: "That did not work. Try again.")
+            }
         }
     }
 

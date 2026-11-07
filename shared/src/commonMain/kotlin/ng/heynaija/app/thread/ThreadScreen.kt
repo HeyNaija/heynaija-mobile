@@ -18,12 +18,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +49,8 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.Empty
+import ng.heynaija.app.ui.GistReplyContext
+import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PostCard
 import ng.heynaija.app.ui.Problem
 import ng.heynaija.app.ui.SecondaryButton
@@ -63,9 +67,18 @@ data class ThreadState(
     val failed: Boolean = false,
     /** The post is gone, or the reader may not see it. */
     val missing: Boolean = false,
+    /** A reply in a Gist: whether the reader hosts it, and may hide replies. */
+    val viewerIsHost: Boolean = false,
 )
 
-class ThreadViewModel(private val api: HeyNaijaApi, private val id: String, first: Post?, changes: Flow<PostChange>) : ViewModel() {
+/** A post's thread, or with [gist] a reply in that Gist and the replies under it (the Gist API sends no ancestors). */
+class ThreadViewModel(
+    private val api: HeyNaijaApi,
+    private val id: String,
+    first: Post?,
+    changes: Flow<PostChange>,
+    private val gist: String? = null,
+) : ViewModel() {
     private val _state = MutableStateFlow(ThreadState(post = first))
     val state: StateFlow<ThreadState> = _state.asStateFlow()
 
@@ -99,8 +112,14 @@ class ThreadViewModel(private val api: HeyNaijaApi, private val id: String, firs
         _state.update { it.copy(failed = false) }
         viewModelScope.launch {
             try {
-                val page = api.thread(id)
-                _state.value = ThreadState(page.ancestors, page.post, page.replies, page.replyCursor, loaded = true)
+                _state.value = if (gist != null) {
+                    val post = api.gistReply(gist, id)
+                    val page = api.gistReplyBranch(gist, id)
+                    ThreadState(post = post, replies = page.replies, cursor = page.cursor, loaded = true, viewerIsHost = page.viewerIsHost)
+                } else {
+                    val page = api.thread(id)
+                    ThreadState(page.ancestors, page.post, page.replies, page.replyCursor, loaded = true)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiException) {
@@ -118,7 +137,7 @@ class ThreadViewModel(private val api: HeyNaijaApi, private val id: String, firs
         _state.update { it.copy(loadingMore = true) }
         viewModelScope.launch {
             try {
-                val page = api.replies(id, cursor)
+                val page = if (gist != null) api.gistReplyBranch(gist, id, cursor) else api.replies(id, cursor)
                 _state.update { it.copy(replies = (it.replies + page.replies).distinctBy(Post::id), cursor = page.cursor, loadingMore = false) }
             } catch (e: CancellationException) {
                 throw e
@@ -138,14 +157,15 @@ private fun Connector() {
 }
 
 @Composable
-fun ThreadScreen(id: String, first: Post?) {
+fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
     val app = LocalApp.current
-    val viewModel = viewModel(key = "thread-$id") { ThreadViewModel(app.api, id, first, app.changes) }
+    val viewModel = viewModel(key = "thread-$id") { ThreadViewModel(app.api, id, first, app.changes, gist) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val now = rememberNow()
+    val inGist = gist?.let { GistReplyContext(it, state.viewerIsHost) }
 
     Column(Modifier.fillMaxSize()) {
-        TopBar(if (state.post?.replyParentId != null) "Reply" else "Post", onBack = { app.navigator.pop() })
+        TopBar(if (gist != null || state.post?.replyParentId != null) "Reply" else "Post", onBack = { app.navigator.pop() })
         val post = state.post
         when {
             state.missing -> Problem("This post is not available. It may have been deleted.", onRetry = null)
@@ -161,16 +181,17 @@ fun ThreadScreen(id: String, first: Post?) {
                         Connector()
                     }
                 }
-                item(key = "post-${post.id}") { PostCard(post, now, focused = true) }
-                if (app.me != null && post.viewerCanReply && !post.deleted) {
-                    item(key = "reply") { ReplyPrompt(post) }
+                if (gist != null) item(key = "gist") { InGist(gist) }
+                item(key = "post-${post.id}") { PostCard(post, now, focused = true, gist = inGist) }
+                if (app.me != null && post.viewerCanReply && !post.deleted && !post.unavailable) {
+                    item(key = "reply") { ReplyPrompt(post, gist) }
                 }
                 if (state.loaded && state.replies.isEmpty()) {
                     item(key = "none") { Empty(if (post.viewerCanReply) "No replies yet." else "No replies.") }
                 }
                 if (state.replies.isNotEmpty()) item(key = "gap") { Spacer(Modifier.height(ListGutter)) }
                 items(state.replies, key = { "r-${it.id}" }) { reply ->
-                    Column(Modifier.padding(bottom = 8.dp)) { PostCard(reply, now, compact = true) }
+                    Column(Modifier.padding(bottom = 8.dp)) { PostCard(reply, now, compact = true, gist = inGist) }
                 }
                 if (!state.loaded && !state.failed) {
                     item(key = "loading") {
@@ -190,9 +211,33 @@ fun ThreadScreen(id: String, first: Post?) {
     }
 }
 
+/**
+ * Over a reply in a Gist: the way to the Gist. Back to it when it is the screen
+ * underneath, so the member never has the same room open twice.
+ */
+@Composable
+private fun InGist(gist: String) {
+    val app = LocalApp.current
+    val colors = HeyNaija.colors
+    val below = app.navigator.stack.dropLast(1).lastOrNull()?.route
+    Row(
+        Modifier
+            .padding(bottom = ListGutter)
+            .fillMaxWidth()
+            .clip(Radii.card)
+            .clickable { if (below == Route.Gist(gist)) app.navigator.pop() else app.navigator.push(Route.Gist(gist)) }
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Live, null, Modifier.size(18.dp), tint = colors.accentStrong)
+        Text("All replies to this Gist", style = MaterialTheme.typography.labelLarge, color = colors.accentStrong)
+    }
+}
+
 /** "Post your reply", with the member's face: opens the composer. */
 @Composable
-private fun ReplyPrompt(post: Post) {
+private fun ReplyPrompt(post: Post, gist: String?) {
     val app = LocalApp.current
     val me = app.me ?: return
     val colors = HeyNaija.colors
@@ -202,7 +247,7 @@ private fun ReplyPrompt(post: Post) {
             .fillMaxWidth()
             .background(colors.surface, Radii.card)
             .border(1.dp, colors.line, Radii.card)
-            .clickable { app.navigator.push(Route.Compose(replyTo = post)) }
+            .clickable { app.navigator.push(Route.Compose(replyTo = post, gist = gist)) }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),

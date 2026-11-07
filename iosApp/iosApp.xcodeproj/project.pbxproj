@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A1C0FFEE0000000000000001 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1C0FFEE0000000000000002 /* LiveKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		031183B128B077337BDAEAF2 /* HeyNaija.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HeyNaija.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -41,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1C0FFEE0000000000000001 /* LiveKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +90,7 @@
 			);
 			name = iosApp;
 			packageProductDependencies = (
+				A1C0FFEE0000000000000002 /* LiveKit */,
 			);
 			productName = iosApp;
 			productReference = 031183B128B077337BDAEAF2 /* HeyNaija.app */;
@@ -114,6 +120,9 @@
 			);
 			mainGroup = 5DD693316785638B30D5818E;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A1C0FFEE0000000000000003 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 75B6056F677D366DA3D28DF5 /* Products */;
 			projectDirPath = "";
@@ -368,6 +377,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1C0FFEE0000000000000003 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/livekit/client-sdk-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.19.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1C0FFEE0000000000000002 /* LiveKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1C0FFEE0000000000000003 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
+			productName = LiveKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E62E418F70EED8E91FC0C4DC /* Project object */;
 }
