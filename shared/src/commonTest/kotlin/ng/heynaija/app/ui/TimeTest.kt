@@ -43,4 +43,13 @@ class TimeTest {
         assertEquals("1:19", clipLength(79_435))
         assertEquals("3:00", clipLength(180_000))
     }
+
+    @Test
+    fun aPostsOwnTimeIsOnATwelveHourClockAsOnTheWeb() {
+        assertEquals("9:41 am · 7 Nov 2026", postedAt(Instant.parse("2026-11-07T08:41:00Z"), lagos))
+        assertEquals("12:30 pm · 7 Nov 2026", postedAt(Instant.parse("2026-11-07T11:30:00Z"), lagos))
+        assertEquals("2:05 pm · 7 Nov 2026", postedAt(Instant.parse("2026-11-07T13:05:00Z"), lagos))
+        // Just after midnight in Lagos is 12, not 0.
+        assertEquals("12:05 am · 8 Nov 2026", postedAt(Instant.parse("2026-11-07T23:05:00Z"), lagos))
+    }
 }
