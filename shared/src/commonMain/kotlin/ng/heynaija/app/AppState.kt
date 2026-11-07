@@ -43,8 +43,8 @@ sealed interface Account {
 sealed interface PostChange {
     data class Updated(val post: Post) : PostChange
     data class Deleted(val id: String) : PostChange
-    /** The member posted: feeds that would show it start again from the top. */
-    data class Created(val id: String) : PostChange
+    /** The member posted: feeds that would show it start again from the top. [replyTo]: the post it answers. */
+    data class Created(val id: String, val replyTo: String? = null) : PostChange
 }
 
 private const val TOKEN = "session_token"

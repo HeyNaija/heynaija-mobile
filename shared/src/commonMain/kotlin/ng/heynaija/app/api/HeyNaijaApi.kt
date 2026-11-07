@@ -501,9 +501,9 @@ class HeyNaijaApi(
     suspend fun gistReply(id: String, postId: String): Post = get("/gists/${seg(id)}/replies/${seg(postId)}")
 
     /** The replies under one reply in a Gist. */
-    suspend fun gistReplyBranch(id: String, postId: String, cursor: String? = null): ReplyPage =
+    suspend fun gistReplyBranch(id: String, postId: String, cursor: String? = null, oldestFirst: Boolean = false): ReplyPage =
         get("/gists/${seg(id)}/replies/${seg(postId)}/replies") {
-            parameter("order", "newest")
+            parameter("order", if (oldestFirst) "oldest" else "newest")
             if (cursor != null) parameter("cursor", cursor)
         }
 

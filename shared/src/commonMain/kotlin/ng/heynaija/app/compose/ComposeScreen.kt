@@ -332,7 +332,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                         sensitive = s.sensitive && (s.images.isNotEmpty() || s.video != null),
                     ),
                 )
-                app.emit(PostChange.Created(created.id))
+                app.emit(PostChange.Created(created.id, route.replyTo?.id))
                 route.replyTo?.let { parent -> app.emit(PostChange.Updated(parent.copy(replyCount = parent.replyCount + 1))) }
                 app.say(if (route.replyTo != null || route.gist != null) "Reply posted" else if (route.story != null) "Update posted" else "Posted")
                 onDone()
