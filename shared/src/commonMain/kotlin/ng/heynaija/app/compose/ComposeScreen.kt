@@ -321,17 +321,19 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                         text = s.text.trim(),
                         replyTo = route.replyTo?.id,
                         quote = route.quote?.id,
-                        community = s.community?.slug,
+                        // An update goes in its story's community and starts with its reply setting.
+                        community = if (route.story != null) null else s.community?.slug,
                         images = s.images.mapNotNull { image -> image.mediaId?.let { it to "" } },
                         poll = s.poll?.let { poll -> NewPoll(poll.options.map { it.trim() }.filter { it.isNotEmpty() }, poll.multiple, poll.expiresIn) },
-                        replyAudience = s.audience,
+                        replyAudience = if (route.story != null) null else s.audience,
+                        storyOf = route.story?.id,
                         video = s.video?.mediaId?.let { it to "" },
                         sensitive = s.sensitive && (s.images.isNotEmpty() || s.video != null),
                     ),
                 )
                 app.emit(PostChange.Created(created.id))
                 route.replyTo?.let { parent -> app.emit(PostChange.Updated(parent.copy(replyCount = parent.replyCount + 1))) }
-                app.say(if (route.replyTo != null || route.gist != null) "Reply posted" else "Posted")
+                app.say(if (route.replyTo != null || route.gist != null) "Reply posted" else if (route.story != null) "Update posted" else "Posted")
                 onDone()
             } catch (e: CancellationException) {
                 throw e
@@ -380,6 +382,7 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
             when {
                 reply != null || gist != null -> "Reply"
                 route.quote != null -> "Quote"
+                route.story != null -> "Add update ${route.story.next}"
                 else -> "New post"
             },
             onBack = close,
@@ -400,13 +403,14 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                 Avatar(me.handle, me.avatar, 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    if (reply == null && route.quote == null && gist == null) Audience(state, viewModel)
+                    if (reply == null && route.quote == null && gist == null && route.story == null) Audience(state, viewModel)
                     Box {
                         if (state.text.isEmpty()) {
                             Text(
                                 when {
                                     reply != null || gist != null -> "Write your reply"
                                     state.poll != null -> "Ask a question"
+                                    route.story != null -> "What happened next?"
                                     else -> "What is on your mind?"
                                 },
                                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize * 1.07f),
@@ -435,6 +439,10 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                     route.quote?.let { quoted ->
                         Spacer(Modifier.height(12.dp))
                         QuotedPostCard(quoted.asQuote())
+                    }
+                    route.story?.start?.let { start ->
+                        Spacer(Modifier.height(12.dp))
+                        QuotedPostCard(start)
                     }
                     state.error?.let {
                         Spacer(Modifier.height(12.dp))
@@ -514,7 +522,7 @@ private fun MentionRow(members: List<MemberSummary>, onPick: (String) -> Unit) {
     }
 }
 
-private fun Post.asQuote() = QuotedPost(
+internal fun Post.asQuote() = QuotedPost(
     id = id,
     authorHandle = authorHandle,
     authorName = authorName,

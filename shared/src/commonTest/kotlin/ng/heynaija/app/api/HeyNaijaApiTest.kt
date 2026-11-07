@@ -125,6 +125,39 @@ class HeyNaijaApiTest {
     }
 
     @Test
+    fun anUpdateNamesItsStoryAndLeavesTheReplySettingToIt() = runTest {
+        val server = FakeServer(token = "t") { HttpStatusCode.Created to """{"id":"u2"}""" }
+
+        server.api.createPost(NewPost("Day two", storyOf = "s1", replyAudience = null))
+
+        val body = (server.requests.single().body as io.ktor.http.content.TextContent).text
+        val json = HeyNaijaApi.json.parseToJsonElement(body).toString()
+        assertTrue("\"storyOf\":\"s1\"" in json, json)
+        // Left out, the update starts with its story's first post's setting.
+        assertTrue("replyAudience" !in json, json)
+    }
+
+    @Test
+    fun readsAStoryWithItsNewestUpdates() = runTest {
+        val start = """{ "id": "s1", "authorHandle": "ada", "text": "Building a darkroom", "images": [], "createdAt": "2026-11-01T10:00:00.000Z" }"""
+        val update = postJson("u2", text = "Day two").trimEnd().removeSuffix("}") +
+            """, "story": { "id": "s1", "number": 2, "updates": 2, "followers": 3, "following": true, "start": $start } }"""
+        val first = postJson("s1").trimEnd().removeSuffix("}") +
+            """, "story": { "id": "s1", "number": 0, "updates": 2, "followers": 3, "following": true, "start": null } }"""
+        val server = FakeServer { HttpStatusCode.OK to """{ "ancestors": [], "post": $first, "updates": [$update], "replies": [], "replyCursor": null }""" }
+
+        val thread = server.api.thread("s1")
+
+        assertEquals(0, thread.post.story?.number)
+        val story = thread.updates.single().story!!
+        assertEquals(2, story.number)
+        assertEquals("Building a darkroom", story.start?.text)
+        assertTrue(story.following)
+        // A server from before stories sends none, and that still reads.
+        assertNull(HeyNaijaApi.json.decodeFromString<Post>(postJson("p1")).story)
+    }
+
+    @Test
     fun mediaUrlsAddTheSizeOnEachServer() {
         val was = Servers.current
         try {

@@ -143,6 +143,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
         "quote" -> Icons.Quote to "quoted your post"
         "mention" -> Icons.Mention to if (gist) "mentioned you in a Gist" else "mentioned you"
         "follow" -> Icons.Follow to "followed you"
+        "story_update" -> Icons.Story to "added to their story"
         "post_removed" -> Icons.Shield to "A moderator removed your post for ${REASONS[n.detail] ?: "breaking the community rules"}."
         "post_restored" -> Icons.Shield to "A moderator restored your post."
         "post_labelled" -> Icons.Shield to "A moderator marked your post as sensitive. People under 18 won’t see it, and its pictures and video show behind a warning."
@@ -168,7 +169,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
 
 /** Where pressing it goes (apps/web/lib/notification-target.ts): a reply in a Gist opens in its Gist. */
 private fun target(n: Notification): Route? = when (n.kind) {
-    "reply", "like", "repost", "quote", "mention", "post_restored", "post_labelled" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
+    "reply", "like", "repost", "quote", "mention", "post_restored", "post_labelled", "story_update" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
     "follow" -> n.actor?.let { Route.Profile(it.handle) }
     "avatar_removed", "profile_cleared" -> Route.EditProfile
     "moderator_revoked" -> n.community?.let { Route.Community(it.slug) }
@@ -282,7 +283,7 @@ private fun NotificationRow(n: Notification, now: Instant) {
                 Box(Modifier.padding(start = 8.dp, top = 8.dp).size(8.dp).clip(CircleShape).background(colors.accent))
             }
         }
-        n.post?.excerpt?.takeIf { it.isNotBlank() && n.kind in setOf("reply", "like", "repost", "quote", "mention") }?.let {
+        n.post?.excerpt?.takeIf { it.isNotBlank() && n.kind in setOf("reply", "like", "repost", "quote", "mention", "story_update") }?.let {
             Text(
                 it,
                 style = MaterialTheme.typography.bodySmall,
@@ -308,5 +309,6 @@ private fun destination(n: Notification): String = when (n.kind) {
     "quote" -> "View quote"
     "mention" -> "View mention"
     "follow" -> "View profile"
+    "story_update" -> "View update"
     else -> if (n.post != null) "View post" else "View details"
 }

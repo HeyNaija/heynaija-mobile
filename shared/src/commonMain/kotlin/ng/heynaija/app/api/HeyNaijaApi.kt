@@ -54,7 +54,10 @@ data class NewPost(
     val community: String? = null,
     val images: List<Pair<String, String>> = emptyList(),
     val poll: NewPoll? = null,
-    val replyAudience: String = "everyone",
+    /** Null: everyone's, or for an update its story's first post's setting. */
+    val replyAudience: String? = "everyone",
+    /** An update to this story: its first post. */
+    val storyOf: String? = null,
     /** A ready video's upload ID and its description. */
     val video: Pair<String, String>? = null,
     /** Marked sensitive by its author (ADR 0020). */
@@ -213,7 +216,8 @@ class HeyNaijaApi(
                     put("options", buildJsonArray { for (option in poll.options) add(JsonPrimitive(option)) })
                 })
             }
-            put("replyAudience", post.replyAudience)
+            post.replyAudience?.let { put("replyAudience", it) }
+            post.storyOf?.let { put("storyOf", it) }
             if (post.sensitive) put("sensitive", true)
         }
         return send("POST", "/posts", body).body()
@@ -226,6 +230,15 @@ class HeyNaijaApi(
     suspend fun setRepost(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/repost") }
 
     suspend fun setBookmark(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/bookmark") }
+
+    /** A page of a story's updates, oldest first. */
+    suspend fun storyUpdates(id: String, cursor: String?): FeedPage = get("/posts/${seg(id)}/updates") {
+        parameter("limit", 100)
+        if (cursor != null) parameter("cursor", cursor)
+    }
+
+    /** Follow a story to be told about each new update, or stop. */
+    suspend fun setStoryFollow(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/story-follow") }
 
     suspend fun setProfilePin(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/pin") }
 

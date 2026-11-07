@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,11 +44,17 @@ import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.HeyNaijaApi
 import ng.heynaija.app.api.Post
+import ng.heynaija.app.api.PostStory
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
+import ng.heynaija.app.ui.SpineButton
+import ng.heynaija.app.ui.SpineItem
+import ng.heynaija.app.ui.StoryBar
+import ng.heynaija.app.ui.StoryStart
+import ng.heynaija.app.ui.storyDraft
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.GistReplyContext
 import ng.heynaija.app.ui.Icons
@@ -69,6 +76,9 @@ data class ThreadState(
     val missing: Boolean = false,
     /** A reply in a Gist: whether the reader hosts it, and may hide replies. */
     val viewerIsHost: Boolean = false,
+    /** On a story's first post: its updates shown, oldest first (the newest few until the rest are unfolded). */
+    val updates: List<Post> = emptyList(),
+    val unfolding: Boolean = false,
 )
 
 /** A post's thread, or with [gist] a reply in that Gist and the replies under it (the Gist API sends no ancestors). */
@@ -89,7 +99,7 @@ class ThreadViewModel(
                 when (change) {
                     is PostChange.Updated -> _state.update { s ->
                         fun Post.updated() = if (this.id == change.post.id) change.post else this
-                        s.copy(ancestors = s.ancestors.map { it.updated() }, post = s.post?.updated(), replies = s.replies.map { it.updated() })
+                        s.copy(ancestors = s.ancestors.map { it.updated() }, post = s.post?.updated(), replies = s.replies.map { it.updated() }, updates = s.updates.map { it.updated() })
                     }
                     is PostChange.Deleted -> _state.update { s ->
                         when {
@@ -118,7 +128,7 @@ class ThreadViewModel(
                     ThreadState(post = post, replies = page.replies, cursor = page.cursor, loaded = true, viewerIsHost = page.viewerIsHost)
                 } else {
                     val page = api.thread(id)
-                    ThreadState(page.ancestors, page.post, page.replies, page.replyCursor, loaded = true)
+                    ThreadState(page.ancestors, page.post, page.replies, page.replyCursor, loaded = true, updates = page.updates)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -126,6 +136,28 @@ class ThreadViewModel(
                 _state.update { it.copy(failed = e.status != 404, missing = e.status == 404, loaded = it.post != null && e.status != 404) }
             } catch (e: Exception) {
                 _state.update { it.copy(failed = true) }
+            }
+        }
+    }
+
+    /** Every update of the story, oldest first, in place of the newest few. */
+    fun unfoldUpdates() {
+        if (_state.value.unfolding) return
+        _state.update { it.copy(unfolding = true) }
+        viewModelScope.launch {
+            try {
+                val all = mutableListOf<Post>()
+                var cursor: String? = null
+                do {
+                    val page = api.storyUpdates(id, cursor)
+                    all += page.posts
+                    cursor = page.cursor
+                } while (cursor != null && all.size < 1000)
+                _state.update { it.copy(updates = all, unfolding = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(unfolding = false) }
             }
         }
     }
@@ -182,7 +214,36 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
                     }
                 }
                 if (gist != null) item(key = "gist") { InGist(gist) }
+                val story = post.story
+                // An update on its own page: the story it belongs to, above it (web ADR 0024).
+                if (story != null && story.number > 0) item(key = "story-start") { UpdateOf(story) }
                 item(key = "post-${post.id}") { PostCard(post, now, focused = true, gist = inGist) }
+                // A story's first post: its updates under it, joined by the spine.
+                if (story != null && story.number == 0) {
+                    val author = app.me?.id == post.authorId
+                    val folded = story.updates - state.updates.size
+                    item(key = "story-bar") { StoryBar(post) }
+                    if (folded > 0) {
+                        item(key = "story-fold") {
+                            SpineItem(last = false) {
+                                SpineButton(if (folded == 1) "Update 1" else "Updates 1 to $folded", Icons.Chevron, accent = false, onClick = viewModel::unfoldUpdates)
+                            }
+                        }
+                    }
+                    itemsIndexed(state.updates, key = { _, update -> "u-${update.id}" }) { index, update ->
+                        // The curve meets the card at its avatar: 10dp inset plus half a 32dp avatar.
+                        SpineItem(last = index == state.updates.lastIndex && !author, curveAt = 26.dp) { PostCard(update, now, compact = true) }
+                    }
+                    if (author) {
+                        item(key = "story-add") {
+                            SpineItem(last = true) {
+                                SpineButton("Add update ${story.updates + 1}", Icons.Plus, accent = true) {
+                                    app.navigator.push(Route.Compose(story = post.storyDraft()))
+                                }
+                            }
+                        }
+                    }
+                }
                 if (app.me != null && post.viewerCanReply && !post.deleted && !post.unavailable) {
                     item(key = "reply") { ReplyPrompt(post, gist) }
                 }
@@ -207,6 +268,25 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Above an update on its own page: the story's first post, and its place in the story. */
+@Composable
+private fun UpdateOf(story: PostStory) {
+    val app = LocalApp.current
+    val colors = HeyNaija.colors
+    Column(Modifier.padding(bottom = ListGutter)) {
+        StoryStart(story)
+        Row(Modifier.padding(top = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Update ${story.number} of ${story.updates} · ", style = MaterialTheme.typography.labelMedium, color = colors.muted)
+            Text(
+                "Read the whole story",
+                Modifier.clickable { app.navigator.push(Route.Thread(story.id)) },
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.accentStrong,
+            )
         }
     }
 }
