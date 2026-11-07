@@ -134,6 +134,8 @@ data class ComposeState(
     /** The communities the member may post in. */
     val joined: List<CommunityRef> = emptyList(),
     val audience: String = "everyone",
+    /** Marked sensitive (ADR 0020); sent only while pictures or a video are attached. */
+    val sensitive: Boolean = false,
     val posting: Boolean = false,
     val error: String? = null,
 )
@@ -286,6 +288,8 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
         if (mediaId != null) app.scope.launch { runCatching { app.api.removeVideo(mediaId) } }
     }
 
+    fun toggleSensitive() = _state.update { it.copy(sensitive = !it.sensitive) }
+
     fun togglePoll() = _state.update { it.copy(poll = if (it.poll == null) PollDraft() else null) }
 
     fun setPoll(change: (PollDraft) -> PollDraft) = _state.update { s -> s.copy(poll = s.poll?.let(change)) }
@@ -322,6 +326,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                         poll = s.poll?.let { poll -> NewPoll(poll.options.map { it.trim() }.filter { it.isNotEmpty() }, poll.multiple, poll.expiresIn) },
                         replyAudience = s.audience,
                         video = s.video?.mediaId?.let { it to "" },
+                        sensitive = s.sensitive && (s.images.isNotEmpty() || s.video != null),
                     ),
                 )
                 app.emit(PostChange.Created(created.id))
@@ -422,6 +427,10 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                     }
                     if (state.images.isNotEmpty()) Images(state.images, viewModel)
                     state.video?.let { VideoDraftCard(it, viewModel) }
+                    // As on X, the mark goes with pictures and video, and is offered only once some are attached.
+                    if (gist == null && me.composerOffersMark && (state.images.isNotEmpty() || state.video != null)) {
+                        SensitiveToggle(state.sensitive) { viewModel.toggleSensitive() }
+                    }
                     state.poll?.let { PollEditor(it, viewModel) }
                     route.quote?.let { quoted ->
                         Spacer(Modifier.height(12.dp))
@@ -513,6 +522,7 @@ private fun Post.asQuote() = QuotedPost(
     authorFounder = authorFounder,
     text = text,
     images = images,
+    coverMedia = coverMedia,
     createdAt = createdAt,
 )
 
@@ -729,6 +739,27 @@ private fun PollEditor(poll: PollDraft, viewModel: ComposeViewModel) {
                 }
             }
         }
+    }
+}
+
+/** Marking what is attached as sensitive (ADR 0020): one small, quiet switch under it, as on the web. */
+@Composable
+private fun SensitiveToggle(on: Boolean, onToggle: () -> Unit) {
+    val colors = HeyNaija.colors
+    val tint = if (on) colors.accentStrong else colors.muted
+    Spacer(Modifier.height(8.dp))
+    Row(
+        Modifier
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .border(1.dp, if (on) colors.accent.copy(alpha = 0.35f) else colors.line, androidx.compose.foundation.shape.CircleShape)
+            .background(if (on) colors.accentSoft else Color.Transparent)
+            .clickable(onClickLabel = if (on) "Unmark as sensitive" else "Mark as sensitive", onClick = onToggle)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Sensitive, null, Modifier.size(15.dp), tint = tint)
+        Spacer(Modifier.width(6.dp))
+        Text(if (on) "Marked sensitive" else "Mark as sensitive", style = MaterialTheme.typography.labelMedium, color = tint)
     }
 }
 

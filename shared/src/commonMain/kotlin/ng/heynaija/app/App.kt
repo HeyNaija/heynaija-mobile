@@ -94,6 +94,7 @@ import ng.heynaija.app.search.SearchScreen
 import ng.heynaija.app.settings.BookmarksScreen
 import ng.heynaija.app.settings.DeleteAccountScreen
 import ng.heynaija.app.settings.NotificationSettingsScreen
+import ng.heynaija.app.settings.SensitiveSettingsScreen
 import ng.heynaija.app.settings.SettingsScreen
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.HeyNaijaTheme
@@ -204,6 +205,7 @@ private fun Screen(entry: Entry) {
         Route.Settings -> SettingsScreen()
         Route.EditProfile -> EditProfileScreen()
         Route.NotificationSettings -> NotificationSettingsScreen()
+        Route.SensitiveSettings -> SensitiveSettingsScreen()
         Route.DeleteAccount -> DeleteAccountScreen()
         is Route.Gist -> GistScreen(route.id)
         is Route.Compose -> ComposeScreen(route)

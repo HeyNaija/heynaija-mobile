@@ -58,6 +58,15 @@ What the apps do now, what comes next, and what the backend
   phone off the server and gives up the token. The build reads
   `androidApp/google-services.json`, which is not in git: CI writes it from the
   `GOOGLE_SERVICES_JSON` secret, and a build without it has no push.
+- **Posts marked sensitive** (ADR 0020 in the web repository, the 18+ label),
+  the way the web shows them: a picture or video in a marked post waits behind
+  "Sensitive content" and a Show button, unless the member chose otherwise in
+  Settings; the text is never covered. The composer offers "Mark as sensitive"
+  once pictures or a video are attached, the post menu adds or takes off the
+  author's own mark, Settings can mark everything a member posts, and a post can
+  be reported as not marked. Only adults are sent marked posts; all of it is
+  behind the API's `adultLabels` flag. Not drawn blurred: Android before 12
+  cannot blur, so nothing of the media shows until Show.
 - **Search** for people, communities and posts, with trending topics.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and

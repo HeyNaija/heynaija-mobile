@@ -33,6 +33,8 @@ sealed interface Route {
     data object Settings : Route
     data object EditProfile : Route
     data object NotificationSettings : Route
+    /** Posts marked sensitive (ADR 0020): adults only. */
+    data object SensitiveSettings : Route
     data object DeleteAccount : Route
     /** A live audio room: who is on stage, joining and speaking, and its replies. */
     data class Gist(val id: String) : Route

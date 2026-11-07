@@ -57,6 +57,8 @@ data class NewPost(
     val replyAudience: String = "everyone",
     /** A ready video's upload ID and its description. */
     val video: Pair<String, String>? = null,
+    /** Marked sensitive by its author (ADR 0020). */
+    val sensitive: Boolean = false,
 )
 
 data class NewPoll(val options: List<String>, val multiple: Boolean, val expiresIn: String)
@@ -212,6 +214,7 @@ class HeyNaijaApi(
                 })
             }
             put("replyAudience", post.replyAudience)
+            if (post.sensitive) put("sensitive", true)
         }
         return send("POST", "/posts", body).body()
     }
@@ -225,6 +228,9 @@ class HeyNaijaApi(
     suspend fun setBookmark(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/bookmark") }
 
     suspend fun setProfilePin(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/pin") }
+
+    /** The author marks their own post sensitive, or takes their own mark off (ADR 0020). */
+    suspend fun setSensitive(id: String, on: Boolean) { send(if (on) "PUT" else "DELETE", "/posts/${seg(id)}/sensitive") }
 
     /** [audience] is 'everyone', 'following' or 'mentioned'. */
     suspend fun setReplyAudience(id: String, audience: String) {
@@ -252,6 +258,14 @@ class HeyNaijaApi(
         send("PUT", "/me/profile", buildJsonObject {
             put("displayName", displayName)
             put("bio", bio)
+        })
+    }
+
+    /** The member's choices about posts marked sensitive (ADR 0020); a null one stays as it is. */
+    suspend fun setSensitiveSettings(showMedia: Boolean? = null, markPosts: Boolean? = null) {
+        send("PUT", "/me/sensitive", buildJsonObject {
+            showMedia?.let { put("showMedia", it) }
+            markPosts?.let { put("markPosts", it) }
         })
     }
 

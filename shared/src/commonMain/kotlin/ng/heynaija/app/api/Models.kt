@@ -24,9 +24,30 @@ data class Me(
     val features: Map<String, Boolean> = emptyMap(),
     /** The limits a video is checked against before sending; null while video is closed to this member. */
     val videoLimits: VideoLimits? = null,
+    /** Posts marked sensitive (ADR 0020): whether they count as an adult for them, and their choices. */
+    val sensitive: SensitiveSettings = SensitiveSettings(),
 ) {
     fun has(feature: String) = features[feature] == true
+
+    /** May mark posts sensitive: the adultLabels flag is on for them, and they count as an adult. */
+    val canMarkSensitive get() = has("adultLabels") && sensitive.adult
+
+    /** The composer offers the mark, unless Settings already mark everything they post. */
+    val composerOffersMark get() = canMarkSensitive && sensitive.markPosts == null
 }
+
+/**
+ * A member's standing and choices for posts marked sensitive (ADR 0020). Only an
+ * adult is ever sent such a post, or may mark one.
+ */
+@Serializable
+data class SensitiveSettings(
+    val adult: Boolean = false,
+    /** Everything they post is marked: 'author' (their choice) or 'moderator' (which they cannot undo); null when not. */
+    val markPosts: String? = null,
+    /** Pictures and video in marked posts show without the cover. */
+    val showMedia: Boolean = false,
+)
 
 /** A page of posts; `cursor` asks for the next one, and is null at the end. */
 @Serializable
@@ -68,6 +89,10 @@ data class Post(
     val images: List<PostImage> = emptyList(),
     /** Only sent once the video is ready to play. */
     val video: PostVideo? = null,
+    /** Marked sensitive (ADR 0020): 'author' or 'moderator', null when not. Only adults and its author are sent it. */
+    val sensitive: String? = null,
+    /** Its pictures and video wait behind a cover until the reader taps Show. The text never does. */
+    val coverMedia: Boolean = false,
     val mentions: List<PostMention> = emptyList(),
     val hashtags: List<PostHashtag> = emptyList(),
     val links: List<PostLink> = emptyList(),
@@ -177,6 +202,8 @@ data class QuotedPost(
     val authorFounder: Boolean = false,
     val text: String = "",
     val images: List<PostImage> = emptyList(),
+    /** Its pictures wait behind a cover (see [Post.coverMedia]). */
+    val coverMedia: Boolean = false,
     val createdAt: String? = null,
 )
 
@@ -474,6 +501,9 @@ val REPORT_REASONS = listOf(
     "illegal" to "Illegal content",
     "other" to "Something else",
 )
+
+/** Only for a post, while marking posts sensitive is switched on (the adultLabels flag); listed before "Something else". */
+val NEEDS_LABEL_REASON = "needs_label" to "Sensitive, but not marked sensitive"
 
 /** `GET /v1/push/key`: the browsers' key, which the app does not use, and whether the app is pushed to. */
 @Serializable

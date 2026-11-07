@@ -260,9 +260,11 @@ private fun Body(post: Post, focused: Boolean, compact: Boolean, open: () -> Uni
     }
     post.poll?.let { PollCard(post, it, Modifier.padding(top = gap)) }
     if (post.images.isNotEmpty()) {
-        PostImages(post.images, Modifier.padding(top = gap)) { index -> app.navigator.push(Route.Images(post.images, index)) }
+        MediaCover(post.coverMedia, Modifier.padding(top = gap)) {
+            PostImages(post.images, Modifier.padding(top = gap)) { index -> app.navigator.push(Route.Images(post.images, index)) }
+        }
     }
-    post.video?.let { VideoPoster(it, post.id, Modifier.padding(top = gap)) }
+    post.video?.let { video -> MediaCover(post.coverMedia, Modifier.padding(top = gap)) { VideoPoster(video, post.id, Modifier.padding(top = gap)) } }
     post.quote?.let { QuotedPostCard(it, Modifier.padding(top = gap)) }
     if (post.linkPreview != null && post.images.isEmpty() && post.video == null && post.quote == null) {
         LinkCard(post.linkPreview, Modifier.padding(top = gap))
@@ -277,6 +279,40 @@ private fun Body(post: Post, focused: Boolean, compact: Boolean, open: () -> Uni
             Spacer(Modifier.width(6.dp))
             Text(note, style = MaterialTheme.typography.labelSmall, color = colors.muted)
         }
+    }
+}
+
+/**
+ * The pictures or video of a post marked sensitive (ADR 0020), held back behind one
+ * quiet line until the reader taps Show, as on the web (media-cover.tsx). Only adults
+ * are sent such a post; the API says when to cover it. Nothing of the media is drawn
+ * until Show, rather than drawn blurred: Android before 12 cannot blur.
+ */
+@Composable
+fun MediaCover(covered: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    var shown by remember { mutableStateOf(false) }
+    if (!covered || shown) {
+        content()
+        return
+    }
+    val onScrim = Color(0xFFEEF4F0)
+    Row(
+        modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(Radii.control).background(Color(0xD9070D0B)).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Sensitive, null, Modifier.size(18.dp), tint = onScrim)
+        Spacer(Modifier.width(8.dp))
+        Text("Sensitive content", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = onScrim)
+        Text(
+            "Show",
+            Modifier
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .border(1.dp, onScrim.copy(alpha = 0.35f), androidx.compose.foundation.shape.CircleShape)
+                .clickable { shown = true }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = onScrim,
+        )
     }
 }
 
@@ -478,7 +514,9 @@ fun QuotedPostCard(quote: QuotedPost, modifier: Modifier = Modifier) {
         if (text.isNotEmpty()) {
             Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.ink, maxLines = 6, overflow = TextOverflow.Ellipsis)
         }
-        if (quote.images.isNotEmpty()) {
+        if (quote.images.isNotEmpty() && quote.coverMedia) {
+            Text("Sensitive content. Open the post to see it.", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+        } else if (quote.images.isNotEmpty()) {
             Row(Modifier.height(120.dp).clip(Radii.control), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 for (image in quote.images.take(2)) {
                     AsyncImage(
@@ -643,6 +681,19 @@ private fun PostMenu(post: Post, gist: GistReplyContext?) {
                             val on = !post.pinnedOnProfile
                             app.act(post, post.copy(pinnedOnProfile = on), "That did not save.") { app.api.setProfilePin(post.id, on) }
                             app.say(if (on) "Pinned to your profile" else "Unpinned")
+                        },
+                    )
+                }
+                // The author's own mark (ADR 0020): taking it off always works; a moderator's is not theirs to change.
+                if (gist == null && post.sensitive != "moderator" && (post.sensitive == "author" || me.canMarkSensitive)) {
+                    val marked = post.sensitive == "author"
+                    DropdownMenuItem(
+                        text = { Text(if (marked) "Remove sensitive mark" else "Mark as sensitive") },
+                        leadingIcon = { Icon(Icons.Sensitive, null, Modifier.size(18.dp)) },
+                        onClick = {
+                            open = false
+                            app.act(post, post.copy(sensitive = if (marked) null else "author"), "That did not save.") { app.api.setSensitive(post.id, !marked) }
+                            app.say(if (marked) "Sensitive mark removed" else "Marked as sensitive")
                         },
                     )
                 }

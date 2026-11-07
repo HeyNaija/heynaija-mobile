@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.api.NEEDS_LABEL_REASON
 import ng.heynaija.app.api.REPORT_REASONS
 import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
@@ -45,13 +46,19 @@ fun ReportScreen(target: Pair<String, String>, what: String) {
     var details by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // "Not marked sensitive" fits only a post, while marking is switched on (ADR 0020).
+    val reasons = if (target.first == "postId" && app.me?.has("adultLabels") == true) {
+        REPORT_REASONS.dropLast(1) + NEEDS_LABEL_REASON + REPORT_REASONS.last()
+    } else {
+        REPORT_REASONS
+    }
     Column(Modifier.fillMaxSize().imePadding()) {
         TopBar("Report", onBack = { app.navigator.pop() }, backIcon = Icons.Close)
         Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("What is wrong with $what?", style = MaterialTheme.typography.titleMedium, color = colors.ink)
             Text("A moderator reads every report. The person you report is not told who sent it.", style = MaterialTheme.typography.bodyMedium, color = colors.muted)
             Column {
-                for ((key, label) in REPORT_REASONS) {
+                for ((key, label) in reasons) {
                     Row(Modifier.fillMaxWidth().clickable { reason = key }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(reason == key, { reason = key }, colors = RadioButtonDefaults.colors(selectedColor = colors.accent))
                         Text(label, style = MaterialTheme.typography.bodyLarge, color = colors.ink)

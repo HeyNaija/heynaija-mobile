@@ -85,12 +85,14 @@ fun SettingsScreen() {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (app.me != null) {
                 SectionTitle("YOUR ACCOUNT")
-                Group(listOf(
-                    { MenuRow("Edit profile", Icons.User) { app.navigator.push(Route.EditProfile) } },
-                    { MenuRow("Bookmarks", Icons.Bookmark) { app.navigator.push(Route.Bookmarks) } },
-                    { MenuRow("Notifications", Icons.Bell) { app.navigator.push(Route.NotificationSettings) } },
-                    { MenuRow("Email, handle and sign-in", Icons.Mail, detail = "On the web, for now") { open("/settings")() } },
-                ))
+                Group(buildList {
+                    add { MenuRow("Edit profile", Icons.User) { app.navigator.push(Route.EditProfile) } }
+                    add { MenuRow("Bookmarks", Icons.Bookmark) { app.navigator.push(Route.Bookmarks) } }
+                    add { MenuRow("Notifications", Icons.Bell) { app.navigator.push(Route.NotificationSettings) } }
+                    // Only adults are ever shown posts marked sensitive, or may mark one (ADR 0020).
+                    if (app.me?.sensitive?.adult == true) add { MenuRow("Sensitive content", Icons.Sensitive) { app.navigator.push(Route.SensitiveSettings) } }
+                    add { MenuRow("Email, handle and sign-in", Icons.Mail, detail = "On the web, for now") { open("/settings")() } }
+                })
             }
             SectionTitle("HEYNAIJA")
             Group(listOf(
@@ -197,6 +199,70 @@ fun NotificationSettingsScreen() {
                         color = HeyNaija.colors.muted,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * An adult's choices about posts marked sensitive (ADR 0020), as in the web's
+ * Settings: whether their pictures and video show without the cover, and whether
+ * everything they post is marked.
+ */
+@Composable
+fun SensitiveSettingsScreen() {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val me = app.me ?: return
+    var settings by remember { mutableStateOf(me.sensitive) }
+    fun save(changed: ng.heynaija.app.api.SensitiveSettings, call: suspend () -> Unit) {
+        val before = settings
+        settings = changed
+        scope.launch {
+            try {
+                call()
+                app.refreshMe()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                settings = before
+                app.say(reasonOf(e) ?: "That did not save. Try again.")
+            }
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        TopBar("Sensitive content", onBack = { app.navigator.pop() })
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "Posts with graphic violence, nudity that is not sexual, or sexual talk are marked sensitive. They are never shown to anyone under 18.",
+                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = HeyNaija.colors.muted,
+            )
+            SectionTitle("WHAT YOU SEE")
+            Group(listOf {
+                Toggle(
+                    "Show sensitive pictures and video",
+                    settings.showMedia,
+                    detail = "Off, they are covered until you tap Show. The words of a post are never hidden from you.",
+                ) { on -> save(settings.copy(showMedia = on)) { app.api.setSensitiveSettings(showMedia = on) } }
+            })
+            if (me.canMarkSensitive || settings.markPosts != null) {
+                SectionTitle("WHAT YOU POST")
+                val byModerator = settings.markPosts == "moderator"
+                Group(listOf {
+                    Toggle(
+                        "Mark everything I post as sensitive",
+                        settings.markPosts != null,
+                        detail = if (byModerator) {
+                            "A moderator turned this on because posts of yours needed the mark. Write to contact@heynaija.ng if you think it is a mistake."
+                        } else {
+                            "For people who often post sensitive things. Your new posts are not shown to anyone under 18 or signed out."
+                        },
+                    ) { on ->
+                        if (!byModerator) save(settings.copy(markPosts = if (on) "author" else null)) { app.api.setSensitiveSettings(markPosts = on) }
+                    }
+                })
             }
         }
     }

@@ -130,6 +130,7 @@ private val REASONS = mapOf(
     "hate" to "hate speech",
     "scam" to "being a scam",
     "illegal" to "illegal content",
+    "needs_label" to "sensitive content that was not marked",
 )
 
 /** What happened, in the web's words (apps/web/app/(main)/notifications/page.tsx). */
@@ -144,6 +145,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
         "follow" -> Icons.Follow to "followed you"
         "post_removed" -> Icons.Shield to "A moderator removed your post for ${REASONS[n.detail] ?: "breaking the community rules"}."
         "post_restored" -> Icons.Shield to "A moderator restored your post."
+        "post_labelled" -> Icons.Shield to "A moderator marked your post as sensitive. People under 18 won’t see it, and its pictures and video show behind a warning."
         "report_resolved" -> {
             val about = when {
                 n.detail?.startsWith("gist_") == true -> "a Gist"
@@ -166,7 +168,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
 
 /** Where pressing it goes (apps/web/lib/notification-target.ts): a reply in a Gist opens in its Gist. */
 private fun target(n: Notification): Route? = when (n.kind) {
-    "reply", "like", "repost", "quote", "mention", "post_restored" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
+    "reply", "like", "repost", "quote", "mention", "post_restored", "post_labelled" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
     "follow" -> n.actor?.let { Route.Profile(it.handle) }
     "avatar_removed", "profile_cleared" -> Route.EditProfile
     "moderator_revoked" -> n.community?.let { Route.Community(it.slug) }
