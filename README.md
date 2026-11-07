@@ -4,9 +4,11 @@ The native apps for [HeyNaija](https://heynaija.ng), the Nigeria-first social
 network built toward community ownership. The web app, API and everything
 behind them are in [HeyNaija/heynaija](https://github.com/HeyNaija/heynaija).
 
-**Status:** early. The apps show the Latest feed from staging, read-only and
-signed out. [docs/plan.md](docs/plan.md) has what comes next, and what the
-backend has to add before members can sign in.
+**Status:** in development, not in the stores yet. Members can sign in and
+join with an invite, read the feeds, threads, profiles and communities, post
+with pictures and polls, reply, like, repost, quote, bookmark, search, and get
+notifications in the app. [docs/plan.md](docs/plan.md) has what is done, what
+is left (push, Gists, video upload), and what the backend still needs.
 
 ## How it fits together
 
@@ -23,15 +25,24 @@ Multiplatform ([ADR 0001](docs/adr/0001-kotlin-multiplatform.md)).
 
 Inside `shared/src/commonMain/kotlin/ng/heynaija/app`:
 
-- `api/`: the HeyNaija API over Ktor, and the JSON it sends (`Models.kt`, after
+- `api/`: the HeyNaija API over Ktor (`HeyNaijaApi.kt`), Kratos's native
+  sign-in flows (`Kratos.kt`), and the JSON they send (`Models.kt`, after
   `apps/web/lib/api.ts`). `Server.kt` says which HeyNaija the app talks to.
-- `theme/`: the web app's colour tokens, type scale and radii
-  (`apps/web/app/globals.css`, `apps/web/DESIGN.md`). Change them on the web first.
-- `ui/`: shared pieces: post card, avatar, icons, times.
-- `feed/`: the Latest feed: a ViewModel and its screen.
+- `AppState.kt`: the session, the API, navigation, and the changes every screen
+  takes up (a like, a delete, a new post). Screens reach it through `LocalApp`.
+- `nav/`: a back stack per tab, with each screen's ViewModels kept until it is popped.
+- `platform/`: what each platform provides: the token store (Android Keystore,
+  iOS Keychain), the photo picker, the share sheet and the video player.
+- `theme/`: the web app's colour tokens and radii (`apps/web/app/globals.css`),
+  and the type scale for phones (`Type.kt` says how it differs from the web's).
+- `ui/`: shared pieces: post card, post text with links, poll, avatar, icons, times.
+- One folder per area: `feed/`, `thread/`, `profile/`, `communities/`,
+  `search/`, `notifications/`, `compose/`, `auth/` (sign in, join, the age
+  question, the welcome steps), `settings/`, `media/`, `report/`.
 
 Libraries: Ktor (HTTP), kotlinx.serialization (JSON), Coil (images),
-kotlinx-datetime, and AndroidX Lifecycle (ViewModels).
+kotlinx-datetime, AndroidX Lifecycle (ViewModels), and Media3 for video on
+Android (AVKit on iOS).
 
 ## Run it
 
@@ -55,9 +66,24 @@ Tests:
 ./gradlew :shared:testAndroidHostTest :shared:iosSimulatorArm64Test
 ```
 
-The app talks to staging (`https://staging.heynaija.ng`). Staging's Latest feed
-is public, so nothing needs to run locally. To point it at another server,
-change `ORIGIN` in `shared/src/commonMain/kotlin/ng/heynaija/app/api/Server.kt`.
+The app talks to staging (`https://staging.heynaija.ng`). Signing in needs the
+API to accept session tokens (HeyNaija/heynaija#107); until that is on staging,
+use the dev stack on your computer.
+
+### Against the dev stack
+
+A debug build has a **Server** choice in Settings (the gear on Home): Staging,
+or This computer. "This computer" expects the web repository's dev stack
+(`pnpm infra:up` and `pnpm dev:api`): the API on port 4000, Kratos on 4533 and
+the media bucket on 9100. The iOS simulator reaches them as they are. The
+Android emulator needs the ports forwarded first:
+
+```bash
+for port in 4000 4533 9100; do adb reverse tcp:$port tcp:$port; done
+```
+
+Sign-in codes land in Mailpit, at http://127.0.0.1:8026. Make an invite with
+`pnpm invite:create` in the web repository.
 
 ## Licence
 

@@ -10,6 +10,16 @@ import kotlinx.coroutines.test.runTest
 
 class HeyNaijaApiTest {
     @Test
+    fun readsAThreadWithAGoneReplyInIt() = runTest {
+        val gone = """{ "unavailable": true, "id": "r0", "replyParentId": "p1", "createdAt": "2026-11-06T11:00:00.000Z", "hasReplies": true }"""
+        val server = FakeServer { HttpStatusCode.OK to """{ "ancestors": [], "post": ${postJson("p1")}, "replies": [$gone, ${postJson("r1")}], "replyCursor": null, "ancestorsTruncated": false }""" }
+
+        val thread = server.api.thread("p1")
+
+        assertEquals(listOf(true, false), thread.replies.map { it.unavailable })
+    }
+
+    @Test
     fun readsLatestAndIgnoresWhatItDoesNotKnow() = runTest {
         val server = FakeServer { HttpStatusCode.OK to pageJson(postJson("p1"), cursor = "c2") }
 
@@ -46,7 +56,76 @@ class HeyNaijaApiTest {
     }
 
     @Test
+    fun theSessionTokenGoesToTheApiAsABearerToken() = runTest {
+        val server = FakeServer(token = "ory_st_abc") { HttpStatusCode.OK to pageJson() }
+
+        server.api.latest()
+
+        assertEquals("Bearer ory_st_abc", server.requests.single().headers["Authorization"])
+    }
+
+    @Test
+    fun aVisitorSendsNoAuthorization() = runTest {
+        val server = FakeServer { HttpStatusCode.OK to pageJson() }
+
+        server.api.latest()
+
+        assertNull(server.requests.single().headers["Authorization"])
+    }
+
+    @Test
+    fun theTokenNeverGoesToAnUploadUrl() = runTest {
+        val server = FakeServer(token = "ory_st_abc") { HttpStatusCode.OK to "" }
+
+        server.api.putFile(Upload("m1", "https://bucket.example/uploads/m1?X-Amz-Signature=s"), "image/jpeg", byteArrayOf(1, 2, 3))
+
+        val request = server.requests.single()
+        assertNull(request.headers["Authorization"])
+        assertEquals("image/jpeg", request.body.contentType?.toString())
+    }
+
+    @Test
+    fun aRefusalCarriesTheApisCodeAndWords() = runTest {
+        val server = FakeServer(token = "t") {
+            HttpStatusCode.Forbidden to """{"statusCode":403,"code":"reply_not_allowed","message":"Only people mentioned can reply"}"""
+        }
+
+        val e = assertFailsWith<ApiException> { server.api.createPost(NewPost("Hi", replyTo = "p1")) }
+
+        assertEquals(403, e.status)
+        assertEquals("reply_not_allowed", e.code)
+        assertEquals("Only people mentioned can reply", e.message)
+        assertEquals(0, server.signedOut)
+    }
+
+    @Test
+    fun a401WithATokenMeansTheSessionEnded() = runTest {
+        val server = FakeServer(token = "stale") { HttpStatusCode.Unauthorized to """{"message":"sign in required"}""" }
+
+        assertFailsWith<ApiException> { server.api.me() }
+
+        assertEquals(1, server.signedOut)
+    }
+
+    @Test
+    fun aNewPostSendsOnlyWhatItHas() = runTest {
+        val server = FakeServer(token = "t") { HttpStatusCode.Created to """{"id":"p9"}""" }
+
+        val created = server.api.createPost(
+            NewPost("Who wins?", community = "lagos", poll = NewPoll(listOf("Jollof", "Fried rice"), multiple = false, expiresIn = "1_day")),
+        )
+
+        assertEquals("p9", created.id)
+        val body = (server.requests.single().body as io.ktor.http.content.TextContent).text
+        val json = HeyNaijaApi.json.parseToJsonElement(body).toString()
+        assertTrue("\"community\":\"lagos\"" in json, json)
+        assertTrue("\"options\":[\"Jollof\",\"Fried rice\"]" in json, json)
+        assertTrue("replyTo" !in json, json)
+        assertTrue("images" !in json, json)
+    }
+
+    @Test
     fun mediaUrlsAddTheSize() {
-        assertEquals("$ORIGIN/media/posts/p1/640.webp", mediaUrl("/media/posts/p1", "640"))
+        assertEquals("https://staging.heynaija.ng/media/posts/p1/640.webp", mediaUrl("/media/posts/p1", "640"))
     }
 }

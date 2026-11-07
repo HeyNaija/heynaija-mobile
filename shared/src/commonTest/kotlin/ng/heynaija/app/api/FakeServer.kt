@@ -7,18 +7,31 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 
-/** An API that answers from [handle] and keeps every request it was sent. */
-class FakeServer(private val handle: (HttpRequestData) -> Pair<HttpStatusCode, String>) {
-    val requests = mutableListOf<HttpRequestData>()
+val TestServer = Server(
+    key = "test",
+    label = "Test",
+    api = "https://test.heynaija.ng/api",
+    kratos = "https://test.heynaija.ng/kratos",
+    media = "https://test.heynaija.ng",
+    web = "https://test.heynaija.ng",
+)
 
-    val api = HeyNaijaApi(
-        origin = "https://test.heynaija.ng",
-        engine = MockEngine { request ->
-            requests += request
-            val (status, body) = handle(request)
-            respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
-        },
-    )
+/**
+ * An API that answers from [handle] and keeps every request it was sent. [token]
+ * is the session the app holds; [signedOut] counts the API telling it the session ended.
+ */
+class FakeServer(var token: String? = null, private val handle: (HttpRequestData) -> Pair<HttpStatusCode, String>) {
+    val requests = mutableListOf<HttpRequestData>()
+    var signedOut = 0
+
+    private val engine = MockEngine { request ->
+        requests += request
+        val (status, body) = handle(request)
+        respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
+    }
+
+    val api = HeyNaijaApi(server = { TestServer }, token = { token }, engine = engine, onSignedOut = { signedOut++ })
+    val kratos = KratosAuth(server = { TestServer }, engine = engine)
 }
 
 /** A post as the API sends it, with fields the app does not read yet. */

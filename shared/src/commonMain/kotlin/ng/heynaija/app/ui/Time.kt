@@ -49,3 +49,17 @@ fun rememberNow(): Instant {
     }
     return now
 }
+
+/** A post's own time, in full: "14:05 · 7 Nov 2026". */
+fun postedAt(at: Instant, zone: TimeZone = TimeZone.currentSystemDefault()): String {
+    val local = at.toLocalDateTime(zone)
+    val time = "${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}"
+    return "$time · ${local.date.day} ${MONTHS[local.date.month.ordinal]} ${local.date.year}"
+}
+
+/** "Joined November 2026". */
+fun joined(at: Instant, zone: TimeZone = TimeZone.currentSystemDefault()): String {
+    val day = at.toLocalDateTime(zone).date
+    val month = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")[day.month.ordinal]
+    return "Joined $month ${day.year}"
+}
