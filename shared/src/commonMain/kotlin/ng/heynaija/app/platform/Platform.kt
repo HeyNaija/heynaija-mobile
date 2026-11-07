@@ -46,11 +46,20 @@ expect fun rememberShare(): (text: String) -> Unit
 
 /**
  * Plays an HLS playlist with the platform's own player and controls (Media3 on
- * Android, AVKit on iOS), from the start, as soon as it is shown. It stops and
- * lets go of the player when it leaves the screen.
+ * Android, AVKit on iOS), from [startMs], as soon as it is shown. It pauses when
+ * the app goes to the background, and stops and lets go of the player when it
+ * leaves the screen. [onEnded] is told when the clip has played to its end;
+ * [onFullScreen], where the platform's controls have no full screen of their own
+ * (Android), is offered as a button and told where the clip had got to.
  */
 @Composable
-expect fun VideoPlayer(url: String, modifier: androidx.compose.ui.Modifier)
+expect fun VideoPlayer(
+    url: String,
+    modifier: androidx.compose.ui.Modifier,
+    startMs: Long = 0,
+    onEnded: () -> Unit = {},
+    onFullScreen: ((positionMs: Long) -> Unit)? = null,
+)
 
 /**
  * A video chosen to post. It stays on the device and is read a part at a time

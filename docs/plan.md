@@ -10,7 +10,15 @@ What the apps do now, what comes next, and what the backend
   Sans, the wordmark, and the HN mark as the app icon. Text follows the phone's
   own size setting, one step smaller on small screens.
 - **Signing in and joining** with an emailed code, through Kratos's native
-  flows (ADR 0022 in the web repository). Joining asks for the invite, the date
+  flows (ADR 0022 in the web repository), or on Android with Google:
+  Credential Manager's "Sign in with Google" gives an ID token for Kratos's
+  Google client, sent with its nonce to the native flow. A Google address that
+  already has an account confirms an emailed code once and Google is connected
+  (the web repository's Kratos policy); one nobody has joined with is told that
+  joining takes an invite, and joining with Google takes the handle from the
+  form and the email from Google. Google needs an Android OAuth client in the
+  same Google Cloud project as the web client, for the package `ng.heynaija.app`
+  and each signing certificate's SHA-1 (see "Google sign-in" below). Joining asks for the invite, the date
   of birth and the handle, as the web does. The session token is kept in the
   Android Keystore or the iOS Keychain. Members who joined before the age
   question answer it first, and newcomers get the welcome steps.
@@ -59,11 +67,11 @@ What the apps do now, what comes next, and what the backend
 
 1. **Session tokens on staging.** Done in HeyNaija/heynaija#107 (API reads
    `Authorization: Bearer`, signup reads `transient_payload`), waiting to merge.
-2. **Google sign-in, and Sign in with Apple.** On a phone, Google sign-in
-   gives an ID token, which Kratos accepts in its native flows. **App Store
+2. **Sign in with Apple, then Google on iOS.** Android has Google. **App Store
    Review Guideline 4.8:** an iOS app that offers Google sign-in must also offer
-   Sign in with Apple (or a sign-in that meets the same privacy rules). Signing
-   in by emailed code alone needs neither, so the apps offer only that for now.
+   Sign in with Apple, so iOS offers the emailed code only until the Apple
+   developer account exists. ADR 0022's "Not yet" in the web repository still
+   says Google is not in the apps.
 3. **Push to the iOS app.** Android's is ADR 0023 (FCM). iOS needs the Apple
    developer account, an APNs key, and a second push service (`apns`) in the
    API's `push_devices`.
@@ -97,3 +105,20 @@ What the apps do now, what comes next, and what the backend
   way). Outside contributions then need a contributor agreement, or a licence
   exception that lets HeyNaija distribute through the App Store. Get advice on
   this before taking outside pull requests.
+
+## Google sign-in
+
+The app asks Google for an ID token whose audience is the web OAuth client
+Kratos uses (`567185521629-rk76…`, the same for staging, production and the dev
+stack; `Server.kt`). Google issues it only to an app it knows: in the Google
+Cloud project that owns that client, **Clients → Create client → Android**, with
+package `ng.heynaija.app` and the SHA-1 of the certificate the app is signed
+with. One client per certificate:
+
+- each computer's debug certificate (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android | grep SHA1`);
+- the release certificate, and once the app is on Play, Play App Signing's
+  certificate (Play Console → Test and release → App integrity).
+
+Without one, Google's sheet opens and then answers with an error, and the app
+says Google sign-in did not work. No secret is involved; the Android client has
+none.

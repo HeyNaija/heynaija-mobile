@@ -313,6 +313,8 @@ fun DeleteAccountScreen() {
                                     is AuthStep.Done -> { busy = false; request() }
                                     is AuthStep.Refused -> error = step.messages.values.firstOrNull() ?: "That did not work."
                                     AuthStep.Expired -> { reauth = app.kratos.startLogin(app.currentToken); codeSent = false; error = "That took too long. Try again." }
+                                    // Only Google's sign-in answers these.
+                                    is AuthStep.ConfirmEmail, is AuthStep.NoAccount -> error = "That did not work."
                                 }
                             } catch (e: CancellationException) {
                                 throw e

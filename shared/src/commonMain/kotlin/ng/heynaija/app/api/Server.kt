@@ -17,6 +17,12 @@ data class Server(
     val media: String,
     /** The web app, for links people share and pages the app does not have. */
     val web: String,
+    /**
+     * Kratos's Google client (docs/deployment/google-sign-in.md in the web
+     * repository): Google signs the app's ID tokens for it, so Kratos accepts
+     * them. Null where Google sign-in is off.
+     */
+    val googleClientId: String? = HEYNAIJA_GOOGLE_CLIENT,
 ) {
     companion object {
         val Staging = Server(
@@ -48,6 +54,9 @@ data class Server(
     }
 }
 
+/** The web client every HeyNaija server's Kratos uses for Google (staging, production and the dev stack's `.env`). */
+private const val HEYNAIJA_GOOGLE_CLIENT = "567185521629-rk7666tosiga37ljdvvi4tkivl3b0jil.apps.googleusercontent.com"
+
 /** The server the app talks to. A debug build can switch it in Settings. */
 object Servers {
     var current: Server = Server.Staging
@@ -63,4 +72,15 @@ fun mediaUrl(path: String, size: String): String {
     // The dev stack's bucket is served at its own root, without the /media prefix.
     val shown = if (server.media.endsWith("/heynaija-media")) path.removePrefix("/media") else path
     return "${server.media}$shown/$size.webp"
+}
+
+/**
+ * A video's file as the API names it: absolute on the media domain where the
+ * server has MEDIA_ORIGIN, or a `/media/…` path where it has not (the dev stack),
+ * which is made absolute here.
+ */
+fun mediaFile(url: String): String {
+    if (!url.startsWith("/")) return url
+    val server = Servers.current
+    return if (server.media.endsWith("/heynaija-media")) server.media + url.removePrefix("/media") else server.web + url
 }

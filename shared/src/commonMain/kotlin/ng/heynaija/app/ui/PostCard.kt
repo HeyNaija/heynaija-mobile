@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,15 +43,17 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlin.time.Instant
 import ng.heynaija.app.AppState
-import ng.heynaija.app.launchCatching
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.LinkPreview
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.PostImage
 import ng.heynaija.app.api.PostVideo
 import ng.heynaija.app.api.QuotedPost
+import ng.heynaija.app.api.mediaFile
 import ng.heynaija.app.api.mediaUrl
+import ng.heynaija.app.launchCatching
 import ng.heynaija.app.nav.Route
+import ng.heynaija.app.platform.VideoPlayer
 import ng.heynaija.app.platform.rememberShare
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
@@ -259,7 +262,7 @@ private fun Body(post: Post, focused: Boolean, compact: Boolean, open: () -> Uni
     if (post.images.isNotEmpty()) {
         PostImages(post.images, Modifier.padding(top = gap)) { index -> app.navigator.push(Route.Images(post.images, index)) }
     }
-    post.video?.let { VideoPoster(it, Modifier.padding(top = gap)) }
+    post.video?.let { VideoPoster(it, post.id, Modifier.padding(top = gap)) }
     post.quote?.let { QuotedPostCard(it, Modifier.padding(top = gap)) }
     if (post.linkPreview != null && post.images.isEmpty() && post.video == null && post.quote == null) {
         LinkCard(post.linkPreview, Modifier.padding(top = gap))
@@ -357,36 +360,64 @@ private fun Picture(image: PostImage, modifier: Modifier, rounded: Boolean = tru
     }
 }
 
-/** The poster and length; pressing it plays the clip with the platform's own player. */
+/**
+ * A post's video, as on the web (post-video.tsx): the poster and length first,
+ * never autoplay; a tap plays it here, in the card. Only one plays at a time:
+ * starting another puts this one's poster back. It stops when it scrolls out of
+ * the list or its screen is left, and the poster comes back when it ends. Full
+ * screen carries on from the same point.
+ */
 @Composable
-private fun VideoPoster(video: PostVideo, modifier: Modifier) {
+private fun VideoPoster(video: PostVideo, postId: String, modifier: Modifier) {
     val app = LocalApp.current
     val ratio = video.width.toFloat() / video.height
     val shown = ratio.coerceIn(0.75f, 16f / 9f)
+    val playlist = video.playlists?.all?.let(::mediaFile)
+    var started by remember(postId) { mutableStateOf(false) }
+    val playing by app.playingVideo.collectAsState()
+    val active = started && playing == postId
     Box(
         modifier
             .fillMaxWidth()
             .aspectRatio(shown)
             .clip(Radii.control)
             .background(Color.Black)
-            .border(1.dp, HeyNaija.colors.line, Radii.control)
-            .clickable(enabled = video.playlists != null) { video.playlists?.let { app.navigator.push(Route.Video(it.all)) } },
+            .border(1.dp, HeyNaija.colors.line, Radii.control),
     ) {
-        AsyncImage(
-            model = video.posterUrl,
-            contentDescription = video.description.ifBlank { null },
-            // A clip of an unusual shape is letterboxed; any other fills the frame,
-            // so rounding leaves no sliver of black at the edge.
-            contentScale = if (shown == ratio) ContentScale.Crop else ContentScale.Fit,
-            modifier = Modifier.matchParentSize(),
-        )
-        Box(
-            Modifier.align(Alignment.Center).size(52.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xB3070D0B)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Play, "Play", Modifier.size(24.dp), tint = Color(0xFFEEF4F0))
+        if (active && playlist != null) {
+            VideoPlayer(
+                playlist,
+                Modifier.matchParentSize(),
+                onEnded = { started = false },
+                onFullScreen = { at ->
+                    started = false
+                    app.navigator.push(Route.Video(playlist, at))
+                },
+            )
+        } else {
+            Box(
+                Modifier.matchParentSize().clickable(enabled = playlist != null) {
+                    app.playVideo(postId)
+                    started = true
+                },
+            ) {
+                AsyncImage(
+                    model = mediaFile(video.posterUrl),
+                    contentDescription = video.description.ifBlank { null },
+                    // A clip of an unusual shape is letterboxed; any other fills the frame,
+                    // so rounding leaves no sliver of black at the edge.
+                    contentScale = if (shown == ratio) ContentScale.Crop else ContentScale.Fit,
+                    modifier = Modifier.matchParentSize(),
+                )
+                Box(
+                    Modifier.align(Alignment.Center).size(52.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color(0xB3070D0B)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Play, "Play", Modifier.size(24.dp), tint = Color(0xFFEEF4F0))
+                }
+                Badge(clipLength(video.durationMs), Modifier.align(Alignment.BottomStart).padding(8.dp))
+            }
         }
-        Badge(clipLength(video.durationMs), Modifier.align(Alignment.BottomStart).padding(8.dp))
     }
 }
 
@@ -503,7 +534,7 @@ private fun Actions(post: Post, compact: Boolean, gist: GistReplyContext?) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Action(Icons.Bubble, post.replyCount, if (post.replyCount == 1) "1 reply" else "${post.replyCount} replies", enabled = post.viewerCanReply || app.me == null) {
-            app.requireMember { app.navigator.push(Route.Compose(replyTo = post, gist = gist?.id)) }
+            app.reply(post, gist?.id)
         }
         if (gist == null) RepostAction(post)
         Action(

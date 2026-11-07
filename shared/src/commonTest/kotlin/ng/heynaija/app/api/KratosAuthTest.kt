@@ -58,4 +58,65 @@ class KratosAuthTest {
 
         assertEquals(AuthStep.Expired, server.kratos.finishLogin("f1", "ada@example.com", "123456"))
     }
+
+    private val google = GoogleToken("eyJ.google.token", "n0nce")
+
+    @Test
+    fun googleSignsInWithItsIdTokenAndNonce() = runTest {
+        val server = FakeServer { HttpStatusCode.OK to """{ "session_token": "ory_st_google", "session": {} }""" }
+
+        assertEquals(AuthStep.Done("ory_st_google"), server.kratos.loginWithGoogle("f1", google))
+        val body = (server.requests.single().body as TextContent).text
+        assertTrue(""""method":"oidc","provider":"google","id_token":"eyJ.google.token","id_token_nonce":"n0nce"""" in body, body)
+    }
+
+    @Test
+    fun googleForAnAccountThatSignsInByEmailAsksForItsCodeFirst() = runTest {
+        // HeyNaija's Kratos policy hands back the sign-in flow with message 4900102 and the address to confirm.
+        val server = FakeServer {
+            HttpStatusCode.OK to """
+                { "id": "f2", "state": "choose_method", "ui": {
+                  "action": "https://test.heynaija.ng/kratos/self-service/login?flow=f2",
+                  "messages": [{ "id": 4900102, "type": "info", "text": "Google confirmed your email." }],
+                  "nodes": [{ "group": "code", "attributes": { "name": "identifier", "value": "ada@example.com" }, "messages": [] }]
+                } }
+            """.trimIndent()
+        }
+
+        assertEquals(AuthStep.ConfirmEmail("f2", "ada@example.com"), server.kratos.loginWithGoogle("f1", google))
+    }
+
+    @Test
+    fun googleThatNobodyHasJoinedWithIsNoAccount() = runTest {
+        // Kratos turns the sign-in into a signup, which wants a handle.
+        val server = FakeServer {
+            HttpStatusCode.BadRequest to """
+                { "id": "r1", "state": "choose_method", "ui": {
+                  "action": "https://test.heynaija.ng/kratos/self-service/registration?flow=r1",
+                  "messages": [],
+                  "nodes": [
+                    { "attributes": { "name": "traits.email", "value": "new@example.com" }, "messages": [] },
+                    { "attributes": { "name": "traits.handle" }, "messages": [{ "type": "error", "text": "Property handle is missing." }] }
+                  ]
+                } }
+            """.trimIndent()
+        }
+
+        assertEquals(AuthStep.NoAccount("new@example.com"), server.kratos.loginWithGoogle("f1", google))
+    }
+
+    @Test
+    fun joiningWithGoogleSendsTheHandleInviteAndAgeButNoEmail() = runTest {
+        val server = FakeServer { HttpStatusCode.BadRequest to flow("choose_method", "traits.handle" to "That handle is taken") }
+
+        val step = server.kratos.signupWithGoogle("r1", google, "ada", SignupExtras("HN-1234", "1990-04-12"))
+
+        assertEquals(AuthStep.Refused(mapOf("traits.handle" to "That handle is taken")), step)
+        val request = server.requests.single()
+        assertEquals("https://test.heynaija.ng/kratos/self-service/registration", request.url.toString().substringBefore('?'))
+        val body = (request.body as TextContent).text
+        assertTrue(""""traits":{"handle":"ada"}""" in body, body)
+        assertTrue(""""transient_payload":{"invite_code":"HN-1234","birth_date":"1990-04-12"}""" in body, body)
+        assertTrue(""""id_token_nonce":"n0nce"""" in body, body)
+    }
 }

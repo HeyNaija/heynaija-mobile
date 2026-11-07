@@ -1,6 +1,11 @@
 package ng.heynaija.app
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,19 +13,26 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -35,6 +47,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +73,7 @@ import ng.heynaija.app.auth.WelcomeScreen
 import ng.heynaija.app.communities.CommunitiesScreen
 import ng.heynaija.app.communities.CommunityScreen
 import ng.heynaija.app.compose.ComposeScreen
+import ng.heynaija.app.compose.ReplySheet
 import ng.heynaija.app.feed.HomeScreen
 import ng.heynaija.app.gists.GistScreen
 import ng.heynaija.app.media.ImageViewer
@@ -124,6 +147,7 @@ private fun Shell(app: AppState) {
     val account by app.account.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { app.messages.collect { snackbar.showSnackbar(it) } }
     BackHandler(enabled = navigator.canPop) { navigator.pop() }
+    app.replying?.let { ReplySheet(app, it) }
     // A tapped notification, whether it started the app or found it open.
     val opened by PushEvents.opened.collectAsStateWithLifecycle()
     LaunchedEffect(opened, account) {
@@ -184,21 +208,52 @@ private fun Screen(entry: Entry) {
         is Route.Gist -> GistScreen(route.id)
         is Route.Compose -> ComposeScreen(route)
         is Route.Images -> ImageViewer(route.images, route.start)
-        is Route.Video -> VideoScreen(route.url)
+        is Route.Video -> VideoScreen(route.url, route.startMs)
         is Route.Report -> ReportScreen(route.target, route.what)
         Route.SignIn -> SignInScreen()
         Route.SignUp -> SignUpScreen()
     }
 }
 
+/**
+ * The tabs: icons on a low bar, and the selected one raised into a bubble that
+ * rides on a curve in the bar's top edge, with its name under it. The curve slides
+ * from tab to tab. The bubble stands above the bar's own height, so the bar takes
+ * no more room from the screen than its icons need.
+ */
 @Composable
 private fun TabBar(app: AppState, unread: Int) {
     val colors = HeyNaija.colors
     val navigator = app.navigator
-    Column {
-        HorizontalDivider(color = colors.line)
-        NavigationBar(containerColor = colors.bg, tonalElevation = 0.dp) {
-            for (tab in Tab.entries) {
+    val selected = Tab.entries.indexOf(navigator.tab)
+    val at by animateFloatAsState(selected.toFloat(), spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val slot = size.width / Tab.entries.size
+                val centre = slot * (at + 0.5f)
+                val rise = TabRise.toPx()
+                val half = TabCurveWidth.toPx() / 2
+                val edge = Path().apply {
+                    moveTo(0f, 0f)
+                    lineTo(centre - half, 0f)
+                    cubicTo(centre - half * 0.45f, 0f, centre - half * 0.55f, -rise, centre, -rise)
+                    cubicTo(centre + half * 0.55f, -rise, centre + half * 0.45f, 0f, centre + half, 0f)
+                    lineTo(size.width, 0f)
+                }
+                val bar = Path().apply {
+                    addPath(edge)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(bar, colors.surface)
+                drawPath(edge, colors.line, style = Stroke(1.dp.toPx()))
+            },
+    ) {
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(TabBarHeight)) {
+            Tab.entries.forEachIndexed { i, tab ->
                 val (icon, label) = when (tab) {
                     Tab.Home -> Icons.Home to "Home"
                     Tab.Search -> Icons.Search to "Search"
@@ -206,29 +261,58 @@ private fun TabBar(app: AppState, unread: Int) {
                     Tab.Notifications -> Icons.Bell to "Notifications"
                     Tab.Me -> Icons.User to "Profile"
                 }
-                NavigationBarItem(
-                    selected = navigator.tab == tab,
-                    onClick = { navigator.select(tab) },
-                    icon = {
-                        Box {
-                            Icon(icon, label, Modifier.size(24.dp))
-                            if (tab == Tab.Notifications && unread > 0) {
-                                CountBadge(unread, Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp))
-                            }
-                        }
-                    },
-                    alwaysShowLabel = false,
-                    // One line, small: "Communities" would wrap at the default size.
-                    label = { Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = colors.accentStrong,
-                        selectedTextColor = colors.accentStrong,
-                        indicatorColor = colors.accentSoft,
-                        unselectedIconColor = colors.muted,
-                        unselectedTextColor = colors.muted,
-                    ),
-                )
+                TabItem(icon, label, selected = i == selected, badge = if (tab == Tab.Notifications) unread else 0) { navigator.select(tab) }
             }
+        }
+    }
+}
+
+private val TabBarHeight = 56.dp
+/** How far the curve under the selected tab rises above the bar. */
+private val TabRise = 27.dp
+private val TabCurveWidth = 120.dp
+private val TabBubble = 48.dp
+/** How far the selected tab's bubble rises: it stops short of the curve's top, leaving a margin above it. */
+private val TabLift = 24.dp
+
+@Composable
+private fun RowScope.TabItem(icon: ImageVector, label: String, selected: Boolean, badge: Int, onClick: () -> Unit) {
+    val colors = HeyNaija.colors
+    val lift by animateDpAsState(if (selected) -TabLift else 0.dp, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+    val bubble by animateFloatAsState(if (selected) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow))
+    val tint by animateColorAsState(if (selected) colors.accentStrong else colors.muted)
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .selectable(selected = selected, onClick = onClick, role = Role.Tab, indication = null, interactionSource = null)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.offset(y = lift).size(TabBubble), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer { scaleX = bubble; scaleY = bubble; alpha = bubble.coerceIn(0f, 1f) }
+                    .clip(CircleShape)
+                    .background(colors.accentSoft)
+                    .border(1.dp, colors.accent.copy(alpha = 0.18f), CircleShape),
+            )
+            Box {
+                Icon(icon, null, Modifier.size(24.dp), tint = tint)
+                if (badge > 0) CountBadge(badge, Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp))
+            }
+        }
+        if (selected) {
+            Text(
+                label,
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).wrapContentWidth(unbounded = true),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.accentStrong,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }

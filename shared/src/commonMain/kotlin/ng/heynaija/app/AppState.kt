@@ -1,8 +1,12 @@
 package ng.heynaija.app
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +16,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.HeyNaijaApi
 import ng.heynaija.app.api.KratosAuth
@@ -101,6 +104,14 @@ class AppState(val platform: Platform) {
     init {
         scope.launch { PushEvents.newToken.collect { syncPush() } }
         scope.launch { PushEvents.arrived.collect { refreshMe() } }
+    }
+
+    private val _playing = MutableStateFlow<String?>(null)
+    /** The post whose video is playing in a list: one at a time, as on the web. */
+    val playingVideo: StateFlow<String?> = _playing.asStateFlow()
+
+    fun playVideo(postId: String) {
+        _playing.value = postId
     }
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -275,6 +286,12 @@ class AppState(val platform: Platform) {
             forget()
         }
     }
+
+    /** The reply being written in a sheet over the current page, if any. */
+    var replying by mutableStateOf<Route.Compose?>(null)
+
+    /** Replies to [post] (in Gist [gist]) in a sheet over this page, without leaving it. */
+    fun reply(post: Post, gist: String? = null) = requireMember { replying = Route.Compose(replyTo = post, gist = gist) }
 
     /** Runs [block] for a member, or sends a visitor to sign in. */
     fun requireMember(block: (Me) -> Unit) {

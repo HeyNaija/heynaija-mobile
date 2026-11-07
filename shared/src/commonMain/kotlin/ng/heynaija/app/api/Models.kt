@@ -109,7 +109,7 @@ data class PostVideo(
     val durationMs: Long,
     val width: Int,
     val height: Int,
-    /** Absolute, on the media domain. */
+    /** Absolute on the media domain, or a `/media/…` path: see [mediaFile]. */
     val posterUrl: String,
     val playlists: Playlists? = null,
     val description: String = "",

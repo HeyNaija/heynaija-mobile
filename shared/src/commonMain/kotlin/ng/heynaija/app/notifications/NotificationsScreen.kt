@@ -225,48 +225,78 @@ private fun NotificationRow(n: Notification, now: Instant) {
     val (icon, words) = remember(n) { describe(n) }
     val go = target(n)
     val ago = remember(n.createdAt, now) { timeAgo(Instant.parse(n.createdAt), now) }
-    Row(
+    // As on the web: who and what beside the avatar, then the quoted post and where
+    // it leads across the whole card, rather than in a column beside the avatar.
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(Radii.card)
-            .background(if (n.read) colors.surface else colors.accentSoft.copy(alpha = 0.45f))
-            .border(1.dp, colors.line, Radii.card)
+            .background(if (n.read) colors.surface else colors.accentSoft)
+            .border(1.dp, if (n.read) colors.line else colors.accent.copy(alpha = 0.3f), Radii.card)
             .let { if (go != null) it.clickable { app.navigator.push(go) } else it }
-            .padding(12.dp),
-        verticalAlignment = Alignment.Top,
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         val actor = n.actor
-        if (actor != null) {
-            // What happened rides on the corner of who did it, as on the web.
-            Box {
-                Avatar(actor.handle, actor.avatar, 36.dp, Modifier.clickable { app.navigator.push(Route.Profile(actor.handle)) })
-                Box(
-                    Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(20.dp).clip(CircleShape).background(colors.surface).padding(2.dp),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(icon, null, Modifier.size(14.dp), tint = colors.accentStrong) }
+        Row(verticalAlignment = Alignment.Top) {
+            if (actor != null) {
+                // What happened rides on the corner of who did it, as on the web.
+                Box {
+                    Avatar(actor.handle, actor.avatar, 36.dp, Modifier.clickable { app.navigator.push(Route.Profile(actor.handle)) })
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(20.dp).clip(CircleShape).background(colors.surface).padding(2.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(icon, null, Modifier.size(14.dp), tint = colors.accentStrong) }
+                }
+            } else {
+                Box(Modifier.size(36.dp).clip(CircleShape).background(colors.panel), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, Modifier.size(18.dp), tint = colors.accentStrong)
+                }
             }
-        } else {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(colors.panel), contentAlignment = Alignment.Center) {
-                Icon(icon, null, Modifier.size(18.dp), tint = colors.accentStrong)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    buildAnnotatedString {
+                        if (actor != null) {
+                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(actor.displayName ?: "@${actor.handle}") }
+                            append(" ")
+                        }
+                        append(words)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.ink,
+                )
+                Text(ago, Modifier.padding(top = 1.dp), style = MaterialTheme.typography.labelSmall, color = colors.muted)
+            }
+            if (!n.read) {
+                Box(Modifier.padding(start = 8.dp, top = 8.dp).size(8.dp).clip(CircleShape).background(colors.accent))
             }
         }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
+        n.post?.excerpt?.takeIf { it.isNotBlank() && n.kind in setOf("reply", "like", "repost", "quote", "mention") }?.let {
             Text(
-                buildAnnotatedString {
-                    if (actor != null) {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(actor.displayName ?: "@${actor.handle}") }
-                        append(" ")
-                    }
-                    append(words)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.ink,
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (n.read) colors.muted else colors.brandDeep,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            n.post?.excerpt?.takeIf { it.isNotBlank() && n.kind in setOf("reply", "like", "repost", "quote", "mention") }?.let {
-                Text(it, Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodyMedium, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Text(ago, Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelSmall, color = colors.muted)
+        }
+        if (go != null) {
+            Text(
+                "${destination(n)} →",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.accentStrong,
+            )
         }
     }
+}
+
+/** Where the card leads, in the web's words. */
+private fun destination(n: Notification): String = when (n.kind) {
+    "reply" -> "View reply"
+    "quote" -> "View quote"
+    "mention" -> "View mention"
+    "follow" -> "View profile"
+    else -> if (n.post != null) "View post" else "View details"
 }

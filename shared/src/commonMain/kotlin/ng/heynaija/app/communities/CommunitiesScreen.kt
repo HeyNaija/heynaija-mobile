@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -145,24 +148,45 @@ fun CommunitiesScreen() {
     }
 }
 
+/**
+ * As on the web: the mark beside the name and member count, the description across
+ * the card under them, and a footer with the way in and the join button.
+ */
 @Composable
 private fun CommunityCard(community: Community, onToggle: () -> Unit) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     Card(onClick = { app.navigator.push(Route.Community(community.slug)) }) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
-            CommunityMark(community, 44.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(community.name, style = MaterialTheme.typography.titleMedium, color = colors.ink)
-                Text(plural(community.memberCount, "member"), style = MaterialTheme.typography.labelSmall, color = colors.muted)
-                if (community.description.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(community.description, style = MaterialTheme.typography.bodyMedium, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CommunityMark(community, 48.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(community.name, style = MaterialTheme.typography.titleMedium, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(plural(community.memberCount, "member"), Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelSmall, color = colors.muted)
                 }
             }
-            Spacer(Modifier.width(10.dp))
-            JoinButton(community, onToggle)
+            if (community.description.isNotBlank()) {
+                Text(
+                    community.description,
+                    Modifier.padding(top = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            HorizontalDivider(Modifier.padding(top = 14.dp), color = colors.line)
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Explore community ↗",
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.accentStrong,
+                )
+                JoinButton(community, onToggle)
+            }
         }
     }
 }

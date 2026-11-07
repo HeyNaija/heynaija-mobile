@@ -247,7 +247,7 @@ private fun ReplyPrompt(post: Post, gist: String?) {
             .fillMaxWidth()
             .background(colors.surface, Radii.card)
             .border(1.dp, colors.line, Radii.card)
-            .clickable { app.navigator.push(Route.Compose(replyTo = post, gist = gist)) }
+            .clickable { app.reply(post, gist) }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),

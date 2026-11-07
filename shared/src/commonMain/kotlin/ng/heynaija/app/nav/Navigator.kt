@@ -41,7 +41,7 @@ sealed interface Route {
     /** A new post, reply or quote; with [gist], a reply in that Gist (to [replyTo], or to the Gist itself). */
     data class Compose(val replyTo: Post? = null, val quote: Post? = null, val community: CommunityRef? = null, val gist: String? = null) : Route
     data class Images(val images: List<PostImage>, val start: Int) : Route
-    data class Video(val url: String) : Route
+    data class Video(val url: String, val startMs: Long = 0) : Route
     /** [target] is `"postId" to id` or `"handle" to handle`. */
     data class Report(val target: Pair<String, String>, val what: String) : Route
     data object SignIn : Route

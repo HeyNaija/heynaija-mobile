@@ -338,9 +338,15 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
     }
 }
 
+/**
+ * Writing a post, reply or quote. Full screen for a post or quote; a reply opens
+ * it in a sheet over the page it was asked from ([ReplySheet]), which passes
+ * [onClose] and hears through [onDraft] whether anything has been written yet.
+ */
 @Composable
-fun ComposeScreen(route: Route.Compose) {
+fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: (Boolean) -> Unit = {}) {
     val app = LocalApp.current
+    val close: () -> Unit = onClose ?: { app.navigator.pop() }
     val me = app.me ?: return
     val viewModel = viewModel(key = "compose") { ComposeViewModel(app, route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -355,6 +361,8 @@ fun ComposeScreen(route: Route.Compose) {
     // The field keeps the cursor, which the @mention suggestions need.
     var field by remember { mutableStateOf(TextFieldValue(state.text)) }
     val mentions by viewModel.mentions.collectAsStateWithLifecycle()
+    val dirty = state.text.isNotBlank() || state.images.isNotEmpty() || state.video != null || state.poll != null
+    LaunchedEffect(dirty) { onDraft(dirty) }
     fun edit(value: TextFieldValue) {
         field = value
         viewModel.setText(value.text)
@@ -368,12 +376,12 @@ fun ComposeScreen(route: Route.Compose) {
                 route.quote != null -> "Quote"
                 else -> "New post"
             },
-            onBack = { app.navigator.pop() },
+            onBack = close,
             backIcon = Icons.Close,
             actions = {
                 PrimaryButton(
                     if (reply != null || gist != null) "Reply" else "Post",
-                    { viewModel.post { app.navigator.pop() } },
+                    { viewModel.post(close) },
                     Modifier.padding(end = 8.dp),
                     enabled = viewModel.canPost(state),
                     busy = state.posting,

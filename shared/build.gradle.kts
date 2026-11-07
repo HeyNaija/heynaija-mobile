@@ -47,6 +47,9 @@ kotlin {
             implementation(libs.media3.exoplayer.hls)
             implementation(libs.media3.ui)
             implementation(libs.livekit.android)
+            implementation(libs.credentials)
+            implementation(libs.credentials.play.services)
+            implementation(libs.googleid)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

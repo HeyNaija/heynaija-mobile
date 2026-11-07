@@ -114,9 +114,9 @@ private fun Zoomable(image: PostImage) {
 
 /** A post's clip, full screen, in the platform's own player. */
 @Composable
-fun VideoScreen(url: String) {
+fun VideoScreen(url: String, startMs: Long = 0) {
     Box(Modifier.fillMaxSize().background(Scrim)) {
-        VideoPlayer(url, Modifier.fillMaxSize())
+        VideoPlayer(url, Modifier.fillMaxSize(), startMs)
         CloseButton(Modifier.align(Alignment.TopStart))
     }
 }
