@@ -160,6 +160,22 @@ class BranchesTest {
     }
 
     @Test
+    fun aStoryUpdateOpensRepliesAsTheFocusRepliesDo() {
+        val update = post("u1", replies = 1)
+        val state = ThreadState(updates = listOf(update), branches = mapOf("u1" to open(post("b", replies = 1)), "b" to open(post("c"))))
+
+        // An update is level 1, as a reply to the first post is, so its branch reaches the limit at the same place.
+        assertEquals("u1" to 1, state.reply("u1")?.let { (post, depth) -> post.id to depth })
+        assertEquals("c" to 3, state.reply("c")?.let { (post, depth) -> post.id to depth })
+
+        val rows = replyRows(listOf(update), state.branches)
+        assertEquals(listOf("r-u1", "r-b", "r-c"), rows.keys())
+        assertEquals(BranchToggle.Hide, (rows.first() as ReplyRow.Reply).toggle)
+        assertEquals(Lines(), rows.first().lines)
+        assertEquals(listOf(1, 2, 3), rows.map { it.depth })
+    }
+
+    @Test
     fun theLastPageTakesInTheRepliesPostedBeforeIt() {
         val waiting = Branch(open = true).withPosted(post("mine", author = "me"), "ada")
 

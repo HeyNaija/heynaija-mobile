@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -99,16 +101,20 @@ data class ThreadState(
         branches = branches.mapValues { (_, branch) -> branch.copy(replies = branch.replies.map(change), recent = branch.recent.map(change)) },
     )
 
-    /** The reply opened in place with this [id] under the focus, and its level: the focus's own replies are 1. */
+    /**
+     * The post with this [id] that replies open under in place, and its level: the
+     * focus's own replies and its story's updates are 1, and the replies under them deeper.
+     */
     fun reply(id: String): Pair<Post, Int>? {
+        val top = replies + updates
         var depth = 1
         var at = id
-        // Up through the branches to one of the focus's replies, within the levels a branch may open.
-        while (replies.none { it.id == at }) {
+        // Up through the branches to one of those, within the levels a branch may open.
+        while (top.none { it.id == at }) {
             at = branches.entries.firstOrNull { (_, branch) -> branch.has(at) }?.key ?: return null
             if (++depth > THREAD_MAX_DEPTH + THREAD_MAX_GAPS) return null
         }
-        return (replies + branches.values.flatMap { it.replies + it.recent }).first { it.id == id } to depth
+        return (top + branches.values.flatMap { it.replies + it.recent }).first { it.id == id } to depth
     }
 }
 
@@ -137,11 +143,14 @@ class ThreadViewModel(
                                 replies = s.replies.filterNot { it.id == change.id },
                                 post = s.post?.let { it.copy(replyCount = (it.replyCount - 1).coerceAtLeast(0)) },
                             )
-                            parent != null -> s.copy(
-                                branches = s.branches.mapValues { (_, branch) ->
+                            parent != null -> {
+                                val left = s.branches.getValue(parent).let { branch ->
                                     branch.copy(replies = branch.replies.filterNot { it.id == change.id }, recent = branch.recent.filterNot { it.id == change.id })
-                                },
-                            ).mapPosts { if (it.id == parent) it.copy(replyCount = (it.replyCount - 1).coerceAtLeast(0)) else it }
+                                }
+                                // Emptied by the member, it closes rather than say nothing is left.
+                                s.copy(branches = s.branches + (parent to if (left.empty) left.copy(open = false) else left))
+                                    .mapPosts { if (it.id == parent) it.copy(replyCount = (it.replyCount - 1).coerceAtLeast(0)) else it }
+                            }
                             else -> s
                         }
                     }
@@ -248,9 +257,9 @@ class ThreadViewModel(
     }
 
     /**
-     * A post the member just made. A reply to a reply opened here joins its branch,
-     * which opens to show it; anything else (a reply to the focus, an update to its
-     * story) loads the thread again. A reply at the limit has no branch here: its
+     * A post the member just made. A reply to a reply or story update shown here joins
+     * its branch, which opens to show it; anything else (a reply to the focus, an
+     * update to its story) loads the thread again. A reply at the limit has no branch here: its
      * count goes up, and it shows on that reply's own page.
      */
     private fun posted(id: String, replyTo: String?) {
@@ -292,8 +301,9 @@ private val REPLY_GAP = 8.dp
 private val REPLY_AXIS = 26.dp
 
 /**
- * A row under the post in focus. Its own replies stand apart, a list's gap from each
- * other. Deeper ones indent under the reply they answer, and the line comes down the
+ * A row under the post in focus or one of its story's updates. A row at level 1 (one
+ * of the focus's replies, or an update) is drawn as it is, where its list puts it.
+ * Deeper ones indent under the reply they answer, and the line comes down the
  * gutter from it, curving into this row at [curveAt] below its top (its avatar's
  * height for a card; the middle when null). The line starts at the top of the row,
  * in the gap, so the curve branches off one continuous line, and runs on past the
@@ -304,10 +314,7 @@ private val REPLY_AXIS = 26.dp
  */
 @Composable
 private fun BranchRow(row: ReplyRow, curveAt: Dp?, content: @Composable () -> Unit) {
-    if (row.depth == 1) {
-        Box(Modifier.padding(top = ListGutter)) { content() }
-        return
-    }
+    if (row.depth == 1) return content()
     val color = HeyNaija.colors.lineStrong
     val level = minOf(row.depth, THREAD_MAX_DEPTH)
     Box(
@@ -327,19 +334,54 @@ private fun BranchRow(row: ReplyRow, curveAt: Dp?, content: @Composable () -> Un
                     else -> {
                         val radius = 8.dp.toPx()
                         val y = gap + (curveAt?.toPx() ?: ((size.height - gap) / 2))
+                        // Straight runs are lines, as on the spine, so the line is the same from row to row.
+                        down(x, to = if (row.lines.onward) size.height else y - radius)
                         val path = Path().apply {
-                            moveTo(x, 0f)
-                            lineTo(x, y - radius)
+                            moveTo(x, y - radius)
                             quadraticTo(x, y, x + radius, y)
                             lineTo(edge, y)
                         }
                         drawPath(path, color, style = Stroke(width = stroke))
-                        if (row.lines.onward) down(x, from = y - radius)
                     }
                 }
             }
             .padding(start = BRANCH_INDENT * (level - 1), top = REPLY_GAP),
     ) { content() }
+}
+
+/** One of [replyRows]: a reply with its toggle, More replies, "Your reply", or No available replies. */
+@Composable
+private fun ReplyRowView(row: ReplyRow, now: Instant, gist: String?, inGist: GistReplyContext?, viewModel: ThreadViewModel) {
+    val app = LocalApp.current
+    when (row) {
+        is ReplyRow.Reply -> BranchRow(row, curveAt = REPLY_AXIS) {
+            val reply = row.post
+            PostCard(reply, now, compact = true, gist = inGist, toggle = row.toggle?.let { toggle ->
+                {
+                    BranchToggleButton(toggle) {
+                        if (toggle == BranchToggle.Continue) app.navigator.push(Route.Thread(reply.id, reply, gist))
+                        else viewModel.toggle(reply)
+                    }
+                }
+            })
+        }
+        is ReplyRow.More -> BranchRow(row, curveAt = null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton(
+                    if (row.loading) "Loading replies…" else if (row.failed) "Try again" else "More replies",
+                    { viewModel.moreReplies(row.parent) },
+                    enabled = !row.loading,
+                )
+                if (row.failed && !row.loading) {
+                    Text("Replies could not be loaded.", style = MaterialTheme.typography.labelMedium, color = HeyNaija.colors.danger)
+                }
+            }
+        }
+        is ReplyRow.Gap -> BranchRow(row, curveAt = null) { ReplyGap(rule = !row.lines.first) }
+        is ReplyRow.Empty -> BranchRow(row, curveAt = null) {
+            Text("No available replies.", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
+        }
+    }
 }
 
 /** In a reply's action row, as tall as its buttons: opens or hides the replies under it. */
@@ -424,8 +466,12 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
                         }
                     }
                     itemsIndexed(state.updates, key = { _, update -> "u-${update.id}" }) { index, update ->
-                        // The curve meets the card at its avatar: 10dp inset plus half a 32dp avatar.
-                        SpineItem(last = index == state.updates.lastIndex && !author, curveAt = 26.dp) { PostCard(update, now, compact = true) }
+                        // The curve meets the card at its avatar. An update opens its replies under it, as
+                        // a reply does, one level in from the spine, which runs on past them.
+                        SpineItem(last = index == state.updates.lastIndex && !author, curveAt = REPLY_AXIS) {
+                            val branch = remember(update, state.branches) { replyRows(listOf(update), state.branches) }
+                            Column { for (row in branch) key(row.key) { ReplyRowView(row, now, gist, inGist, viewModel) } }
+                        }
                     }
                     if (author) {
                         // The box the next update is written in, as Reply to is under a post; the curve meets its avatar.
@@ -441,35 +487,8 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
                     item(key = "none") { Empty(if (post.viewerCanReply) "No replies yet." else "No replies.") }
                 }
                 items(rows, key = { it.key }, contentType = { it::class }) { row ->
-                    when (row) {
-                        is ReplyRow.Reply -> BranchRow(row, curveAt = REPLY_AXIS) {
-                            val reply = row.post
-                            PostCard(reply, now, compact = true, gist = inGist, toggle = row.toggle?.let { toggle ->
-                                {
-                                    BranchToggleButton(toggle) {
-                                        if (toggle == BranchToggle.Continue) app.navigator.push(Route.Thread(reply.id, reply, gist))
-                                        else viewModel.toggle(reply)
-                                    }
-                                }
-                            })
-                        }
-                        is ReplyRow.More -> BranchRow(row, curveAt = null) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                SecondaryButton(
-                                    if (row.loading) "Loading replies…" else if (row.failed) "Try again" else "More replies",
-                                    { viewModel.moreReplies(row.parent) },
-                                    enabled = !row.loading,
-                                )
-                                if (row.failed && !row.loading) {
-                                    Text("Replies could not be loaded.", style = MaterialTheme.typography.labelMedium, color = HeyNaija.colors.danger)
-                                }
-                            }
-                        }
-                        is ReplyRow.Gap -> BranchRow(row, curveAt = null) { ReplyGap(rule = !row.lines.first) }
-                        is ReplyRow.Empty -> BranchRow(row, curveAt = null) {
-                            Text("No available replies.", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
-                        }
-                    }
+                    // The focus's own replies stand apart, a list's gap from each other.
+                    Box(Modifier.padding(top = if (row.depth == 1) ListGutter else 0.dp)) { ReplyRowView(row, now, gist, inGist, viewModel) }
                 }
                 if (!state.loaded && !state.failed) {
                     item(key = "loading") {

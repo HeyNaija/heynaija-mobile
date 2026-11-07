@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.FakeServer
+import ng.heynaija.app.api.Post
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ThreadViewModelTest {
@@ -44,6 +45,10 @@ class ThreadViewModelTest {
             "/posts/a/replies" -> HttpStatusCode.OK to
                 if (request.url.parameters["cursor"] == null) page(json("b", "a"), cursor = "c2") else page(json("c", "a"))
             "/posts/mine/post" -> HttpStatusCode.OK to json("mine", "a", author = "me")
+            // A story's first post "s": update "u1" has no replies, "u2" has one.
+            "/posts/s" -> HttpStatusCode.OK to """{ "post": ${json("s", null)}, "replies": [], "replyCursor": null,
+                "updates": [${json("u1", null)}, ${json("u2", null, replies = 1)}] }"""
+            "/posts/u2/replies" -> HttpStatusCode.OK to page(json("d", "u2"))
             else -> HttpStatusCode.NotFound to """{ "message": "No $path" }"""
         }
     }
@@ -109,6 +114,28 @@ class ThreadViewModelTest {
         vm.until { it.replies.size == 2 }
 
         assertEquals(listOf("r-a", "r-b", "m-a", "r-z"), vm.keys())
+    }
+
+    @Test
+    fun aStoryUpdateOpensItsRepliesAndTakesInOnesPostedToIt() = runTest {
+        val vm = ThreadViewModel(server.api, "s", null, changes).also { it.until { s -> s.loaded } }
+        val (quiet, busy) = vm.state.value.updates
+        fun keys(update: Post) = vm.state.value.let { s -> replyRows(listOf(s.updates.first { it.id == update.id }), s.branches).map { it.key } }
+
+        vm.toggle(busy)
+        vm.until { it.branches["u2"]?.loaded == true }
+        assertEquals(listOf("r-u2", "r-d"), keys(busy))
+        assertEquals("oldest", server.requests.last().url.parameters["order"])
+
+        // u1 had no replies, so the one posted to it is all there is: it joins the list, not "Your reply".
+        changes.emit(PostChange.Created("mine", replyTo = "u1"))
+        changes.emit(PostChange.Updated(quiet.copy(replyCount = 1)))
+        vm.until { it.branches["u1"]?.replies?.isNotEmpty() == true }
+        assertEquals(listOf("r-u1", "r-mine"), keys(quiet))
+
+        changes.emit(PostChange.Deleted("mine"))
+        assertEquals(listOf("r-u1"), keys(quiet))
+        assertEquals(0, vm.state.value.updates.first().replyCount)
     }
 
     @Test
