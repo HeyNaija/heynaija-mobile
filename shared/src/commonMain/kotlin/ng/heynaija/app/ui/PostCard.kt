@@ -52,8 +52,8 @@ import ng.heynaija.app.api.QuotedPost
 import ng.heynaija.app.api.mediaFile
 import ng.heynaija.app.api.mediaUrl
 import ng.heynaija.app.launchCatching
+import ng.heynaija.app.media.VideoPlayer
 import ng.heynaija.app.nav.Route
-import ng.heynaija.app.platform.VideoPlayer
 import ng.heynaija.app.platform.rememberShare
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii

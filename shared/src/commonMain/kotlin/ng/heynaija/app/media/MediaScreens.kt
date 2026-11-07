@@ -34,7 +34,6 @@ import coil3.compose.AsyncImage
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.PostImage
 import ng.heynaija.app.api.mediaUrl
-import ng.heynaija.app.platform.VideoPlayer
 import ng.heynaija.app.ui.Icons
 
 private val Scrim = Color(0xFF070D0B)
@@ -115,8 +114,9 @@ private fun Zoomable(image: PostImage) {
 /** A post's clip, full screen, in the platform's own player. */
 @Composable
 fun VideoScreen(url: String, startMs: Long = 0) {
+    val app = LocalApp.current
     Box(Modifier.fillMaxSize().background(Scrim)) {
-        VideoPlayer(url, Modifier.fillMaxSize(), startMs)
+        VideoPlayer(url, Modifier.fillMaxSize().statusBarsPadding(), startMs, fullScreen = true, onFullScreen = { app.navigator.pop() })
         CloseButton(Modifier.align(Alignment.TopStart))
     }
 }

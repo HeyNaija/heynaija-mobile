@@ -44,22 +44,41 @@ expect fun rememberImagePicker(onPicked: (List<PickedImage>) -> Unit): (max: Int
 @Composable
 expect fun rememberShare(): (text: String) -> Unit
 
-/**
- * Plays an HLS playlist with the platform's own player and controls (Media3 on
- * Android, AVKit on iOS), from [startMs], as soon as it is shown. It pauses when
- * the app goes to the background, and stops and lets go of the player when it
- * leaves the screen. [onEnded] is told when the clip has played to its end;
- * [onFullScreen], where the platform's controls have no full screen of their own
- * (Android), is offered as a button and told where the clip had got to.
- */
-@Composable
-expect fun VideoPlayer(
-    url: String,
-    modifier: androidx.compose.ui.Modifier,
-    startMs: Long = 0,
-    onEnded: () -> Unit = {},
-    onFullScreen: ((positionMs: Long) -> Unit)? = null,
+/** What a clip is doing, as the platform's player says, in milliseconds. */
+data class VideoState(
+    /** Not paused: playing, or waiting for more to arrive to play. */
+    val playing: Boolean = false,
+    val ended: Boolean = false,
+    val positionMs: Long = 0,
+    /** 0 until the playlist says. */
+    val durationMs: Long = 0,
+    /** How far it has loaded from where it is. */
+    val bufferedMs: Long = 0,
+    val muted: Boolean = false,
+    val waiting: Boolean = false,
+    val failed: Boolean = false,
 )
+
+/**
+ * One clip in the platform's own player (Media3's ExoPlayer, AVFoundation's
+ * AVPlayer), without the platform's controls: HeyNaija draws its own, as the web
+ * does (media/VideoPlayer.kt).
+ */
+interface VideoHandle {
+    val state: androidx.compose.runtime.State<VideoState>
+    fun play()
+    fun pause()
+    fun seekTo(positionMs: Long)
+    fun setMuted(muted: Boolean)
+}
+
+/** A player for the HLS playlist [url], from [startMs], playing as soon as it can. It is let go when it leaves the composition. */
+@Composable
+expect fun rememberVideoHandle(url: String, startMs: Long): VideoHandle
+
+/** The picture alone, letterboxed in black inside [modifier]. */
+@Composable
+expect fun VideoSurface(handle: VideoHandle, modifier: androidx.compose.ui.Modifier)
 
 /**
  * A video chosen to post. It stays on the device and is read a part at a time

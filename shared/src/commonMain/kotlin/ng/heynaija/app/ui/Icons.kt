@@ -181,6 +181,32 @@ object Icons {
         "M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1z",
         "M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1z",
     )
+    /** The video player's, filled, as the web's are. */
+    val PlayFilled = lucide(
+        "play-filled",
+        "M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z",
+        filled = true,
+    )
+    val PauseFilled = lucide(
+        "pause-filled",
+        "M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1z",
+        "M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1z",
+        filled = true,
+    )
+    val FullScreen = lucide(
+        "maximize",
+        "M8 3H5a2 2 0 0 0-2 2v3",
+        "M21 8V5a2 2 0 0 0-2-2h-3",
+        "M3 16v3a2 2 0 0 0 2 2h3",
+        "M16 21h3a2 2 0 0 0 2-2v-3",
+    )
+    val ExitFullScreen = lucide(
+        "minimize",
+        "M8 3v3a2 2 0 0 1-2 2H3",
+        "M21 8h-3a2 2 0 0 1-2-2V3",
+        "M3 16h3a2 2 0 0 1 2 2v3",
+        "M16 21v-3a2 2 0 0 1 2-2h3",
+    )
     val Award = lucide(
         "award",
         "m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526",
