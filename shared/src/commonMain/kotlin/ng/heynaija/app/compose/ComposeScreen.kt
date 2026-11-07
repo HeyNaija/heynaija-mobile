@@ -75,6 +75,7 @@ import ng.heynaija.app.api.NewPoll
 import ng.heynaija.app.api.NewPost
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.QuotedPost
+import ng.heynaija.app.api.StoryDraft
 import ng.heynaija.app.media.awaitVideo
 import ng.heynaija.app.media.rejectionText
 import ng.heynaija.app.media.sendVideo
@@ -398,7 +399,7 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
             },
         )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            if (reply != null) ReplyingTo(reply) else if (gist != null) ReplyingToGist()
+            if (reply != null) ReplyingTo(reply) else if (gist != null) ReplyingToGist() else route.story?.let { AddingTo(it) }
             Row {
                 Avatar(me.handle, me.avatar, 40.dp)
                 Spacer(Modifier.width(12.dp))
@@ -439,10 +440,6 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                     route.quote?.let { quoted ->
                         Spacer(Modifier.height(12.dp))
                         QuotedPostCard(quoted.asQuote())
-                    }
-                    route.story?.start?.let { start ->
-                        Spacer(Modifier.height(12.dp))
-                        QuotedPostCard(start)
                     }
                     state.error?.let {
                         Spacer(Modifier.height(12.dp))
@@ -540,6 +537,41 @@ private fun ReplyingToGist() {
         Icon(Icons.Live, null, Modifier.size(18.dp), tint = HeyNaija.colors.accentStrong)
         Spacer(Modifier.width(8.dp))
         Text("Replying to this Gist", style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+    }
+}
+
+/** Above an update: the story it goes at the end of, as a reply shows what it answers. */
+@Composable
+private fun AddingTo(story: StoryDraft) {
+    val colors = HeyNaija.colors
+    val start = story.start?.takeIf { !it.unavailable }
+    Column(Modifier.padding(bottom = 14.dp)) {
+        if (start != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(start.authorHandle ?: "", start.authorAvatar, 24.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(start.authorName ?: "@${start.authorHandle}", style = MaterialTheme.typography.labelLarge, color = colors.ink)
+            }
+            if (start.text.isNotBlank()) {
+                Text(
+                    start.text,
+                    Modifier.padding(start = 32.dp, top = 2.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(Modifier.padding(start = if (start != null) 32.dp else 0.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Story, null, Modifier.size(14.dp), tint = colors.accentStrong)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                if (story.next == 1) "Update 1: this post becomes a story" else "Update ${story.next} of your story",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.accentStrong,
+            )
+        }
     }
 }
 

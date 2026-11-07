@@ -30,6 +30,7 @@ import ng.heynaija.app.platform.KeyValueStore
 import ng.heynaija.app.platform.Platform
 import ng.heynaija.app.platform.PushDevice
 import ng.heynaija.app.platform.PushEvents
+import ng.heynaija.app.ui.storyDraft
 
 /** Who is using the app. [Unknown] only while the app starts. */
 sealed interface Account {
@@ -292,6 +293,16 @@ class AppState(val platform: Platform) {
 
     /** Replies to [post] (in Gist [gist]) in a sheet over this page, without leaving it. */
     fun reply(post: Post, gist: String? = null) = requireMember { replying = Route.Compose(replyTo = post, gist = gist) }
+
+    /**
+     * The next update to the story [post] starts or belongs to (web ADR 0024), in the
+     * same sheet, over the story's own screen so it lands where it was written.
+     */
+    fun addUpdate(post: Post) = requireMember {
+        val story = post.storyDraft()
+        if ((navigator.stack.lastOrNull()?.route as? Route.Thread)?.id != story.id) navigator.push(Route.Thread(story.id))
+        replying = Route.Compose(story = story)
+    }
 
     /** Runs [block] for a member, or sends a visitor to sign in. */
     fun requireMember(block: (Me) -> Unit) {

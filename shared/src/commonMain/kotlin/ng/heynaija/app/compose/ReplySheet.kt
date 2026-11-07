@@ -22,8 +22,8 @@ import ng.heynaija.app.nav.Route
 import ng.heynaija.app.theme.HeyNaija
 
 /**
- * A reply, written in a sheet over the feed or thread it was asked from, so the
- * member stays where they were. The composer is the full one (pictures,
+ * A reply, or the next update to a story, written in a sheet over the feed or
+ * thread it was asked from, so the member stays where they were. The composer is the full one (pictures,
  * mentions). Once something is written, only its own close button or posting
  * shuts the sheet: a stray swipe or tap outside does not throw the draft away.
  */

@@ -21,8 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -179,7 +182,42 @@ fun SpineItem(last: Boolean, curveAt: Dp? = null, content: @Composable () -> Uni
     ) { content() }
 }
 
-/** A button-sized row on the spine: unfolding earlier updates, or the author's Add update. */
+/**
+ * At the end of the spine, for its author: "Add update N…" with their face, edged
+ * in dashes. It opens the sheet replies are written in, over this screen.
+ */
+@Composable
+fun UpdatePrompt(post: Post) {
+    val app = LocalApp.current
+    val me = app.me ?: return
+    val colors = HeyNaija.colors
+    val next = (post.story?.updates ?: 0) + 1
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(Radii.card)
+            .background(colors.surface)
+            .drawBehind {
+                val width = 1.dp.toPx()
+                drawRoundRect(
+                    colors.accent,
+                    topLeft = Offset(width / 2, width / 2),
+                    size = Size(size.width - width, size.height - width),
+                    cornerRadius = CornerRadius(12.dp.toPx()),
+                    style = Stroke(width, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+                )
+            }
+            .clickable { app.addUpdate(post) }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Avatar(me.handle, me.avatar, 32.dp)
+        Text("Add update $next…", style = MaterialTheme.typography.bodyLarge, color = colors.faint)
+    }
+}
+
+/** A button-sized row on the spine: unfolding earlier updates. */
 @Composable
 fun SpineButton(label: String, icon: ImageVector, accent: Boolean, onClick: () -> Unit) {
     val colors = HeyNaija.colors

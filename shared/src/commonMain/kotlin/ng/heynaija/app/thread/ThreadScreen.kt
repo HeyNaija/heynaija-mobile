@@ -51,10 +51,10 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.SpineButton
+import ng.heynaija.app.ui.UpdatePrompt
 import ng.heynaija.app.ui.SpineItem
 import ng.heynaija.app.ui.StoryBar
 import ng.heynaija.app.ui.StoryStart
-import ng.heynaija.app.ui.storyDraft
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.GistReplyContext
 import ng.heynaija.app.ui.Icons
@@ -235,12 +235,9 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
                         SpineItem(last = index == state.updates.lastIndex && !author, curveAt = 26.dp) { PostCard(update, now, compact = true) }
                     }
                     if (author) {
+                        // The box the next update is written in, as Reply to is under a post; the curve meets its avatar.
                         item(key = "story-add") {
-                            SpineItem(last = true) {
-                                SpineButton("Add update ${story.updates + 1}", Icons.Plus, accent = true) {
-                                    app.navigator.push(Route.Compose(story = post.storyDraft()))
-                                }
-                            }
+                            SpineItem(last = true, curveAt = 28.dp) { UpdatePrompt(post) }
                         }
                     }
                 }

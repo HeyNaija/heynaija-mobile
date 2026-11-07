@@ -711,7 +711,7 @@ private fun PostMenu(post: Post, gist: GistReplyContext?) {
                     DropdownMenuItem(
                         text = { Text("Add update") },
                         leadingIcon = { Icon(Icons.Plus, null, Modifier.size(18.dp)) },
-                        onClick = { open = false; app.navigator.push(Route.Compose(story = post.storyDraft())) },
+                        onClick = { open = false; app.addUpdate(post) },
                     )
                     DropdownMenuItem(
                         text = { Text(if (post.pinnedOnProfile) "Unpin from your profile" else "Pin to your profile") },
