@@ -83,6 +83,7 @@ class AppState(val platform: Platform) {
     /** Reads the saved session: shown at once from the last copy of `/v1/me`, then checked. */
     fun start() {
         val saved = token
+        if (platform.debug) println("HeyNaija: starting ${if (saved == null) "signed out" else "with a saved session"} on ${Servers.current.label}")
         if (saved == null) {
             _account.value = Account.SignedOut
             return
@@ -102,6 +103,7 @@ class AppState(val platform: Platform) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiException) {
+            if (platform.debug) println("HeyNaija: /v1/me answered ${e.status} ${e.code}")
             // 401 has already signed out (onSignedOut). A 403 is an invite that was never spent,
             // or a suspended account: neither can use the app.
             if (e.status == 403) forget()

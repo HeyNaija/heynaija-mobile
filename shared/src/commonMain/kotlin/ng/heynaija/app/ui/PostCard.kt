@@ -306,7 +306,7 @@ fun PostImages(images: List<PostImage>, modifier: Modifier = Modifier, onOpen: (
         val image = images.first()
         Picture(
             image,
-            modifier.fillMaxWidth().aspectRatio((image.width.toFloat() / image.height).coerceIn(0.75f, 2f)).clickable { onOpen(0) },
+            modifier.fillMaxWidth().aspectRatio((image.width.toFloat() / image.height).coerceIn(0.8f, 2f)).clickable { onOpen(0) },
         )
         return
     }

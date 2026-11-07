@@ -269,6 +269,10 @@ data class MemberSummary(
     val founder: Boolean = false,
 )
 
+/** Members offered while typing an @mention, people the member follows first. */
+@Serializable
+data class MentionPage(val members: List<MemberSummary> = emptyList(), val cursor: String? = null)
+
 @Serializable
 data class TrendingTopics(val topics: List<TrendingTopic> = emptyList())
 

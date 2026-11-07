@@ -294,6 +294,9 @@ class HeyNaijaApi(
     /** [q] of 2 to 80 characters. */
     suspend fun search(q: String): SearchResults = get("/search") { parameter("q", q) }
 
+    /** Members whose handle starts with [q] (1 to 20 letters, numbers or _), for an @mention. */
+    suspend fun mentionSuggestions(q: String): MentionPage = get("/search/mentions") { parameter("q", q) }
+
     /** [ApiException] 404 when trending topics are switched off. */
     suspend fun trendingTopics(): TrendingTopics = get("/topics/trending")
 

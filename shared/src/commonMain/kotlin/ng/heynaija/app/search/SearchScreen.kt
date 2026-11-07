@@ -29,12 +29,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -125,6 +130,7 @@ fun SearchScreen() {
     var query by rememberSaveable { mutableStateOf(state.query) }
     val now = rememberNow()
     val focus = LocalFocusManager.current
+    val field = remember { FocusRequester() }
     val colors = HeyNaija.colors
 
     Column(Modifier.fillMaxSize()) {
@@ -135,6 +141,8 @@ fun SearchScreen() {
                     .fillMaxWidth()
                     .background(colors.surface, Radii.control)
                     .border(1.dp, colors.lineStrong, Radii.control)
+                    // The whole box is the field, not only its line of text.
+                    .clickable { field.requestFocus() }
                     .padding(horizontal = 12.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -145,7 +153,7 @@ fun SearchScreen() {
                     BasicTextField(
                         query,
                         { query = it; viewModel.search(it) },
-                        Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth().focusRequester(field).semantics { contentDescription = "Search" },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.ink),
                         cursorBrush = SolidColor(colors.accent),

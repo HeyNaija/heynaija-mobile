@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
@@ -45,6 +48,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -54,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +69,7 @@ import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.CommunityRef
+import ng.heynaija.app.api.MemberSummary
 import ng.heynaija.app.api.NewPoll
 import ng.heynaija.app.api.NewPost
 import ng.heynaija.app.api.Post
@@ -135,6 +142,24 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
     val state: StateFlow<ComposeState> = _state.asStateFlow()
     private val uploads = mutableMapOf<Int, Job>()
     private var nextKey = 0
+
+    private val _mentions = MutableStateFlow<List<MemberSummary>>(emptyList())
+    /** Members to offer for the @mention being typed; empty when there is none. */
+    val mentions: StateFlow<List<MemberSummary>> = _mentions.asStateFlow()
+    private var lookUp: Job? = null
+
+    /** Asks for members a moment after typing stops; [partial] null clears the list. */
+    fun suggest(partial: String?) {
+        lookUp?.cancel()
+        if (partial == null) {
+            _mentions.value = emptyList()
+            return
+        }
+        lookUp = viewModelScope.launch {
+            delay(200)
+            _mentions.value = runCatching { app.api.mentionSuggestions(partial).members.take(8) }.getOrDefault(emptyList())
+        }
+    }
 
     init {
         if (route.replyTo == null) viewModelScope.launch {
@@ -242,6 +267,14 @@ fun ComposeScreen(route: Route.Compose) {
     LaunchedEffect(Unit) { focus.requestFocus() }
     val reply = route.replyTo
     val length = visibleLength(state.text.trim())
+    // The field keeps the cursor, which the @mention suggestions need.
+    var field by remember { mutableStateOf(TextFieldValue(state.text)) }
+    val mentions by viewModel.mentions.collectAsStateWithLifecycle()
+    fun edit(value: TextFieldValue) {
+        field = value
+        viewModel.setText(value.text)
+        viewModel.suggest(if (value.selection.collapsed) mentionAt(value.text, value.selection.start) else null)
+    }
 
     Column(Modifier.fillMaxSize().background(colors.bg).imePadding()) {
         TopBar(
@@ -282,8 +315,8 @@ fun ComposeScreen(route: Route.Compose) {
                             )
                         }
                         BasicTextField(
-                            state.text,
-                            viewModel::setText,
+                            field,
+                            ::edit,
                             Modifier.fillMaxWidth().heightIn(min = 120.dp).focusRequester(focus),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 color = colors.ink,
@@ -304,6 +337,13 @@ fun ComposeScreen(route: Route.Compose) {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.danger)
                     }
                 }
+            }
+        }
+        if (mentions.isNotEmpty()) {
+            MentionRow(mentions) { handle ->
+                val (text, cursor) = insertMention(field.text, field.selection.start, handle)
+                edit(TextFieldValue(text, TextRange(cursor)))
+                viewModel.suggest(null)
             }
         }
         HorizontalDivider(color = colors.line)
@@ -328,6 +368,32 @@ fun ComposeScreen(route: Route.Compose) {
                     style = MaterialTheme.typography.labelLarge,
                     color = if (left < 0) colors.danger else colors.muted,
                 )
+            }
+        }
+    }
+}
+
+/** People to mention, in a row above the toolbar. */
+@Composable
+private fun MentionRow(members: List<MemberSummary>, onPick: (String) -> Unit) {
+    val colors = HeyNaija.colors
+    HorizontalDivider(color = colors.line)
+    LazyRow(
+        Modifier.fillMaxWidth().background(colors.surface),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(members, key = { it.handle }) { member ->
+            Row(
+                Modifier.clip(Radii.control).border(1.dp, colors.line, Radii.control).clickable { onPick(member.handle) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(member.handle, member.avatar, 24.dp)
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(member.displayName ?: "@${member.handle}", style = MaterialTheme.typography.labelLarge, color = colors.ink, maxLines = 1)
+                    if (member.displayName != null) Text("@${member.handle}", style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 1)
+                }
             }
         }
     }

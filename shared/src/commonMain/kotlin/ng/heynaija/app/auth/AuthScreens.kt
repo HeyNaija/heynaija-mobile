@@ -347,14 +347,15 @@ fun BirthDateFields(birth: BirthDate, onChange: (BirthDate) -> Unit, confirmed: 
     // Lagos's year, as on the web.
     val latest = remember { Clock.System.now().toLocalDateTime(TimeZone.of("Africa/Lagos")).year }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Date of birth", style = MaterialTheme.typography.labelLarge, color = colors.ink)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Picker("Day", birth.day.takeIf { it > 0 }?.toString(), (1..daysIn(birth.month, birth.year)).map { it.toString() }, Modifier.weight(0.8f)) {
+            Picker("Day", birth.day.takeIf { it > 0 }?.toString(), (1..daysIn(birth.month, birth.year)).map { it.toString() }, Modifier.weight(0.85f)) {
                 onChange(birth.copy(day = it.toInt()))
             }
             Picker("Month", birth.month.takeIf { it > 0 }?.let { MONTHS[it - 1] }, MONTHS, Modifier.weight(1.4f)) {
                 onChange(birth.copy(month = MONTHS.indexOf(it) + 1))
             }
-            Picker("Year", birth.year.takeIf { it > 0 }?.toString(), (0..110).map { (latest - it).toString() }, Modifier.weight(1f)) {
+            Picker("Year", birth.year.takeIf { it > 0 }?.toString(), (0..110).map { (latest - it).toString() }, Modifier.weight(1.05f)) {
                 onChange(birth.copy(year = it.toInt()))
             }
         }
@@ -366,31 +367,28 @@ fun BirthDateFields(birth: BirthDate, onChange: (BirthDate) -> Unit, confirmed: 
     }
 }
 
+/** A box that opens a list; it shows its own name ("Day") until something is chosen. */
 @Composable
 private fun Picker(label: String, value: String?, options: List<String>, modifier: Modifier, onPick: (String) -> Unit) {
     val colors = HeyNaija.colors
     var open by remember { mutableStateOf(false) }
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = colors.ink)
-        Spacer(Modifier.height(6.dp))
-        Box {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .clip(Radii.control)
-                    .border(1.dp, colors.lineStrong, Radii.control)
-                    .clickable { open = true }
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(value ?: "Choose", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = if (value == null) colors.faint else colors.ink, maxLines = 1)
-                Icon(Icons.Chevron, null, Modifier.size(16.dp), tint = colors.muted)
-            }
-            DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 320.dp)) {
-                for (option in options) {
-                    DropdownMenuItem(text = { Text(option) }, onClick = { open = false; onPick(option) })
-                }
+    Box(modifier) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(Radii.control)
+                .border(1.dp, if (value == null) colors.lineStrong else colors.accent, Radii.control)
+                .clickable(onClickLabel = label) { open = true }
+                .padding(start = 12.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(value ?: label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = if (value == null) colors.muted else colors.ink, maxLines = 1)
+            Icon(Icons.Chevron, null, Modifier.size(16.dp), tint = colors.muted)
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 320.dp)) {
+            for (option in options) {
+                DropdownMenuItem(text = { Text(option) }, onClick = { open = false; onPick(option) })
             }
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -204,7 +205,8 @@ private fun TabBar(app: AppState, unread: Int) {
                         }
                     },
                     alwaysShowLabel = false,
-                    label = { Text(label) },
+                    // One line, small: "Communities" would wrap at the default size.
+                    label = { Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = colors.accentStrong,
                         selectedTextColor = colors.accentStrong,
