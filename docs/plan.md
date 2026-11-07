@@ -67,6 +67,13 @@ What the apps do now, what comes next, and what the backend
   be reported as not marked. Only adults are sent marked posts; all of it is
   behind the API's `adultLabels` flag. Not drawn blurred: Android before 12
   cannot blur, so nothing of the media shows until Show.
+- **Stories** (ADR 0024 in the web repository): a post plus the updates its
+  author adds to it. Feeds show a story once, as its newest update with the
+  first post on one line above it; the first post's screen has Follow story and
+  the updates oldest first, joined by a curved line, the earlier ones folded;
+  an update's own screen names its place. The author writes the next update
+  from the box at the end of the story ("Add update 3…") or the post's menu,
+  in the sheet replies use, over the story. Needs the web's `feat/stories` API.
 - **Search** for people, communities and posts, with trending topics.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and

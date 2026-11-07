@@ -115,6 +115,25 @@ data class Post(
     val via: Via? = null,
     /** A Gist reply its host hid: sent as [unavailable] when replies hang under it. */
     val hiddenByHost: Boolean = false,
+    /** The story it is part of (web ADR 0024): its first post with updates, or one of them. */
+    val story: PostStory? = null,
+)
+
+/** What the composer needs to add an update: the story's first post, the update's number, and the first post to show under the box. */
+data class StoryDraft(val id: String, val next: Int, val start: QuotedPost?)
+
+/** A story as each of its posts carries it: one author's updates to a post, in order. */
+@Serializable
+data class PostStory(
+    /** The story's first post. */
+    val id: String,
+    /** 0 on the first post; an update's place among the live updates, from 1. */
+    val number: Int = 0,
+    val updates: Int = 0,
+    val followers: Int = 0,
+    val following: Boolean = false,
+    /** On an update, the first post (only `unavailable` when gone or hidden). Null on the first post. */
+    val start: QuotedPost? = null,
 )
 
 @Serializable
@@ -240,6 +259,8 @@ data class Via(
 data class ThreadPage(
     val ancestors: List<Post> = emptyList(),
     val post: Post,
+    /** On a story's first post, its newest updates, oldest first; the earlier ones are paged with storyUpdates. */
+    val updates: List<Post> = emptyList(),
     val replies: List<Post> = emptyList(),
     val replyCursor: String? = null,
     val ancestorsTruncated: Boolean = false,
@@ -490,6 +511,7 @@ val NOTIFICATION_KINDS = listOf(
     "like" to "Likes",
     "repost" to "Reposts",
     "follow" to "New followers",
+    "story_update" to "Stories you follow",
 )
 
 /** The reasons a report can give, as the web lists them (apps/web/lib/report-reasons.ts). */

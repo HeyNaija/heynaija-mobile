@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import ng.heynaija.app.api.CommunityRef
 import ng.heynaija.app.api.Post
+import ng.heynaija.app.api.StoryDraft
 import ng.heynaija.app.api.PostImage
 
 /** A screen, with what it needs to open. */
@@ -41,7 +42,8 @@ sealed interface Route {
 
     // Full screen, without the tab bar.
     /** A new post, reply or quote; with [gist], a reply in that Gist (to [replyTo], or to the Gist itself). */
-    data class Compose(val replyTo: Post? = null, val quote: Post? = null, val community: CommunityRef? = null, val gist: String? = null) : Route
+    /** [story]: an update to that story. */
+    data class Compose(val replyTo: Post? = null, val quote: Post? = null, val community: CommunityRef? = null, val gist: String? = null, val story: StoryDraft? = null) : Route
     data class Images(val images: List<PostImage>, val start: Int) : Route
     data class Video(val url: String, val startMs: Long = 0) : Route
     /** [target] is `"postId" to id` or `"handle" to handle`. */

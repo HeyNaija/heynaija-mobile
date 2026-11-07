@@ -37,7 +37,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -119,6 +123,30 @@ fun PostCard(
         return
     }
     val open = { app.navigator.push(Route.Thread(post.id, post, gist?.id)) }
+    val story = post.story
+    // An update away from its story shows where it comes from (web ADR 0024).
+    if (!focused && !compact && story != null && story.number > 0) {
+        Column(modifier) {
+            StoryStart(story)
+            StoryJoin()
+            PostSurface(post, now, Modifier, focused, compact, pinned, gist, open)
+        }
+        return
+    }
+    PostSurface(post, now, modifier, focused, compact, pinned, gist, open)
+}
+
+@Composable
+private fun PostSurface(
+    post: Post,
+    now: Instant,
+    modifier: Modifier,
+    focused: Boolean,
+    compact: Boolean,
+    pinned: Boolean,
+    gist: GistReplyContext?,
+    open: () -> Unit,
+) {
     Card(modifier, onClick = if (focused) null else open) {
         Column(Modifier.padding(start = 14.dp, end = 6.dp, top = if (compact) 10.dp else 14.dp)) {
             Column(Modifier.padding(end = 8.dp)) {
@@ -215,10 +243,16 @@ private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean,
                     FounderBadge()
                 }
             }
+            // A story's place, in the accent: an update's number, or "Story" on its first post in a list.
+            val storyLabel = post.story?.let { s -> if (s.number > 0) "Update ${s.number}" else if (!focused) "Story" else null }
             Text(
-                buildString {
+                buildAnnotatedString {
                     if (post.authorName != null) append("@${post.authorHandle} · ")
                     append(if (focused) postedAt(Instant.parse(post.createdAt)) else ago)
+                    if (storyLabel != null) {
+                        append(" · ")
+                        withStyle(SpanStyle(color = colors.accentStrong, fontWeight = FontWeight.SemiBold)) { append(storyLabel) }
+                    }
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.muted,
@@ -673,6 +707,12 @@ private fun PostMenu(post: Post, gist: GistReplyContext?) {
         DropdownMenu(open, onDismissRequest = { open = false }) {
             if (own) {
                 if (post.replyParentId == null && gist == null) {
+                    // Any of your top-level posts becomes a story with its first update (web ADR 0024).
+                    DropdownMenuItem(
+                        text = { Text("Add update") },
+                        leadingIcon = { Icon(Icons.Plus, null, Modifier.size(18.dp)) },
+                        onClick = { open = false; app.addUpdate(post) },
+                    )
                     DropdownMenuItem(
                         text = { Text(if (post.pinnedOnProfile) "Unpin from your profile" else "Pin to your profile") },
                         leadingIcon = { Icon(Icons.Pin, null, Modifier.size(18.dp)) },

@@ -75,6 +75,7 @@ import ng.heynaija.app.api.NewPoll
 import ng.heynaija.app.api.NewPost
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.QuotedPost
+import ng.heynaija.app.api.StoryDraft
 import ng.heynaija.app.media.awaitVideo
 import ng.heynaija.app.media.rejectionText
 import ng.heynaija.app.media.sendVideo
@@ -321,17 +322,19 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                         text = s.text.trim(),
                         replyTo = route.replyTo?.id,
                         quote = route.quote?.id,
-                        community = s.community?.slug,
+                        // An update goes in its story's community and starts with its reply setting.
+                        community = if (route.story != null) null else s.community?.slug,
                         images = s.images.mapNotNull { image -> image.mediaId?.let { it to "" } },
                         poll = s.poll?.let { poll -> NewPoll(poll.options.map { it.trim() }.filter { it.isNotEmpty() }, poll.multiple, poll.expiresIn) },
-                        replyAudience = s.audience,
+                        replyAudience = if (route.story != null) null else s.audience,
+                        storyOf = route.story?.id,
                         video = s.video?.mediaId?.let { it to "" },
                         sensitive = s.sensitive && (s.images.isNotEmpty() || s.video != null),
                     ),
                 )
                 app.emit(PostChange.Created(created.id))
                 route.replyTo?.let { parent -> app.emit(PostChange.Updated(parent.copy(replyCount = parent.replyCount + 1))) }
-                app.say(if (route.replyTo != null || route.gist != null) "Reply posted" else "Posted")
+                app.say(if (route.replyTo != null || route.gist != null) "Reply posted" else if (route.story != null) "Update posted" else "Posted")
                 onDone()
             } catch (e: CancellationException) {
                 throw e
@@ -380,6 +383,7 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
             when {
                 reply != null || gist != null -> "Reply"
                 route.quote != null -> "Quote"
+                route.story != null -> "Add update ${route.story.next}"
                 else -> "New post"
             },
             onBack = close,
@@ -395,18 +399,19 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
             },
         )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            if (reply != null) ReplyingTo(reply) else if (gist != null) ReplyingToGist()
+            if (reply != null) ReplyingTo(reply) else if (gist != null) ReplyingToGist() else route.story?.let { AddingTo(it) }
             Row {
                 Avatar(me.handle, me.avatar, 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    if (reply == null && route.quote == null && gist == null) Audience(state, viewModel)
+                    if (reply == null && route.quote == null && gist == null && route.story == null) Audience(state, viewModel)
                     Box {
                         if (state.text.isEmpty()) {
                             Text(
                                 when {
                                     reply != null || gist != null -> "Write your reply"
                                     state.poll != null -> "Ask a question"
+                                    route.story != null -> "What happened next?"
                                     else -> "What is on your mind?"
                                 },
                                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize * 1.07f),
@@ -514,7 +519,7 @@ private fun MentionRow(members: List<MemberSummary>, onPick: (String) -> Unit) {
     }
 }
 
-private fun Post.asQuote() = QuotedPost(
+internal fun Post.asQuote() = QuotedPost(
     id = id,
     authorHandle = authorHandle,
     authorName = authorName,
@@ -532,6 +537,41 @@ private fun ReplyingToGist() {
         Icon(Icons.Live, null, Modifier.size(18.dp), tint = HeyNaija.colors.accentStrong)
         Spacer(Modifier.width(8.dp))
         Text("Replying to this Gist", style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+    }
+}
+
+/** Above an update: the story it goes at the end of, as a reply shows what it answers. */
+@Composable
+private fun AddingTo(story: StoryDraft) {
+    val colors = HeyNaija.colors
+    val start = story.start?.takeIf { !it.unavailable }
+    Column(Modifier.padding(bottom = 14.dp)) {
+        if (start != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Avatar(start.authorHandle ?: "", start.authorAvatar, 24.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(start.authorName ?: "@${start.authorHandle}", style = MaterialTheme.typography.labelLarge, color = colors.ink)
+            }
+            if (start.text.isNotBlank()) {
+                Text(
+                    start.text,
+                    Modifier.padding(start = 32.dp, top = 2.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(Modifier.padding(start = if (start != null) 32.dp else 0.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Story, null, Modifier.size(14.dp), tint = colors.accentStrong)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                if (story.next == 1) "Update 1: this post becomes a story" else "Update ${story.next} of your story",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.accentStrong,
+            )
+        }
     }
 }
 
