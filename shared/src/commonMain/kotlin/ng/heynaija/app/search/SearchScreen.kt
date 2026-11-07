@@ -70,7 +70,7 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.Card
-import ng.heynaija.app.ui.Chip
+import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PostCard
@@ -232,7 +232,7 @@ fun MemberRow(member: MemberSummary) {
                 Text(member.displayName ?: "@${member.handle}", style = MaterialTheme.typography.titleSmall, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (member.founder) {
                     Spacer(Modifier.width(6.dp))
-                    Chip("Founder")
+                    FounderBadge(plain = true)
                 }
             }
             if (member.displayName != null) Text("@${member.handle}", style = MaterialTheme.typography.labelSmall, color = colors.muted)

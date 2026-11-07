@@ -54,8 +54,8 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.Card
-import ng.heynaija.app.ui.Chip
 import ng.heynaija.app.ui.Confirm
+import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
 import ng.heynaija.app.ui.PrimaryButton
@@ -241,12 +241,12 @@ private fun Header(profile: Profile, viewModel: ProfileViewModel) {
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Verified, "Identity verified", Modifier.size(20.dp), tint = colors.accentStrong)
                 }
+                if (profile.founderBadge) {
+                    Spacer(Modifier.width(6.dp))
+                    FounderBadge(size = 18.dp)
+                }
             }
             if (profile.displayName != null) Text("@${profile.handle}", style = MaterialTheme.typography.labelSmall, color = colors.muted)
-            if (profile.founderBadge) {
-                Spacer(Modifier.height(8.dp))
-                Chip("Founder")
-            }
             if (profile.bio.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
                 Text(profile.bio, style = MaterialTheme.typography.bodyLarge, color = colors.ink)

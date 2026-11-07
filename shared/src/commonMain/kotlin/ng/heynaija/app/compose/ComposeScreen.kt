@@ -89,6 +89,7 @@ import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
+import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PrimaryButton
 import ng.heynaija.app.ui.QuotedPostCard
@@ -490,7 +491,13 @@ private fun MentionRow(members: List<MemberSummary>, onPick: (String) -> Unit) {
                 Avatar(member.handle, member.avatar, 24.dp)
                 Spacer(Modifier.width(8.dp))
                 Column {
-                    Text(member.displayName ?: "@${member.handle}", style = MaterialTheme.typography.labelLarge, color = colors.ink, maxLines = 1)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(member.displayName ?: "@${member.handle}", style = MaterialTheme.typography.labelLarge, color = colors.ink, maxLines = 1)
+                        if (member.founder) {
+                            Spacer(Modifier.width(6.dp))
+                            FounderBadge(size = 14.dp, plain = true)
+                        }
+                    }
                     if (member.displayName != null) Text("@${member.handle}", style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 1)
                 }
             }

@@ -211,8 +211,8 @@ private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (post.authorFounder) {
-                    Spacer(Modifier.width(6.dp))
-                    Chip("Founder")
+                    Spacer(Modifier.width(4.dp))
+                    FounderBadge()
                 }
             }
             Text(
@@ -465,6 +465,10 @@ fun QuotedPostCard(quote: QuotedPost, modifier: Modifier = Modifier) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (quote.authorFounder) {
+                Spacer(Modifier.width(6.dp))
+                FounderBadge(plain = true)
+            }
             if (quote.authorName != null) {
                 Spacer(Modifier.width(6.dp))
                 Text("@${quote.authorHandle}", style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)

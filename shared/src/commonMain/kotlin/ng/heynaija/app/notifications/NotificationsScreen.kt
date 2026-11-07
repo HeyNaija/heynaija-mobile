@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -62,9 +63,11 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.Empty
+import ng.heynaija.app.ui.FOUNDER_INLINE
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Problem
 import ng.heynaija.app.ui.TopBar
+import ng.heynaija.app.ui.founderInlineContent
 import ng.heynaija.app.ui.rememberNow
 import ng.heynaija.app.ui.timeAgo
 import ng.heynaija.app.profile.MeScreen
@@ -259,12 +262,17 @@ private fun NotificationRow(n: Notification, now: Instant) {
                     buildAnnotatedString {
                         if (actor != null) {
                             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(actor.displayName ?: "@${actor.handle}") }
+                            if (actor.founder) {
+                                append(" ")
+                                appendInlineContent(FOUNDER_INLINE)
+                            }
                             append(" ")
                         }
                         append(words)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.ink,
+                    inlineContent = founderInlineContent,
                 )
                 Text(ago, Modifier.padding(top = 1.dp), style = MaterialTheme.typography.labelSmall, color = colors.muted)
             }
