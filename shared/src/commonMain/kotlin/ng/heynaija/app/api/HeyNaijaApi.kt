@@ -54,6 +54,8 @@ data class NewPost(
     val images: List<Pair<String, String>> = emptyList(),
     val poll: NewPoll? = null,
     val replyAudience: String = "everyone",
+    /** A ready video's upload ID and its description. */
+    val video: Pair<String, String>? = null,
 )
 
 data class NewPoll(val options: List<String>, val multiple: Boolean, val expiresIn: String)
@@ -197,6 +199,9 @@ class HeyNaijaApi(
                     for ((id, alt) in post.images) add(buildJsonObject { put("id", id); put("alt", alt) })
                 })
             }
+            post.video?.let { (id, description) ->
+                put("video", buildJsonObject { put("id", id); put("description", description) })
+            }
             post.poll?.let { poll ->
                 put("poll", buildJsonObject {
                     put("multiple", poll.multiple)
@@ -278,6 +283,32 @@ class HeyNaijaApi(
 
     /** 'processing', 'ready' or 'failed'. */
     suspend fun imageStatus(mediaId: String): UploadStatus = get("/me/images/${seg(mediaId)}")
+
+    // A post's video (ADR 0019, 0021): parts go straight to storage, then the worker makes it ready.
+
+    suspend fun startVideoUpload(contentType: String, bytes: Long, durationMs: Long?): VideoPlan =
+        send("POST", "/me/videos/upload", buildJsonObject {
+            put("contentType", contentType)
+            put("bytes", bytes)
+            if (durationMs != null) put("durationMs", durationMs)
+        }).body()
+
+    /** After a broken upload: the parts already stored, and fresh URLs for the rest. */
+    suspend fun resumeVideoUpload(mediaId: String): VideoPlan = get("/me/videos/${seg(mediaId)}/upload")
+
+    suspend fun putVideoPart(part: VideoPart, data: ByteArray) {
+        val response = client.put(part.url) {
+            setBody(data)
+            timeout { requestTimeoutMillis = 300_000 }
+        }
+        if (!response.status.isSuccess()) throw ApiException(response.status.value, "upload_failed", "Part of the video could not be sent.")
+    }
+
+    suspend fun completeVideoUpload(mediaId: String): VideoStatus = send("POST", "/me/videos/${seg(mediaId)}/complete").body()
+
+    suspend fun videoStatus(mediaId: String): VideoStatus = get("/me/videos/${seg(mediaId)}")
+
+    suspend fun removeVideo(mediaId: String) { send("DELETE", "/me/videos/${seg(mediaId)}") }
 
     // Communities
 

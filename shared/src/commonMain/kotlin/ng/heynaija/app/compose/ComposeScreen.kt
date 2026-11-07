@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -74,10 +75,16 @@ import ng.heynaija.app.api.NewPoll
 import ng.heynaija.app.api.NewPost
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.QuotedPost
+import ng.heynaija.app.media.awaitVideo
+import ng.heynaija.app.media.rejectionText
+import ng.heynaija.app.media.sendVideo
 import ng.heynaija.app.media.uploadPostImage
+import ng.heynaija.app.media.videoProblem
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.PickedImage
+import ng.heynaija.app.platform.PickedVideo
 import ng.heynaija.app.platform.rememberImagePicker
+import ng.heynaija.app.platform.rememberVideoPicker
 import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
@@ -103,11 +110,24 @@ data class DraftImage(
     val ready get() = mediaId != null
 }
 
+/** A video on its way into the post: [stage] is 'uploading', 'processing', 'ready', 'held', 'rejected' or 'failed'. */
+data class DraftVideo(
+    val picked: PickedVideo,
+    val mediaId: String? = null,
+    val progress: Float = 0f,
+    val stage: String = "uploading",
+    val error: String? = null,
+    val canRetry: Boolean = false,
+) {
+    val ready get() = stage == "ready"
+}
+
 data class PollDraft(val options: List<String> = listOf("", ""), val multiple: Boolean = false, val expiresIn: String = "7_days")
 
 data class ComposeState(
     val text: String = "",
     val images: List<DraftImage> = emptyList(),
+    val video: DraftVideo? = null,
     val poll: PollDraft? = null,
     val community: CommunityRef? = null,
     /** The communities the member may post in. */
@@ -206,6 +226,65 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
         _state.update { s -> s.copy(images = s.images.filterNot { it.key == image.key }) }
     }
 
+    private var videoJob: Job? = null
+
+    fun addVideo(picked: PickedVideo) {
+        val limits = app.me?.videoLimits ?: return
+        videoProblem(picked, limits)?.let { app.say(it); return }
+        removeVideo()
+        _state.update { it.copy(video = DraftVideo(picked), images = emptyList(), poll = null) }
+        videoJob = viewModelScope.launch { runVideo { app.api.startVideoUpload(picked.contentType, picked.bytes, picked.durationMs) } }
+    }
+
+    /** Picks up a broken upload where storage left it. */
+    fun retryVideo() {
+        val mediaId = _state.value.video?.mediaId ?: return
+        setVideo { it.copy(stage = "uploading", error = null, canRetry = false) }
+        videoJob = viewModelScope.launch { runVideo { app.api.resumeVideoUpload(mediaId) } }
+    }
+
+    private suspend fun runVideo(plan: suspend () -> ng.heynaija.app.api.VideoPlan) {
+        val picked = _state.value.video?.picked ?: return
+        val status = try {
+            val p = plan()
+            setVideo { it.copy(mediaId = p.mediaId) }
+            sendVideo(app.api, picked, p) { share -> setVideo { it.copy(progress = share) } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val started = _state.value.video?.mediaId != null
+            setVideo {
+                it.copy(
+                    stage = "failed",
+                    error = reasonOf(e) ?: if (started) "The upload was interrupted. Check your connection, then continue." else "The video could not be sent. Try again.",
+                    canRetry = started,
+                )
+            }
+            return
+        }
+        setVideo { it.copy(stage = "processing", progress = 1f) }
+        val mediaId = _state.value.video?.mediaId ?: return
+        val final = if (status.status == "processing" || status.status == "uploading") awaitVideo(app.api, mediaId) else status
+        setVideo {
+            when (final.status) {
+                "ready" -> it.copy(stage = "ready", error = null)
+                "quarantined" -> it.copy(stage = "held", error = "This video is being held for a safety check, so it cannot be posted yet.")
+                "rejected" -> it.copy(stage = "rejected", error = rejectionText(final.reason, app.me?.videoLimits))
+                else -> it.copy(stage = "failed", error = "We could not process that video. Remove it and try again.")
+            }
+        }
+    }
+
+    private fun setVideo(change: (DraftVideo) -> DraftVideo) = _state.update { s -> s.copy(video = s.video?.let(change)) }
+
+    fun removeVideo() {
+        videoJob?.cancel()
+        val mediaId = _state.value.video?.mediaId
+        _state.update { it.copy(video = null) }
+        // Not on a post yet, so the API may drop it; a failure only leaves it for the sweep.
+        if (mediaId != null) app.scope.launch { runCatching { app.api.removeVideo(mediaId) } }
+    }
+
     fun togglePoll() = _state.update { it.copy(poll = if (it.poll == null) PollDraft() else null) }
 
     fun setPoll(change: (PollDraft) -> PollDraft) = _state.update { s -> s.copy(poll = s.poll?.let(change)) }
@@ -218,6 +297,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
         val length = visibleLength(s.text.trim())
         if (s.posting || length > TEXT_MAX) return false
         if (s.images.any { !it.ready }) return false
+        if (s.video != null) return s.video.ready
         val poll = s.poll
         if (poll != null) return length > 0 && poll.options.count { it.isNotBlank() } >= 2
         return length > 0 || s.images.isNotEmpty()
@@ -238,6 +318,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                         images = s.images.mapNotNull { image -> image.mediaId?.let { it to "" } },
                         poll = s.poll?.let { poll -> NewPoll(poll.options.map { it.trim() }.filter { it.isNotEmpty() }, poll.multiple, poll.expiresIn) },
                         replyAudience = s.audience,
+                        video = s.video?.mediaId?.let { it to "" },
                     ),
                 )
                 app.emit(PostChange.Created(created.id))
@@ -264,6 +345,7 @@ fun ComposeScreen(route: Route.Compose) {
     val colors = HeyNaija.colors
     val focus = remember { FocusRequester() }
     val pick = rememberImagePicker { viewModel.addImages(it) }
+    val pickVideo = rememberVideoPicker { viewModel.addVideo(it) }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val reply = route.replyTo
     val length = visibleLength(state.text.trim())
@@ -327,6 +409,7 @@ fun ComposeScreen(route: Route.Compose) {
                         )
                     }
                     if (state.images.isNotEmpty()) Images(state.images, viewModel)
+                    state.video?.let { VideoDraftCard(it, viewModel) }
                     state.poll?.let { PollEditor(it, viewModel) }
                     route.quote?.let { quoted ->
                         Spacer(Modifier.height(12.dp))
@@ -351,11 +434,15 @@ fun ComposeScreen(route: Route.Compose) {
             Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToolButton(Icons.Image, "Add pictures", enabled = state.images.size < IMAGES_MAX && state.poll == null) {
+            ToolButton(Icons.Image, "Add pictures", enabled = state.images.size < IMAGES_MAX && state.poll == null && state.video == null) {
                 pick(IMAGES_MAX - state.images.size)
             }
+            // One video, not in replies, and only while video is open to this member (ADR 0019).
+            if (reply == null && me.videoLimits != null && me.has("videoPosts")) {
+                ToolButton(Icons.Video, "Add a video", enabled = state.images.isEmpty() && state.poll == null && state.video == null) { pickVideo() }
+            }
             if (reply == null && route.quote == null && me.has("polls")) {
-                ToolButton(Icons.Vote, if (state.poll == null) "Add a poll" else "Remove the poll", enabled = state.images.isEmpty(), active = state.poll != null) {
+                ToolButton(Icons.Vote, if (state.poll == null) "Add a poll" else "Remove the poll", enabled = state.images.isEmpty() && state.video == null, active = state.poll != null) {
                     viewModel.togglePoll()
                 }
             }
@@ -505,6 +592,51 @@ private fun Images(images: List<DraftImage>, viewModel: ComposeViewModel) {
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Close, "Remove picture", Modifier.size(14.dp), tint = Color(0xFFEEF4F0)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun VideoDraftCard(video: DraftVideo, viewModel: ComposeViewModel) {
+    val colors = HeyNaija.colors
+    val ratio = if (video.picked.width > 0 && video.picked.height > 0) (video.picked.width.toFloat() / video.picked.height).coerceIn(0.75f, 16f / 9f) else 16f / 9f
+    Column(Modifier.padding(top = 12.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(Radii.control).background(Color.Black).border(1.dp, colors.line, Radii.control)) {
+            video.picked.thumbnail?.let { AsyncImage(it, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop) }
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(6.dp).size(28.dp).clip(CircleShape).background(Color(0xD9070D0B)).clickable { viewModel.removeVideo() },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Close, "Remove video", Modifier.size(16.dp), tint = Color(0xFFEEF4F0)) }
+            Row(
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color(0xB3070D0B)).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (video.stage == "uploading" || video.stage == "processing") {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFFEEF4F0))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    when (video.stage) {
+                        "uploading" -> "Uploading ${(video.progress * 100).toInt()}%"
+                        "processing" -> "Getting it ready to play. You can keep writing."
+                        "ready" -> "Ready" + (video.picked.durationMs?.let { " · ${ng.heynaija.app.ui.clipLength(it)}" } ?: "")
+                        else -> "Not ready"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFFEEF4F0),
+                )
+            }
+        }
+        video.error?.let {
+            Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodyMedium, color = colors.danger)
+        }
+        if (video.canRetry) {
+            Text(
+                "Continue the upload",
+                Modifier.padding(top = 4.dp).clickable { viewModel.retryVideo() }.padding(vertical = 4.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.accentStrong,
+            )
         }
     }
 }

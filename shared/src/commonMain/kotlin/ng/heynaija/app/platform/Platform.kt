@@ -47,3 +47,24 @@ expect fun rememberShare(): (text: String) -> Unit
  */
 @Composable
 expect fun VideoPlayer(url: String, modifier: androidx.compose.ui.Modifier)
+
+/**
+ * A video chosen to post. It stays on the device and is read a part at a time
+ * ([read]), so a clip of up to 1 GB never has to fit in memory.
+ */
+class PickedVideo(
+    /** video/mp4, video/quicktime or video/webm. */
+    val contentType: String,
+    val bytes: Long,
+    val durationMs: Long?,
+    val width: Int,
+    val height: Int,
+    /** Its first frame as a JPEG, to show while it uploads. */
+    val thumbnail: ByteArray?,
+    /** [length] bytes from [offset]; blocking, so call it off the main thread. */
+    val read: (offset: Long, length: Int) -> ByteArray,
+)
+
+/** Opens the system's picker for one video. */
+@Composable
+expect fun rememberVideoPicker(onPicked: (PickedVideo) -> Unit): () -> Unit

@@ -22,6 +22,8 @@ data class Me(
     val birthDateNeeded: Boolean = false,
     /** What is switched on for this member; a missing key is off. */
     val features: Map<String, Boolean> = emptyMap(),
+    /** The limits a video is checked against before sending; null while video is closed to this member. */
+    val videoLimits: VideoLimits? = null,
 ) {
     fun has(feature: String) = features[feature] == true
 }
@@ -327,6 +329,33 @@ data class SuggestionReason(val kind: String, val community: CommunityRef? = nul
 /** `state` is 'none' (with [graceDays]) or 'scheduled' (with [scheduledFor]). */
 @Serializable
 data class Deletion(val state: String, val graceDays: Int = 14, val scheduledFor: String? = null)
+
+/** This server's limits for a post's video (ADR 0021). */
+@Serializable
+data class VideoLimits(val maxBytes: Long, val maxSeconds: Int, val minSeconds: Int, val maxEdge: Int)
+
+/** A video's upload in parts: a signed URL for each part still to send. */
+@Serializable
+data class VideoPlan(
+    val mediaId: String,
+    val partSize: Long,
+    val totalParts: Int,
+    val done: List<VideoPartDone> = emptyList(),
+    val parts: List<VideoPart> = emptyList(),
+)
+
+@Serializable
+data class VideoPart(val partNumber: Int, val url: String, val bytes: Long)
+
+@Serializable
+data class VideoPartDone(val partNumber: Int, val size: Long)
+
+/**
+ * 'uploading', 'processing', 'quarantined' (held for a safety check), 'ready',
+ * 'rejected' (with a [reason]) or 'failed'.
+ */
+@Serializable
+data class VideoStatus(val status: String, val reason: String? = null, val video: PostVideo? = null)
 
 /** A short-lived URL the file is PUT to, and the upload's ID for the next steps. */
 @Serializable

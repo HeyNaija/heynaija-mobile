@@ -18,7 +18,9 @@ What the apps do now, what comes next, and what the backend
   replies, media, pinned post), communities (join, leave, rules, pinned post),
   hashtags and bookmarks.
 - **Posts:** threads with the conversation above and replies below; posting
-  with up to four pictures, a poll, a community and who can reply; replies,
+  with up to four pictures, a video (sent in parts, then waited on until the
+  worker has it ready), a poll, a community and who can reply; @mention
+  suggestions while writing; replies,
   likes, reposts, quotes, bookmarks, sharing a link, pinning to your profile,
   deleting; mentions, hashtags and links in the text; link cards; pictures full
   screen with zoom; videos in the platform's own player.
@@ -50,12 +52,12 @@ What the apps do now, what comes next, and what the backend
 ## Next in the app
 
 1. Push notifications (after 3 above).
-2. Posting a video: picked, checked against `videoLimits` from `/v1/me`, and
-   uploaded with the same signed-upload API as the web (ADR 0021).
-3. Gists, with LiveKit's Android and Swift SDKs.
-4. @mention suggestions while writing, and the ideas board.
-5. Opening shared links in the app (after 4 above).
-6. Store listings: Play Console and App Store Connect accounts, privacy labels,
+2. Gists, with LiveKit's Android and Swift SDKs. The Swift SDK has no
+   Objective-C interface, so the iOS side needs a small Swift wrapper in
+   `iosApp` that the shared code calls through a protocol.
+3. The ideas board, and continuing a video upload after the app was closed.
+4. Opening shared links in the app (after 4 above).
+5. Store listings: Play Console and App Store Connect accounts, privacy labels,
    age rating (18 and over during the beta), and signing keys kept out of the repo.
 
 ## Decisions still open
