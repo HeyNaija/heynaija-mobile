@@ -4,7 +4,7 @@ import Shared
 
 struct ComposeView: UIViewControllerRepresentable {
     func makeUIViewController(context: Self.Context) -> UIViewController {
-        MainViewControllerKt.MainViewController(gistAudio: LiveKitGistAudioFactory())
+        MainViewControllerKt.MainViewController(gistAudio: LiveKitGistAudioFactory(), ageRange: AppleDeclaredAgeRange())
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Self.Context) {}

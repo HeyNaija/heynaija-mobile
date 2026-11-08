@@ -50,6 +50,7 @@ kotlin {
             implementation(libs.credentials)
             implementation(libs.credentials.play.services)
             implementation(libs.googleid)
+            implementation(libs.play.age.signals)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
