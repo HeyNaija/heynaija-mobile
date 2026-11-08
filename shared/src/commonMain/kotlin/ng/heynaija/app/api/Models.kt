@@ -530,3 +530,10 @@ val NEEDS_LABEL_REASON = "needs_label" to "Sensitive, but not marked sensitive"
 /** `GET /v1/push/key`: the browsers' key, which the app does not use, and whether the app is pushed to. */
 @Serializable
 data class PushKey(val publicKey: String? = null, val app: Boolean = false)
+
+/**
+ * `GET /v1/signup/age`. A server from before 8 November 2026 says nothing of
+ * [asksBirthDate], and asked for a date then.
+ */
+@Serializable
+data class SignupAge(val joinAge: Int = 18, val asksBirthDate: Boolean = true)

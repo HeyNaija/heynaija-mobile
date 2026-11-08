@@ -437,6 +437,9 @@ class HeyNaijaApi(
             ?.jsonPrimitive?.contentOrNull == "true"
 
     /** 'allowed', 'too_young' or 'not_a_date', and the youngest age that may join. */
+    /** Who may join now, and whether signup asks for a date of birth or the "I am 18 or older" box. */
+    suspend fun signupAge(): SignupAge = get("/signup/age")
+
     suspend fun checkAge(birthDate: String): Pair<String, Int> {
         val answer = send("POST", "/signup/age", buildJsonObject { put("birthDate", birthDate) }).body<JsonObject>()
         return (answer["outcome"]?.jsonPrimitive?.contentOrNull ?: "not_a_date") to

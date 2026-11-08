@@ -119,4 +119,14 @@ class KratosAuthTest {
         assertTrue(""""transient_payload":{"invite_code":"HN-1234","birth_date":"1990-04-12"}""" in body, body)
         assertTrue(""""id_token_nonce":"n0nce"""" in body, body)
     }
+
+    @Test
+    fun theAdultBoxGoesAsAdultDeclaredWithNoDate() = runTest {
+        val server = FakeServer { HttpStatusCode.BadRequest to flow("sent_email") }
+
+        server.kratos.sendSignupCode("f1", "ada@example.com", "ada", SignupExtras("HN-1234", adultDeclared = true))
+
+        val body = (server.requests.single().body as TextContent).text
+        assertTrue(""""transient_payload":{"invite_code":"HN-1234","adult_declared":true}""" in body, body)
+    }
 }
