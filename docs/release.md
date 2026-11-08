@@ -26,7 +26,8 @@ Production has to be ready before a reviewer opens the app.
 ## 2. Apple developer account (once)
 
 - [ ] **You:** App ID `ng.heynaija.app` with **Push Notifications**, **Sign In
-      with Apple** and **App Groups** (`group.ng.heynaija.app`); and
+      with Apple**, **Declared Age Range** and **App Groups**
+      (`group.ng.heynaija.app`); and
       `ng.heynaija.app.NotificationService` with **App Groups**. Xcode's automatic
       signing makes both, and the group, once the team is set below.
 - [ ] Put the team ID in `iosApp/Configuration/Config.xcconfig` (`TEAM_ID=`). It
@@ -42,7 +43,11 @@ Production has to be ready before a reviewer opens the app.
   what members post. License agreement: the standard one, or the terms at
   `https://heynaija.ng/terms`.
 - **Age rating:** answer the questionnaire honestly; the beta is 18+, and members
-  post and talk to each other (user-generated content, messaging).
+  post and talk to each other (user-generated content, messaging). Social media
+  features: **Yes**. Social media turned off for users under 13: **No** (that
+  answer is about checking everyone's age with Apple; the app asks only where a
+  law requires it). Age assurance: **Yes**, Apple's Declared Age Range, where a
+  law requires it (see "Age checks" below).
 - **App Privacy:** privacy policy `https://heynaija.ng/privacy`. Data collected,
   all *linked to the person*, *not used for tracking*, for *App Functionality*:
   Contact Info → Email Address and Name (the display name, if they add one);
@@ -50,7 +55,8 @@ Production has to be ready before a reviewer opens the app.
   (posts and replies). Nothing for tracking, advertising or analytics. Gists' sound
   passes through the server and is not kept, so it is not "collected" in Apple's
   sense. `iosApp/iosApp/PrivacyInfo.xcprivacy` says the same.
-- **Pricing:** free. **Availability:** Nigeria first, or everywhere.
+- **Pricing:** free. **Availability:** everywhere, the United States included:
+  the app checks age with Apple where a US state's law requires it.
 - **Support URL:** `https://heynaija.ng/privacy#rights`, which gives the contact
   address (Guideline 1.2 asks apps with posts to publish one); a support page of
   its own would be better. **Marketing URL:** `https://heynaija.ng/about`.
@@ -137,6 +143,31 @@ On a computer instead: the same four settings as `heynaija.upload.keystore`,
 `heynaija.upload.store_password`, `heynaija.upload.key_alias` and
 `heynaija.upload.key_password` in `~/.gradle/gradle.properties`, then
 `./gradlew :androidApp:bundleRelease -PversionCode=<n>`.
+
+## Age checks
+
+Some places' laws (Texas's so far, with Utah's and Louisiana's to follow) make an
+18+ app check age with the app store's own signal, not a box the person ticks.
+Before signing in or joining, the app asks the store:
+
+- **iOS 26.2 and later:** Apple's Declared Age Range, only where Apple says a law
+  requires it (`isEligibleForAgeFeatures`). Apple asks the person to share their
+  age range with HeyNaija. Under 18, or not shared: they cannot sign in or join,
+  and the app says why. Elsewhere, and on older iOS, nobody is asked. Needs the
+  **Declared Age Range** capability on the App ID (the entitlement is in the app).
+- **Android:** Google Play's Age Signals (beta, `age-signals` 0.0.4). Where a law
+  requires it Play shares the age band, or says the person has to confirm their
+  age with Play first (they cannot sign in or join until they do). Elsewhere it
+  depends on the person's own Play setting: Play may ask once whether to share,
+  and not sharing is their choice. Nothing to switch on in Play Console. A build
+  not installed from Play (or a phone without Play) cannot ask, and goes on.
+- Everywhere, the age range stays on the phone: it is not sent to HeyNaija, so it
+  is not "collected" in either store's privacy forms.
+- The answer that lets someone in is kept while the app is open. Members already
+  signed in are not asked again until they next sign in.
+
+Apple's and Google's own words leave whether this is enough to counsel; it is
+what both stores' age APIs offer an 18+ app.
 
 ## Not needed for the first release
 
