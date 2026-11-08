@@ -42,7 +42,10 @@ Production has to be ready before a reviewer opens the app.
   what members post. License agreement: the standard one, or the terms at
   `https://heynaija.ng/terms`.
 - **Age rating:** answer the questionnaire honestly; the beta is 18+, and members
-  post and talk to each other (user-generated content, messaging).
+  post and talk to each other (user-generated content, messaging). Social media
+  features: **Yes**. Social media turned off for users under 13: **No** (Yes
+  commits the app to Apple's Declared Age Range API, which it does not use). Age
+  assurance through that API: none; the app asks "I am 18 or older" itself.
 - **App Privacy:** privacy policy `https://heynaija.ng/privacy`. Data collected,
   all *linked to the person*, *not used for tracking*, for *App Functionality*:
   Contact Info → Email Address and Name (the display name, if they add one);
@@ -50,7 +53,12 @@ Production has to be ready before a reviewer opens the app.
   (posts and replies). Nothing for tracking, advertising or analytics. Gists' sound
   passes through the server and is not kept, so it is not "collected" in Apple's
   sense. `iosApp/iosApp/PrivacyInfo.xcprivacy` says the same.
-- **Pricing:** free. **Availability:** Nigeria first, or everywhere.
+- **Pricing:** free. **Availability:** everywhere **except the United States**.
+  Texas, Utah and Louisiana expect 18+ apps to check age through Apple's Declared
+  Age Range API (and Texas, parents' consent for under-18s), which the app does not
+  do yet; see "Before a US launch" below. Australia, Brazil and Singapore need
+  nothing from the app: the App Store itself stops people it has not confirmed as
+  adults from downloading 18+ apps there.
 - **Support URL:** `https://heynaija.ng/privacy#rights`, which gives the contact
   address (Guideline 1.2 asks apps with posts to publish one); a support page of
   its own would be better. **Marketing URL:** `https://heynaija.ng/about`.
@@ -114,6 +122,8 @@ For each version:
   - Content rating: the IARC questionnaire, as a social app where people
     communicate and share content.
   - Target audience: 18 and over.
+- **Countries** (Test and release → Production → Countries / regions): every one
+  except the United States, as for Apple, until "Before a US launch" below is done.
   - Data safety: collected and shared as for Apple above (email, name, user ID,
     photos and videos, other user-generated content), all for app functionality,
     encrypted in transit, and deletable: in the app (Settings → Delete your
@@ -137,6 +147,21 @@ On a computer instead: the same four settings as `heynaija.upload.keystore`,
 `heynaija.upload.store_password`, `heynaija.upload.key_alias` and
 `heynaija.upload.key_password` in `~/.gradle/gradle.properties`, then
 `./gradlew :androidApp:bundleRelease -PversionCode=<n>`.
+
+## Before a US launch
+
+The first release is not in the United States. Texas, Utah and Louisiana's app
+store laws expect an 18+ app to check each new account's age with the store's own
+signal, not a box the person ticks, and Texas adds parents' consent for under-18s.
+Before the US:
+
+- **iOS:** on iOS 26 and later, the join and sign-in steps ask Apple's Declared Age
+  Range API for the person's age range and stop anyone under 18; Texas also needs
+  the Significant Change API (PermissionKit) and handling Apple's consent-revoked
+  notification.
+- **Android:** the same through Google Play's Age Signals API.
+- Then check with counsel that it is enough, and add the United States in both
+  stores.
 
 ## Not needed for the first release
 
