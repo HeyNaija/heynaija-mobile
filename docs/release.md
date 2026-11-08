@@ -14,9 +14,10 @@ Production has to be ready before a reviewer opens the app.
       `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (`docs/deployment/sign-in-with-apple.md`
       in the web repository). It also needs `GOOGLE_SIGN_IN=true`, which switches
       on Sign in with Apple in Kratos.
-- [ ] **You:** Apple's email relay: `heynaija.ng` and `no-reply@heynaija.ng`
-      registered for Sign in with Apple (same document, step 4). Without it,
-      members who hide their email get no sign-in codes.
+- [ ] **You:** Apple's email relay: an SPF record on `mail.heynaija.ng`, then
+      `mail.heynaija.ng` and `no-reply@mail.heynaija.ng` registered for Sign in
+      with Apple (same document, step 4). Without it, members who hide their
+      email get no sign-in codes.
 - [ ] **You:** `FCM_SERVICE_ACCOUNT` on production, for Android push
       (`docs/deployment/app-push.md`).
 - [ ] **You:** the review account on production, with a feed to look at
