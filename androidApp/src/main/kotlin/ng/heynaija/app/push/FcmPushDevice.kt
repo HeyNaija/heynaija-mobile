@@ -49,7 +49,7 @@ class FcmPushDevice private constructor(private val context: Context, private va
         }
     }
 
-    override fun allowed(): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    override suspend fun allowed(): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     override fun key(): String = secure.get(KEY) ?: SealedPush.newKey().also { secure.set(KEY, it) }
 

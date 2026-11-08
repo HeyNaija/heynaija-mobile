@@ -372,13 +372,18 @@ class HeyNaijaApi(
     suspend fun setNotificationPreference(key: String, on: Boolean): Map<String, Boolean> =
         send("PUT", "/notifications/preferences", buildJsonObject { put(key, on) }).body()
 
-    /** Whether this server pushes notifications to the app (ADR 0023 in the web repository). */
-    suspend fun pushesToApp(): Boolean = get<PushKey>("/push/key").app
+    /**
+     * The push services this server pushes to the apps through (ADRs 0023 and 0026
+     * in the web repository): "fcm", "apns", "apns_sandbox". A server from before
+     * iOS had push says only whether it pushes to Android.
+     */
+    suspend fun pushServices(): List<String> = get<PushKey>("/push/key").let { it.appServices ?: if (it.app) listOf("fcm") else emptyList() }
 
     /**
      * Pushes the member's notifications to this installation from now on: its
-     * [token] with the push service ([service], "fcm"), and the [key] the server
-     * seals what it sends with. [ApiException] 404 when the server does not push to the app.
+     * [token] with the push service ([service], as [PushDevice.service] says), and
+     * the [key] the server seals what it sends with. [ApiException] 404 when the
+     * server does not push through that service.
      */
     suspend fun registerPushDevice(service: String, token: String, key: String) {
         send("POST", "/push/devices", buildJsonObject {
@@ -386,6 +391,16 @@ class HeyNaijaApi(
             put("token", token)
             put("key", key)
         })
+    }
+
+    /**
+     * After signing in with Apple: the server trades Apple's one-time [code] for a
+     * token it revokes when the account is erased, as Apple requires (ADR 0026 in
+     * the web repository). [ApiException] 404 where the server has no Apple key,
+     * 400 when Apple refuses the code.
+     */
+    suspend fun keepAppleToken(code: String) {
+        send("POST", "/apple/token", buildJsonObject { put("code", code) })
     }
 
     /** Stops pushing to this installation: before signing out. */

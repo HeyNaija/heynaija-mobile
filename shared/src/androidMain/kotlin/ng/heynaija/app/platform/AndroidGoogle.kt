@@ -13,7 +13,7 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import java.security.SecureRandom
 import kotlin.io.encoding.Base64
-import ng.heynaija.app.api.GoogleToken
+import ng.heynaija.app.api.IdToken
 
 /**
  * "Sign in with Google" through Credential Manager: Google's own sheet, then an
@@ -34,17 +34,17 @@ actual fun rememberGoogleSignIn(): GoogleSignIn? {
             try {
                 val credential = CredentialManager.create(context).getCredential(context, request).credential
                 if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    GoogleResult.Signed(GoogleToken(GoogleIdTokenCredential.createFrom(credential.data).idToken, nonce))
+                    SignInResult.Signed(IdToken("google", GoogleIdTokenCredential.createFrom(credential.data).idToken, nonce))
                 } else {
-                    GoogleResult.Failed("Google did not sign you in. Try again, or use your email.")
+                    SignInResult.Failed("Google did not sign you in. Try again, or use your email.")
                 }
             } catch (e: GetCredentialCancellationException) {
-                GoogleResult.Cancelled
+                SignInResult.Cancelled
             } catch (e: NoCredentialException) {
-                GoogleResult.Failed("There is no Google account on this phone. Add one in Android's settings, or use your email.")
+                SignInResult.Failed("There is no Google account on this phone. Add one in Android's settings, or use your email.")
             } catch (e: GetCredentialException) {
                 println("HeyNaija: Google sign-in failed: ${e.type} ${e.message}")
-                GoogleResult.Failed("Google sign-in did not work. Try again, or use your email.")
+                SignInResult.Failed("Google sign-in did not work. Try again, or use your email.")
             }
         }
     }

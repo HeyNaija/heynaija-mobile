@@ -26,10 +26,10 @@ import kotlinx.serialization.json.put
  * Where a sign-in or signup stands after a step. [Sent]: the code is on its way.
  * [Done]: here is the session token. [Refused]: Kratos's words, for the form,
  * by field (`""` for the form as a whole). [Expired]: start again.
- * [ConfirmEmail]: Google vouched for an address that already has an account,
- * which confirms an emailed code in sign-in [flow] before Google is linked to
- * it (infra/kratos/policy in the web repository). [NoAccount]: Google is fine,
- * but nobody has joined with it; joining takes an invite.
+ * [ConfirmEmail]: Google or Apple vouched for an address that already has an
+ * account, which confirms an emailed code in sign-in [flow] before the provider
+ * is linked to it (infra/kratos/policy in the web repository). [NoAccount]: the
+ * provider is fine, but nobody has joined with it; joining takes an invite.
  */
 sealed interface AuthStep {
     data object Sent : AuthStep
@@ -40,8 +40,14 @@ sealed interface AuthStep {
     data class NoAccount(val email: String?) : AuthStep
 }
 
-/** A Google ID token for this app, and the nonce it was asked for with (Kratos checks they match). */
-data class GoogleToken(val idToken: String, val nonce: String)
+/**
+ * An ID token from a platform's own sign-in for Kratos's [provider] ("google" on
+ * Android, "apple" on iOS), and the nonce it was asked for with (Kratos checks
+ * they match). Apple also gives a one-time [appleCode], which the server trades
+ * for a token it can revoke when the account is erased (ADR 0026 in the web
+ * repository).
+ */
+data class IdToken(val provider: String, val idToken: String, val nonce: String, val appleCode: String? = null)
 
 /**
  * What a signup carries that is not an account trait: read by the registration
@@ -103,13 +109,13 @@ class KratosAuth(
     suspend fun finishSignup(flow: String, email: String, handle: String, extras: SignupExtras, code: String): AuthStep =
         submit("registration", flow, null, signupBody(email, handle, extras, code))
 
-    /** Signs in with Google: an ID token from the platform's own Google sign-in. */
-    suspend fun loginWithGoogle(flow: String, google: GoogleToken): AuthStep =
-        submit("login", flow, null, googleBody(google))
+    /** Signs in with Google or Apple: an ID token from the platform's own sign-in. */
+    suspend fun loginWith(flow: String, token: IdToken): AuthStep =
+        submit("login", flow, null, idTokenBody(token))
 
-    /** Joins with Google, which gives the email; the handle and the signup's extras come from the form. */
-    suspend fun signupWithGoogle(flow: String, google: GoogleToken, handle: String, extras: SignupExtras): AuthStep =
-        submit("registration", flow, null, googleBody(google, buildJsonObject {
+    /** Joins with Google or Apple, which gives the email; the handle and the signup's extras come from the form. */
+    suspend fun signupWith(flow: String, token: IdToken, handle: String, extras: SignupExtras): AuthStep =
+        submit("registration", flow, null, idTokenBody(token, buildJsonObject {
             put("traits", buildJsonObject { put("handle", handle) })
             put("transient_payload", extras.payload())
         }))
@@ -121,12 +127,12 @@ class KratosAuth(
         if (adultDeclared) put("adult_declared", true)
     }
 
-    private fun googleBody(google: GoogleToken, extra: JsonObject = JsonObject(emptyMap())) = JsonObject(
+    private fun idTokenBody(token: IdToken, extra: JsonObject = JsonObject(emptyMap())) = JsonObject(
         buildJsonObject {
             put("method", "oidc")
-            put("provider", "google")
-            put("id_token", google.idToken)
-            put("id_token_nonce", google.nonce)
+            put("provider", token.provider)
+            put("id_token", token.idToken)
+            put("id_token_nonce", token.nonce)
         } + extra,
     )
 
@@ -162,14 +168,14 @@ class KratosAuth(
             ?: return AuthStep.Refused(mapOf("" to "Something went wrong. Try again in a moment."))
         val token = (json["session_token"] as? JsonPrimitive)?.contentOrNull
         if (response.status.value == 200 && token != null) return AuthStep.Done(token)
-        // Google, for an address that already has an account: a sign-in flow comes
-        // back asking for an emailed code before Google is linked to it.
-        if (hasMessage(json, LINK_GOOGLE_MESSAGE)) {
+        // Google or Apple, for an address that already has an account: a sign-in flow
+        // comes back asking for an emailed code before the provider is linked to it.
+        if (hasMessage(json, LINK_PROVIDER_MESSAGE)) {
             val id = (json["id"] as? JsonPrimitive)?.contentOrNull
             val email = nodeValue(json, "identifier")
             if (id != null && email != null) return AuthStep.ConfirmEmail(id, email)
         }
-        // Signing in with Google that nobody has joined with: Kratos turns it into a signup.
+        // Signing in with Google or Apple that nobody has joined with: Kratos turns it into a signup.
         if (kind == "login" && (actionOf(json)?.contains("/self-service/registration") == true || redirectOf(json)?.contains("registration") == true)) {
             return AuthStep.NoAccount(nodeValue(json, "traits.email"))
         }
@@ -197,8 +203,8 @@ class KratosAuth(
     }
 
     companion object {
-        /** HeyNaija's Kratos policy: "Google confirmed your email. Confirm your existing HeyNaija account with an email code…" */
-        private const val LINK_GOOGLE_MESSAGE = 4900102L
+        /** HeyNaija's Kratos policy: "Google (or Apple) confirmed your email. Confirm your existing HeyNaija account with an email code…" */
+        private const val LINK_PROVIDER_MESSAGE = 4900102L
 
         private fun hasMessage(flow: JsonObject, id: Long): Boolean =
             ((flow["ui"] as? JsonObject)?.get("messages") as? JsonArray).orEmpty().any {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.HeyNaijaApi
+import ng.heynaija.app.api.IdToken
 import ng.heynaija.app.api.KratosAuth
 import ng.heynaija.app.api.Me
 import ng.heynaija.app.api.Post
@@ -168,12 +169,28 @@ class AppState(val platform: Platform) {
         _account.update { if (it is Account.SignedIn) Account.SignedIn(change(it.me)) else it }
     }
 
-    /** Keeps a new session's token and loads the member. */
-    suspend fun signedIn(newToken: String) {
+    /**
+     * Keeps a new session's token and loads the member. [via] is the Google or
+     * Apple sign-in it came from: Apple's one-time code goes to the server, which
+     * keeps a token to revoke when the account is erased (ADR 0026 in the web
+     * repository). If that fails, the next Apple sign-in sends another.
+     */
+    suspend fun signedIn(newToken: String, via: IdToken? = null) {
         token = newToken
         platform.secure.set(TOKEN, newToken)
         refreshMe(firstLoad = true)
         navigator.reset()
+        via?.appleCode?.let { code ->
+            scope.launch {
+                try {
+                    api.keepAppleToken(code)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (platform.debug) println("HeyNaija: the server did not keep Apple's code: ${e.message}")
+                }
+            }
+        }
         syncPush()
     }
 
@@ -214,7 +231,7 @@ class AppState(val platform: Platform) {
         val push = platform.push ?: return
         if (token == null) return
         val available = try {
-            api.pushesToApp()
+            push.service in api.pushServices()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -244,7 +261,8 @@ class AppState(val platform: Platform) {
     fun pushMayHaveChanged() {
         val push = platform.push ?: return
         val state = _push.value
-        if (state.available && !state.off && push.allowed() != state.on) scope.launch { syncPush() }
+        if (!state.available || state.off) return
+        scope.launch { if (push.allowed() != state.on) syncPush() }
     }
 
     /** The member turned push on or off in Settings, or on from the offer in Notifications. */

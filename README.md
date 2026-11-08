@@ -4,13 +4,13 @@ The native apps for [HeyNaija](https://heynaija.ng), the Nigeria-first social
 network built toward community ownership. The web app, API and everything
 behind them are in [HeyNaija/heynaija](https://github.com/HeyNaija/heynaija).
 
-**Status:** in development, not in the stores yet. Members can sign in and
-join with an invite, read the feeds, threads, profiles and communities, post
-with pictures, polls and video, reply, like, repost, quote, bookmark, search,
-get notifications in the app and, on Android, as push notifications, and listen
-and speak in Gists, the live audio rooms. [docs/plan.md](docs/plan.md) has what
-is done, what is left (push on iOS, Gists in the background), and what the
-backend still needs.
+**Status:** getting ready for the stores ([docs/release.md](docs/release.md)).
+Members can sign in and join with an invite (with Google on Android, with Apple on
+iOS), read the feeds, threads, profiles and communities, post with pictures,
+polls and video, reply, like, repost, quote, bookmark, search, get notifications
+in the app and as push notifications, and listen and speak in Gists, the live
+audio rooms. [docs/plan.md](docs/plan.md) has what is done, what is left (Gists
+in the background, links that open the app), and what the backend still needs.
 
 ## How it fits together
 
@@ -23,7 +23,7 @@ Multiplatform ([ADR 0001](docs/adr/0001-kotlin-multiplatform.md)).
 | `shared/src/androidMain`, `iosMain` | The few things that differ per platform |
 | `shared/src/commonTest` | Tests, run on the JVM and on the iOS simulator |
 | `androidApp` | The Android app: one Activity that shows the shared UI |
-| `iosApp` | The Xcode project: a SwiftUI app that shows the shared UI, and the Swift side of Gists (`GistAudio.swift`) |
+| `iosApp` | The Xcode project: a SwiftUI app that shows the shared UI, the Swift side of Gists (`GistAudio.swift`) and of push (`iOSApp.swift`), and the notification service extension that opens what the server sealed (`NotificationService`) |
 
 Inside `shared/src/commonMain/kotlin/ng/heynaija/app`:
 
@@ -101,6 +101,12 @@ microphone (System Settings, Privacy & Security, Microphone).
 
 Sign-in codes land in Mailpit, at http://127.0.0.1:8026. Make an invite with
 `pnpm invite:create` in the web repository.
+
+Push on the iOS simulator works on a Mac with Apple silicon once the Xcode
+project has a team (`TEAM_ID` in `iosApp/Configuration/Config.xcconfig`) and the
+API has the Apple key (`docs/deployment/sign-in-with-apple.md` in the web
+repository); a build run from Xcode registers with Apple's sandbox. Sign in with
+Apple in the simulator needs an Apple Account signed in to the simulator.
 
 Push on the emulator needs a Google Play system image, `google-services.json`
 at `androidApp/google-services.json` (from the Firebase console; git ignores it),

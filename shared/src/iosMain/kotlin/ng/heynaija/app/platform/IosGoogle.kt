@@ -2,6 +2,6 @@ package ng.heynaija.app.platform
 
 import androidx.compose.runtime.Composable
 
-/** Not on iOS until Sign in with Apple is offered beside it (App Store Review Guideline 4.8). */
+/** Not on iOS yet: Kratos needs an iOS client for Google first (ADR 0026 in the web repository). Apple is offered instead. */
 @Composable
 actual fun rememberGoogleSignIn(): GoogleSignIn? = null

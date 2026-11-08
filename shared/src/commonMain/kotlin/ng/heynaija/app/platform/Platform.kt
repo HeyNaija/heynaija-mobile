@@ -19,7 +19,7 @@ class Platform(
     val debug: Boolean,
     /** A Gist's sound; null where there is none (tests), and Gists then say they cannot play. */
     val gistAudio: GistAudioFactory? = null,
-    /** Push notifications; null where there are none: iOS for now, an Android build without Firebase, tests. */
+    /** Push notifications; null where there are none: an Android build without Firebase, tests. */
     val push: PushDevice? = null,
 )
 

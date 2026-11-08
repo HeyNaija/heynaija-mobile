@@ -9,12 +9,15 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Push notifications on this device (ADR 0023 in the web repository): the token
- * the push service gave this installation, and the key the server seals what it
- * sends with, so that the push service cannot read it.
+ * Push notifications on this device (ADRs 0023 and 0026 in the web repository):
+ * the token the push service gave this installation, and the key the server seals
+ * what it sends with, so that the push service cannot read it.
  */
 interface PushDevice {
-    /** Which push service the token is from: "fcm". */
+    /**
+     * Which push service the token is from: "fcm" on Android; on iOS "apns", or
+     * "apns_sandbox" for a build run from Xcode, whose tokens are the sandbox's.
+     */
     val service: String
 
     /** This installation's token, or null when the push service cannot give one now (offline, no Google Play). */
@@ -23,8 +26,8 @@ interface PushDevice {
     /** Gives the token up, so that the push service refuses whatever is still sent to it. */
     suspend fun deleteToken()
 
-    /** Whether the system lets the app show notifications. */
-    fun allowed(): Boolean
+    /** Whether the system lets the app show notifications. iOS answers this only asynchronously. */
+    suspend fun allowed(): Boolean
 
     /** 32 random bytes in base64url, made the first time and kept in secure storage. */
     fun key(): String
@@ -72,9 +75,9 @@ object PushEvents {
 class NotificationPermission(val ask: () -> Unit, val openSettings: () -> Unit)
 
 /**
- * Asks to show notifications where the system asks (Android 13 and later), and
- * tells [onResult] whether they may show. Where it does not ask, the answer is
- * whether they are on in the system's settings.
+ * Asks to show notifications where the system asks (Android 13 and later, and
+ * iOS), and tells [onResult] whether they may show. Where it does not ask, the
+ * answer is whether they are on in the system's settings.
  */
 @Composable
 expect fun rememberNotificationPermission(onResult: (allowed: Boolean) -> Unit): NotificationPermission
