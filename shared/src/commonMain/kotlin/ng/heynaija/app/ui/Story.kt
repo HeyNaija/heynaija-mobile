@@ -169,14 +169,14 @@ fun SpineItem(last: Boolean, curveAt: Dp? = null, content: @Composable () -> Uni
                 val radius = 8.dp.toPx()
                 val y = gap + (curveAt?.toPx() ?: ((size.height - gap) / 2))
                 val stroke = 2.dp.toPx()
+                // Every straight run is drawn as a line, so the spine is the same from one item to the next.
+                drawLine(color, Offset(x, 0f), Offset(x, if (last) y - radius else size.height), stroke)
                 val path = Path().apply {
-                    moveTo(x, 0f)
-                    lineTo(x, y - radius)
+                    moveTo(x, y - radius)
                     quadraticTo(x, y, x + radius, y)
                     lineTo(edge, y)
                 }
                 drawPath(path, color, style = Stroke(width = stroke))
-                if (!last) drawLine(color, Offset(x, y - radius), Offset(x, size.height), stroke)
             }
             .padding(start = SPINE_INDENT, top = SPINE_GAP_DP.dp),
     ) { content() }

@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -90,6 +91,7 @@ data class GistReplyContext(val id: String, val viewerIsHost: Boolean)
  * name only, and the text, media and actions use the card's whole width.
  * [focused]: the post a thread is about, larger and complete. [compact]: a reply
  * in a thread, smaller and without the community chip. [gist]: a reply in a Gist.
+ * [toggle]: a thread's control for the replies under this one, after the counts.
  */
 @Composable
 fun PostCard(
@@ -100,24 +102,29 @@ fun PostCard(
     compact: Boolean = false,
     pinned: Boolean = false,
     gist: GistReplyContext? = null,
+    toggle: (@Composable () -> Unit)? = null,
 ) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     if (post.deleted || post.unavailable) {
         Card(modifier) {
-            Row(Modifier.padding(start = 16.dp, end = 8.dp).heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (post.hiddenByHost) "The host hid this reply." else "This post is no longer available.",
-                    Modifier.weight(1f).padding(vertical = 12.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontStyle = FontStyle.Italic,
-                    color = colors.muted,
-                )
-                if (post.hiddenByHost && gist?.viewerIsHost == true) {
-                    TextButton(onClick = { app.hideGistReply(gist.id, post, hidden = false) }) {
-                        Text("Show reply", style = MaterialTheme.typography.labelLarge, color = colors.accentStrong)
+            Column {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp).heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (post.hiddenByHost) "The host hid this reply." else "This post is no longer available.",
+                        Modifier.weight(1f).padding(vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontStyle = FontStyle.Italic,
+                        color = colors.muted,
+                    )
+                    if (post.hiddenByHost && gist?.viewerIsHost == true) {
+                        TextButton(onClick = { app.hideGistReply(gist.id, post, hidden = false) }) {
+                            Text("Show reply", style = MaterialTheme.typography.labelLarge, color = colors.accentStrong)
+                        }
                     }
                 }
+                // The replies behind a post that is gone stay in reach.
+                if (toggle != null) Box(Modifier.padding(start = 8.dp, bottom = 4.dp)) { toggle() }
             }
         }
         return
@@ -129,11 +136,11 @@ fun PostCard(
         Column(modifier) {
             StoryStart(story)
             StoryJoin()
-            PostSurface(post, now, Modifier, focused, compact, pinned, gist, open)
+            PostSurface(post, now, Modifier, focused, compact, pinned, gist, open, toggle)
         }
         return
     }
-    PostSurface(post, now, modifier, focused, compact, pinned, gist, open)
+    PostSurface(post, now, modifier, focused, compact, pinned, gist, open, toggle)
 }
 
 @Composable
@@ -146,6 +153,7 @@ private fun PostSurface(
     pinned: Boolean,
     gist: GistReplyContext?,
     open: () -> Unit,
+    toggle: (@Composable () -> Unit)?,
 ) {
     Card(modifier, onClick = if (focused) null else open) {
         Column(Modifier.padding(start = 14.dp, end = 6.dp, top = if (compact) 10.dp else 14.dp)) {
@@ -158,7 +166,7 @@ private fun PostSurface(
                 Body(post, focused, compact, open)
             }
             if (focused) FocusedMeta(post)
-            Actions(post, compact, gist)
+            Actions(post, compact, gist, toggle)
         }
     }
 }
@@ -598,39 +606,81 @@ private fun LinkCard(preview: LinkPreview, modifier: Modifier) {
     }
 }
 
-/** Reply, repost, like on the left; bookmark and share on the right, over a hairline. A Gist's reply: reply and like. */
+/**
+ * Reply, repost, like on the left, then [toggle]; bookmark and share on the right,
+ * over a hairline. A Gist's reply: reply and like.
+ */
 @Composable
-private fun Actions(post: Post, compact: Boolean, gist: GistReplyContext?) {
+private fun Actions(post: Post, compact: Boolean, gist: GistReplyContext?, toggle: (@Composable () -> Unit)?) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     val share = rememberShare()
     if (!compact) HorizontalDivider(Modifier.padding(top = 12.dp, end = 8.dp), color = colors.line)
-    Row(
+    ActionRow(
         Modifier.fillMaxWidth().padding(vertical = if (compact) 0.dp else 2.dp).heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Action(Icons.Bubble, post.replyCount, if (post.replyCount == 1) "1 reply" else "${post.replyCount} replies", enabled = post.viewerCanReply || app.me == null) {
-            app.reply(post, gist?.id)
+        start = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Action(Icons.Bubble, post.replyCount, if (post.replyCount == 1) "1 reply" else "${post.replyCount} replies", enabled = post.viewerCanReply || app.me == null) {
+                    app.reply(post, gist?.id)
+                }
+                if (gist == null) RepostAction(post)
+                Action(
+                    if (post.viewerLiked) Icons.HeartFilled else Icons.Heart,
+                    post.likeCount,
+                    if (post.viewerLiked) "Unlike" else "Like",
+                    // Pressed reads in the deep green, as on the web, not a red heart.
+                    tint = if (post.viewerLiked) colors.accentStrong else colors.muted,
+                ) { app.toggleLike(post, gist?.id) }
+            }
+        },
+        toggle = toggle,
+        end = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (gist != null) return@Row
+                if (!compact) {
+                    Action(
+                        if (post.viewerBookmarked) Icons.BookmarkFilled else Icons.Bookmark,
+                        0,
+                        if (post.viewerBookmarked) "Remove bookmark" else "Bookmark",
+                        tint = if (post.viewerBookmarked) colors.accentStrong else colors.muted,
+                    ) { app.toggleBookmark(post) }
+                }
+                Action(Icons.Share, 0, "Share") { share(app.postLink(post)) }
+            }
+        },
+    )
+}
+
+/**
+ * [start] on the left and [end] on the right, with [toggle] after [start] when the
+ * row has room for it, and otherwise on a line of its own under them, still inside
+ * the card (a small phone, or a reply deep in a thread).
+ */
+@Composable
+private fun ActionRow(modifier: Modifier, start: @Composable () -> Unit, toggle: (@Composable () -> Unit)?, end: @Composable () -> Unit) {
+    Layout(
+        content = {
+            start()
+            toggle?.invoke()
+            end()
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val first = measurables.first().measure(loose)
+        val last = measurables.last().measure(loose)
+        val middle = if (measurables.size > 2) measurables[1].measure(loose) else null
+        val width = constraints.maxWidth
+        val inline = middle == null || first.width + middle.width + last.width <= width
+        val line = maxOf(first.height, last.height, if (inline) middle?.height ?: 0 else 0, constraints.minHeight)
+        val height = if (inline || middle == null) line else line + middle.height
+        layout(width, height) {
+            first.placeRelative(0, (line - first.height) / 2)
+            last.placeRelative(width - last.width, (line - last.height) / 2)
+            if (middle != null) {
+                if (inline) middle.placeRelative(first.width, (line - middle.height) / 2) else middle.placeRelative(0, line)
+            }
         }
-        if (gist == null) RepostAction(post)
-        Action(
-            if (post.viewerLiked) Icons.HeartFilled else Icons.Heart,
-            post.likeCount,
-            if (post.viewerLiked) "Unlike" else "Like",
-            // Pressed reads in the deep green, as on the web, not a red heart.
-            tint = if (post.viewerLiked) colors.accentStrong else colors.muted,
-        ) { app.toggleLike(post, gist?.id) }
-        Spacer(Modifier.weight(1f))
-        if (gist != null) return@Row
-        if (!compact) {
-            Action(
-                if (post.viewerBookmarked) Icons.BookmarkFilled else Icons.Bookmark,
-                0,
-                if (post.viewerBookmarked) "Remove bookmark" else "Bookmark",
-                tint = if (post.viewerBookmarked) colors.accentStrong else colors.muted,
-            ) { app.toggleBookmark(post) }
-        }
-        Action(Icons.Share, 0, "Share") { share(app.postLink(post)) }
     }
 }
 
