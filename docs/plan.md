@@ -123,9 +123,6 @@ What the apps do now, what comes next, and what the backend
    bundles ship only the one a phone needs (the release bundle is about 44 MB).
    LiveKit's camera and screen-sharing permissions are taken out of the manifest,
    as Gists use neither.
-5. Age checks for the United States: Apple's Declared Age Range API and Google
-   Play's Age Signals API, which Texas, Utah and Louisiana expect of 18+ apps. The
-   first release leaves the US out until then ([release.md](release.md#before-a-us-launch)).
 
 ## Decisions still open
 
