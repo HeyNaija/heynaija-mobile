@@ -49,6 +49,27 @@ class HeyNaijaApiTest {
     }
 
     @Test
+    fun pushServicesAreWhatTheServerSaysOrAndroidAloneFromAnOlderOne() = runTest {
+        val both = FakeServer { HttpStatusCode.OK to """{ "publicKey": null, "app": true, "appServices": ["fcm", "apns", "apns_sandbox"] }""" }
+        assertEquals(listOf("fcm", "apns", "apns_sandbox"), both.api.pushServices())
+        val older = FakeServer { HttpStatusCode.OK to """{ "publicKey": "BPk", "app": true }""" }
+        assertEquals(listOf("fcm"), older.api.pushServices())
+        val none = FakeServer { HttpStatusCode.OK to """{ "publicKey": null, "app": false }""" }
+        assertEquals(emptyList(), none.api.pushServices())
+    }
+
+    @Test
+    fun applesCodeGoesToTheApiToBeKept() = runTest {
+        val server = FakeServer(token = "ory_st_abc") { HttpStatusCode.NoContent to "" }
+
+        server.api.keepAppleToken("c.one-time")
+
+        val request = server.requests.single()
+        assertEquals("https://test.heynaija.ng/api/v1/apple/token", request.url.toString())
+        assertEquals("""{"code":"c.one-time"}""", (request.body as io.ktor.http.content.TextContent).text)
+    }
+
+    @Test
     fun aRefusalThrows() = runTest {
         val server = FakeServer { HttpStatusCode.ServiceUnavailable to """{"code":"auth_provider_unavailable"}""" }
 

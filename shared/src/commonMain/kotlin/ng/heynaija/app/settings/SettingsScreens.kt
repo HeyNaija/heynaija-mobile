@@ -96,6 +96,7 @@ fun SettingsScreen() {
             }
             SectionTitle("HEYNAIJA")
             Group(listOf(
+                { MenuRow("Terms of use", Icons.Pen, onClick = open("/terms")) },
                 { MenuRow("Community rules", Icons.Shield, onClick = open("/rules")) },
                 { MenuRow("Privacy notice", Icons.Info, onClick = open("/privacy")) },
                 { MenuRow("About HeyNaija", Icons.Globe, onClick = open("/about")) },

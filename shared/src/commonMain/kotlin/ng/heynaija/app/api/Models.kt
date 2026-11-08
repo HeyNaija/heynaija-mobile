@@ -527,9 +527,13 @@ val REPORT_REASONS = listOf(
 /** Only for a post, while marking posts sensitive is switched on (the adultLabels flag); listed before "Something else". */
 val NEEDS_LABEL_REASON = "needs_label" to "Sensitive, but not marked sensitive"
 
-/** `GET /v1/push/key`: the browsers' key, which the app does not use, and whether the app is pushed to. */
+/**
+ * `GET /v1/push/key`: the browsers' key, which the app does not use, and the push
+ * services the apps are pushed through. [app] is whether Android is, from a server
+ * before [appServices].
+ */
 @Serializable
-data class PushKey(val publicKey: String? = null, val app: Boolean = false)
+data class PushKey(val publicKey: String? = null, val app: Boolean = false, val appServices: List<String>? = null)
 
 /**
  * `GET /v1/signup/age`. A server from before 8 November 2026 says nothing of

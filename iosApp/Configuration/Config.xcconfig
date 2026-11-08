@@ -1,7 +1,11 @@
-TEAM_ID=
+// HeyNaija's Apple developer team (developer.apple.com → Membership). Not secret:
+// every signed app carries it. Builds for a phone and for the App Store need it.
+TEAM_ID=P6YA592CLG
 
 PRODUCT_NAME=HeyNaija
 PRODUCT_BUNDLE_IDENTIFIER=ng.heynaija.app
 
+// Every upload to App Store Connect needs a higher build number (docs/release.md).
+// The notification service extension takes both from here, as Apple requires.
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=0.1.0

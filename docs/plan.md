@@ -10,7 +10,10 @@ What the apps do now, what comes next, and what the backend
   Sans, the wordmark, and the HN mark as the app icon. Text follows the phone's
   own size setting, one step smaller on small screens.
 - **Signing in and joining** with an emailed code, through Kratos's native
-  flows (ADR 0022 in the web repository), or on Android with Google:
+  flows (ADR 0022 in the web repository), with Apple on iOS (below), or with
+  Google. On iOS, Google's page opens in iOS's sign-in sheet as the app's own
+  iOS OAuth client (PKCE and a nonce, no Google SDK), whose ID tokens Kratos
+  takes as an extra audience. On Android:
   Credential Manager's "Sign in with Google" gives an ID token for Kratos's
   Google client, sent with its nonce to the native flow. A Google address that
   already has an account confirms an emailed code once and Google is connected
@@ -48,6 +51,22 @@ What the apps do now, what comes next, and what the backend
   Gist, hidden by its host), and a reply's notification opens it in its Gist.
 - **Notifications** in the app, with the count on the tab, and which kinds you
   get (and email) in Settings.
+- **Sign in with Apple on iOS** (ADR 0026 in the web repository): Apple's own
+  button and sheet give an ID token for the app, sent with its nonce to Kratos's
+  native flow as Google's is on Android, under the same account policy (an
+  address that already has an account confirms an emailed code first; joining
+  takes an invite). Apple's one-time code then goes to `POST /v1/apple/token`, so
+  the server can revoke Apple's token when the account is erased, as Apple
+  requires. The web offers no Apple button; Settings there can disconnect it.
+- **Push notifications on iOS** (ADR 0026 in the web repository), through Apple's
+  push service directly, with no Firebase. Offered and asked for as on Android.
+  The server seals each message as for Android; Apple carries only "You have a
+  new notification" and `sealed`, and the notification service extension
+  (`iosApp/NotificationService`) opens it with the key the app keeps in the
+  Keychain of the app group `group.ng.heynaija.app`, and shows its words, or
+  keeps the stand-in when it is another member's (the member signed in is in the
+  group's defaults). Tapping it opens its link in the app. A build run from Xcode
+  registers as `apns_sandbox`, an App Store or TestFlight build as `apns`.
 - **Push notifications on Android** (ADR 0023 in the web repository), through
   Firebase Cloud Messaging. Offered once at the top of Notifications and in
   Settings, never asked for at start; the system's permission is asked for only
@@ -83,33 +102,27 @@ What the apps do now, what comes next, and what the backend
 
 1. **Session tokens on staging.** Done in HeyNaija/heynaija#107 (API reads
    `Authorization: Bearer`, signup reads `transient_payload`), waiting to merge.
-2. **Sign in with Apple, then Google on iOS.** Android has Google. **App Store
-   Review Guideline 4.8:** an iOS app that offers Google sign-in must also offer
-   Sign in with Apple, so iOS offers the emailed code only until the Apple
-   developer account exists. ADR 0022's "Not yet" in the web repository still
-   says Google is not in the apps.
-3. **Push to the iOS app.** Android's is ADR 0023 (FCM). iOS needs the Apple
-   developer account, an APNs key, and a second push service (`apns`) in the
-   API's `push_devices`.
-4. **Links that open the app.** For `heynaija.ng/p/...` links to open in the
+2. **Links that open the app.** For `heynaija.ng/p/...` links to open in the
    app, the web app has to serve `/.well-known/assetlinks.json` (Android App
    Links) and `/.well-known/apple-app-site-association` (iOS Universal Links).
 
 ## Next in the app
 
-1. Push notifications on iOS (after 3 above).
-2. Gists with the phone locked or another app open. Today the sound can stop,
+1. Gists with the phone locked or another app open. Today the sound can stop,
    and the room says to keep the screen open, as the web does. Listening on
    needs iOS's audio background mode, and on Android a foreground service with a
    notification (of the microphone type while speaking, from Android 14).
    The web's Connection sheet (route, loss and jitter) and microphone settings
    are not in the room yet.
-3. The ideas board, and continuing a video upload after the app was closed.
-4. Opening shared links in the app (after 4 above).
-5. Store listings: Play Console and App Store Connect accounts, privacy labels,
-   age rating (18 and over during the beta), and signing keys kept out of the repo.
-   LiveKit's WebRTC library makes the Android debug APK about 75 MB with every
-   processor type in it; the Play Store's app bundles ship only the one a phone needs.
+2. The ideas board, and continuing a video upload after the app was closed.
+3. Opening shared links in the app (after 2 above).
+4. The stores: [release.md](release.md) has every step, what is in the
+   repository (release signing, the Release workflow, privacy manifests) and what
+   only the account holders can do. LiveKit's WebRTC library makes the Android
+   debug APK about 75 MB with every processor type in it; the Play Store's app
+   bundles ship only the one a phone needs (the release bundle is about 44 MB).
+   LiveKit's camera and screen-sharing permissions are taken out of the manifest,
+   as Gists use neither.
 
 ## Decisions still open
 
@@ -138,3 +151,9 @@ with. One client per certificate:
 Without one, Google's sheet opens and then answers with an error, and the app
 says Google sign-in did not work. No secret is involved; the Android client has
 none.
+
+iOS signs in as its own client, type iOS, bundle ID `ng.heynaija.app`
+(`567185521629-68a94t7k…`, `Server.kt`): Google's page in iOS's sign-in sheet,
+coming back to the client's reversed ID. Its tokens are for that client, so
+Kratos lists it in the Google provider's `additional_id_token_audiences` (the
+web repository's compose files). One client serves every build.

@@ -59,15 +59,27 @@ class KratosAuthTest {
         assertEquals(AuthStep.Expired, server.kratos.finishLogin("f1", "ada@example.com", "123456"))
     }
 
-    private val google = GoogleToken("eyJ.google.token", "n0nce")
+    private val google = IdToken("google", "eyJ.google.token", "n0nce")
 
     @Test
     fun googleSignsInWithItsIdTokenAndNonce() = runTest {
         val server = FakeServer { HttpStatusCode.OK to """{ "session_token": "ory_st_google", "session": {} }""" }
 
-        assertEquals(AuthStep.Done("ory_st_google"), server.kratos.loginWithGoogle("f1", google))
+        assertEquals(AuthStep.Done("ory_st_google"), server.kratos.loginWith("f1", google))
         val body = (server.requests.single().body as TextContent).text
         assertTrue(""""method":"oidc","provider":"google","id_token":"eyJ.google.token","id_token_nonce":"n0nce"""" in body, body)
+    }
+
+    @Test
+    fun appleSignsInWithItsIdTokenButNotItsCode() = runTest {
+        val server = FakeServer { HttpStatusCode.OK to """{ "session_token": "ory_st_apple", "session": {} }""" }
+        val apple = IdToken("apple", "eyJ.apple.token", "n0nce", appleCode = "c.one-time")
+
+        assertEquals(AuthStep.Done("ory_st_apple"), server.kratos.loginWith("f1", apple))
+        val body = (server.requests.single().body as TextContent).text
+        assertTrue(""""method":"oidc","provider":"apple","id_token":"eyJ.apple.token","id_token_nonce":"n0nce"""" in body, body)
+        // The code is for HeyNaija's API, not Kratos.
+        assertTrue("c.one-time" !in body, body)
     }
 
     @Test
@@ -83,7 +95,7 @@ class KratosAuthTest {
             """.trimIndent()
         }
 
-        assertEquals(AuthStep.ConfirmEmail("f2", "ada@example.com"), server.kratos.loginWithGoogle("f1", google))
+        assertEquals(AuthStep.ConfirmEmail("f2", "ada@example.com"), server.kratos.loginWith("f1", google))
     }
 
     @Test
@@ -102,14 +114,14 @@ class KratosAuthTest {
             """.trimIndent()
         }
 
-        assertEquals(AuthStep.NoAccount("new@example.com"), server.kratos.loginWithGoogle("f1", google))
+        assertEquals(AuthStep.NoAccount("new@example.com"), server.kratos.loginWith("f1", google))
     }
 
     @Test
     fun joiningWithGoogleSendsTheHandleInviteAndAgeButNoEmail() = runTest {
         val server = FakeServer { HttpStatusCode.BadRequest to flow("choose_method", "traits.handle" to "That handle is taken") }
 
-        val step = server.kratos.signupWithGoogle("r1", google, "ada", SignupExtras("HN-1234", "1990-04-12"))
+        val step = server.kratos.signupWith("r1", google, "ada", SignupExtras("HN-1234", "1990-04-12"))
 
         assertEquals(AuthStep.Refused(mapOf("traits.handle" to "That handle is taken")), step)
         val request = server.requests.single()

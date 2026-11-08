@@ -52,10 +52,12 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.AuthStep
+import ng.heynaija.app.api.IdToken
 import ng.heynaija.app.api.Servers
 import ng.heynaija.app.api.SignupExtras
 import ng.heynaija.app.nav.Route
-import ng.heynaija.app.platform.GoogleResult
+import ng.heynaija.app.platform.SignInResult
+import ng.heynaija.app.platform.rememberAppleSignIn
 import ng.heynaija.app.platform.rememberGoogleSignIn
 import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
@@ -94,25 +96,65 @@ private fun FormError(message: String?) {
 private fun AuthStep.Refused.first(): String = messages[""] ?: messages.values.firstOrNull() ?: CONNECTION
 
 /**
+ * A sign-in the phone has of its own, besides the emailed code: Google's on
+ * Android, Apple's on iOS (ADR 0026 in the web repository). [name] is how the
+ * screens speak of it; [note] says what it gives HeyNaija.
+ */
+private class Provider(
+    val name: String,
+    val note: String,
+    val signIn: suspend () -> SignInResult,
+    val button: @Composable (onClick: () -> Unit, joining: Boolean, enabled: Boolean, busy: Boolean) -> Unit,
+)
+
+/** The providers this phone and server offer, in the order their buttons show. */
+@Composable
+private fun rememberProviders(): List<Provider> {
+    val apple = rememberAppleSignIn()
+    val google = rememberGoogleSignIn()
+    val server = Servers.current
+    return remember(apple, google, server) {
+        listOfNotNull(
+            apple?.let {
+                Provider(
+                    "Apple",
+                    "Apple gives HeyNaija your email address, or one that forwards to it if you hide yours, and nothing else.",
+                    it::signIn,
+                ) { onClick, joining, enabled, busy -> it.Button(onClick, joining, enabled && !busy, Modifier.fillMaxWidth().height(44.dp)) }
+            },
+            if (google != null && google.offeredOn(server)) {
+                Provider("Google", "Google gives HeyNaija your email address, and nothing else.", { google.signIn(server) }) { onClick, _, enabled, busy ->
+                    GoogleButton(onClick, enabled, busy)
+                }
+            } else {
+                null
+            },
+        )
+    }
+}
+
+/**
  * Signing in with a code emailed to the member (no passwords: docs/adr/0003 in
- * the web repository), or with Google where the app offers it. Google for an
- * address that already has an account confirms an emailed code first, and Google
+ * the web repository), or with Google or Apple where the app offers them. Either
+ * for an address that already has an account confirms an emailed code first, and
  * is then connected to it (infra/kratos/policy in the web repository).
  */
 @Composable
 fun SignInScreen() {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val google = rememberGoogleSignIn()
+    val providers = rememberProviders()
     var email by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
     var flow by rememberSaveable { mutableStateOf<String?>(null) }
     var sent by rememberSaveable { mutableStateOf(false) }
-    // The code confirms an account Google is being connected to.
-    var linking by rememberSaveable { mutableStateOf(false) }
+    // The provider ("Google", "Apple") being connected to the account the code confirms.
+    var linking by rememberSaveable { mutableStateOf<String?>(null) }
+    // Its sign-in, whose Apple code goes to the server once the account is signed in.
+    var linked by remember { mutableStateOf<IdToken?>(null) }
     var busy by remember { mutableStateOf(false) }
-    // Which button is waiting: Google's sheet can be up for a while.
-    var googleBusy by remember { mutableStateOf(false) }
+    // Which provider's button is waiting: its sheet can be up for a while.
+    var providerBusy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun run(block: suspend () -> Unit) {
@@ -134,7 +176,8 @@ fun SignInScreen() {
     fun send() = run {
         val id = app.kratos.startLogin()
         flow = id
-        linking = false
+        linking = null
+        linked = null
         when (val step = app.kratos.sendLoginCode(id, email.trim())) {
             AuthStep.Sent -> sent = true
             is AuthStep.Refused -> error = step.messages["identifier"] ?: step.first()
@@ -144,25 +187,26 @@ fun SignInScreen() {
         }
     }
 
-    fun withGoogle() = run {
-        googleBusy = true
+    fun withProvider(provider: Provider) = run {
+        providerBusy = provider.name
         val result = try {
-            google?.signIn(Servers.current.googleClientId ?: return@run)
+            provider.signIn()
         } finally {
-            googleBusy = false
+            providerBusy = null
         }
         val token = when (result) {
-            is GoogleResult.Signed -> result.token
-            is GoogleResult.Failed -> { error = result.reason; return@run }
-            GoogleResult.Cancelled, null -> return@run
+            is SignInResult.Signed -> result.token
+            is SignInResult.Failed -> { error = result.reason; return@run }
+            SignInResult.Cancelled -> return@run
         }
         val id = app.kratos.startLogin()
-        when (val step = app.kratos.loginWithGoogle(id, token)) {
-            is AuthStep.Done -> app.signedIn(step.token)
+        when (val step = app.kratos.loginWith(id, token)) {
+            is AuthStep.Done -> app.signedIn(step.token, via = token)
             is AuthStep.ConfirmEmail -> {
                 flow = step.flow
                 email = step.email
-                linking = true
+                linking = provider.name
+                linked = token
                 when (val sending = app.kratos.sendLoginCode(step.flow, step.email)) {
                     AuthStep.Sent -> { sent = true; code = "" }
                     is AuthStep.Refused -> error = sending.first()
@@ -170,7 +214,12 @@ fun SignInScreen() {
                 }
             }
             is AuthStep.NoAccount -> error =
-                "No one has joined HeyNaija with ${step.email ?: "that Google account"} yet. Joining takes an invite: choose Google when you join."
+                // Hide My Email gives an address of Apple's, which no account that joined by email has.
+                if (step.email?.endsWith("@privaterelay.appleid.com") == true) {
+                    "Apple hid your email, so it matches no HeyNaija account. To connect Apple, stop using Apple with HeyNaija in your iPhone’s Settings, then continue with Apple and share your email. Or sign in with your email."
+                } else {
+                    "No one has joined HeyNaija with ${step.email ?: "that ${provider.name} account"} yet. Joining takes an invite: choose ${provider.name} when you join."
+                }
             is AuthStep.Refused -> error = step.first()
             AuthStep.Expired -> error = "That took too long. Try again."
             AuthStep.Sent -> error = CONNECTION
@@ -181,12 +230,12 @@ fun SignInScreen() {
         val id = flow ?: return
         run {
             when (val step = app.kratos.finishLogin(id, email.trim(), code.trim())) {
-                is AuthStep.Done -> app.signedIn(step.token)
+                is AuthStep.Done -> app.signedIn(step.token, via = linked)
                 is AuthStep.Refused -> error = step.messages["code"] ?: step.first()
                 AuthStep.Expired -> {
                     sent = false
                     code = ""
-                    error = if (linking) "That code has expired. Continue with Google again for a new one." else "That code has expired. Send yourself a new one."
+                    error = linking?.let { "That code has expired. Continue with $it again for a new one." } ?: "That code has expired. Send yourself a new one."
                 }
                 AuthStep.Sent -> error = "That code is not right. Check the email and try again."
                 is AuthStep.ConfirmEmail, is AuthStep.NoAccount -> error = CONNECTION
@@ -198,11 +247,9 @@ fun SignInScreen() {
         FormPage("Sign in", "We will email you a code. No password needed.", onClose = { app.navigator.pop() }) {
             Field(email, { email = it }, "Email", placeholder = "you@example.com", keyboardType = KeyboardType.Email, onDone = { if (email.contains('@')) send() })
             FormError(error)
-            PrimaryButton("Email me a code", ::send, Modifier.fillMaxWidth(), enabled = email.contains('@') && !busy, busy = busy && !googleBusy)
-            if (google != null && Servers.current.googleClientId != null) {
-                Or()
-                GoogleButton(::withGoogle, enabled = !busy, busy = googleBusy)
-            }
+            PrimaryButton("Email me a code", ::send, Modifier.fillMaxWidth(), enabled = email.contains('@') && !busy, busy = busy && providerBusy == null)
+            if (providers.isNotEmpty()) Or()
+            for (provider in providers) provider.button({ withProvider(provider) }, false, !busy, providerBusy == provider.name)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("New here? ", style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
                 Text(
@@ -217,16 +264,16 @@ fun SignInScreen() {
     } else {
         FormPage(
             "Check your email",
-            if (linking) "Google confirmed ${email.trim()}, which already has a HeyNaija account. Enter the code we emailed there to sign in; Google is connected to the account after that."
-            else "We sent a code to ${email.trim()}. It works for 15 minutes.",
+            linking?.let { "$it confirmed ${email.trim()}, which already has a HeyNaija account. Enter the code we emailed there to sign in; $it is connected to the account after that." }
+                ?: "We sent a code to ${email.trim()}. It works for 15 minutes.",
             onClose = { app.navigator.pop() },
         ) {
             Field(code, { code = it.filter(Char::isDigit).take(6) }, "Code", placeholder = "6 digits", keyboardType = KeyboardType.NumberPassword, onDone = { if (code.length == 6) finish() })
             FormError(error)
             PrimaryButton("Sign in", ::finish, Modifier.fillMaxWidth(), enabled = code.length == 6, busy = busy)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Send a new code", { code = ""; if (linking) withGoogle() else send() })
-                SecondaryButton(if (linking) "Start again" else "Use another email", { sent = false; linking = false; code = ""; error = null })
+                SecondaryButton("Send a new code", { code = ""; providers.firstOrNull { it.name == linking }?.let(::withProvider) ?: send() })
+                SecondaryButton(if (linking != null) "Start again" else "Use another email", { sent = false; linking = null; linked = null; code = ""; error = null })
             }
         }
     }
@@ -278,9 +325,9 @@ private enum class JoinStep { Invite, Age, Account, Code, Link }
 /**
  * Joining, in the web's order (/join, then /signup): the invite, the date of
  * birth, then the handle and either an email (and the code sent to it) or
- * Google, which gives the email. The invite and date go with the signup as its
- * transient payload, and the API decides again when the account is made (ADR
- * 0022 in the web repository). Google for an address that already has an
+ * Google or Apple, which give the email. The invite and date go with the signup
+ * as its transient payload, and the API decides again when the account is made
+ * (ADR 0022 in the web repository). Either for an address that already has an
  * account signs in to it instead, after an emailed code, and spends no invite.
  */
 @Composable
@@ -288,7 +335,7 @@ fun SignUpScreen() {
     val app = LocalApp.current
     val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
-    val google = rememberGoogleSignIn()?.takeIf { Servers.current.googleClientId != null }
+    val providers = rememberProviders()
     var step by rememberSaveable { mutableStateOf(JoinStep.Invite) }
     var invite by rememberSaveable { mutableStateOf("") }
     var birth by rememberSaveable(stateSaver = BirthDate.Saver) { mutableStateOf(BirthDate()) }
@@ -300,8 +347,11 @@ fun SignUpScreen() {
     var handle by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
     var flow by rememberSaveable { mutableStateOf<String?>(null) }
+    // The provider being connected to an account that already has its address, and its sign-in.
+    var linking by rememberSaveable { mutableStateOf("") }
+    var linked by remember { mutableStateOf<IdToken?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var googleBusy by remember { mutableStateOf(false) }
+    var providerBusy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var fieldErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val extras = {
@@ -352,25 +402,27 @@ fun SignUpScreen() {
         }
     }
 
-    fun joinWithGoogle() = run {
+    fun joinWith(provider: Provider) = run {
         fieldErrors = emptyMap()
-        googleBusy = true
+        providerBusy = provider.name
         val result = try {
-            google?.signIn(Servers.current.googleClientId ?: return@run)
+            provider.signIn()
         } finally {
-            googleBusy = false
+            providerBusy = null
         }
         val token = when (result) {
-            is GoogleResult.Signed -> result.token
-            is GoogleResult.Failed -> { error = result.reason; return@run }
-            GoogleResult.Cancelled, null -> return@run
+            is SignInResult.Signed -> result.token
+            is SignInResult.Failed -> { error = result.reason; return@run }
+            SignInResult.Cancelled -> return@run
         }
         val id = app.kratos.startSignup()
-        when (val answer = app.kratos.signupWithGoogle(id, token, handle.trim().lowercase(), extras())) {
-            is AuthStep.Done -> app.signedIn(answer.token)
+        when (val answer = app.kratos.signupWith(id, token, handle.trim().lowercase(), extras())) {
+            is AuthStep.Done -> app.signedIn(answer.token, via = token)
             is AuthStep.ConfirmEmail -> {
                 flow = answer.flow
                 email = answer.email
+                linking = provider.name
+                linked = token
                 when (val sending = app.kratos.sendLoginCode(answer.flow, answer.email)) {
                     AuthStep.Sent -> { step = JoinStep.Link; code = "" }
                     is AuthStep.Refused -> error = sending.first()
@@ -421,7 +473,8 @@ fun SignUpScreen() {
         }
         JoinStep.Account -> FormPage(
             "Make your account",
-            if (google != null) "Choose your handle, then join with your email or with Google. No password needed." else "We will email you a code to finish. No password needed.",
+            if (providers.isNotEmpty()) "Choose your handle, then join with your email or with ${providers.joinToString(" or ") { it.name }}. No password needed."
+            else "We will email you a code to finish. No password needed.",
             { step = if (asksBirthDate == true) JoinStep.Age else JoinStep.Invite },
         ) {
             Field(
@@ -435,19 +488,20 @@ fun SignUpScreen() {
             Field(email, { email = it }, "Email", placeholder = "you@example.com", keyboardType = KeyboardType.Email, error = fieldErrors["traits.email"])
             FormError(error)
             Text(
-                "By joining you agree to the community rules, and to how we handle your data in the privacy notice.",
+                "By joining you agree to the terms, the rules and the privacy policy.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = HeyNaija.colors.muted,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Community rules", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/rules") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
-                Text("Privacy notice", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/privacy") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+                Text("Terms", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/terms") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+                Text("Rules", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/rules") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+                Text("Privacy policy", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/privacy") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
             }
-            PrimaryButton("Email me a code", ::sendCode, Modifier.fillMaxWidth(), enabled = email.contains('@') && handle.length >= 3 && !busy, busy = busy && !googleBusy)
-            if (google != null) {
-                Or()
-                GoogleButton(::joinWithGoogle, enabled = handle.length >= 3 && !busy, busy = googleBusy)
-                Text("Google gives HeyNaija your email address, and nothing else.", style = MaterialTheme.typography.labelSmall, color = HeyNaija.colors.muted)
+            PrimaryButton("Email me a code", ::sendCode, Modifier.fillMaxWidth(), enabled = email.contains('@') && handle.length >= 3 && !busy, busy = busy && providerBusy == null)
+            if (providers.isNotEmpty()) Or()
+            for (provider in providers) {
+                provider.button({ joinWith(provider) }, true, handle.length >= 3 && !busy, providerBusy == provider.name)
+                Text(provider.note, style = MaterialTheme.typography.labelSmall, color = HeyNaija.colors.muted)
             }
         }
         JoinStep.Code -> FormPage("Check your email", "We sent a code to ${email.trim()}. It works for 15 minutes.", { step = JoinStep.Account }) {
@@ -469,7 +523,7 @@ fun SignUpScreen() {
         }
         JoinStep.Link -> FormPage(
             "You already have an account",
-            "Google confirmed ${email.trim()}, which already has a HeyNaija account. Enter the code we emailed there to sign in; Google is connected to the account after that, and your invite is not used.",
+            "$linking confirmed ${email.trim()}, which already has a HeyNaija account. Enter the code we emailed there to sign in; $linking is connected to the account after that, and your invite is not used.",
             { step = JoinStep.Account },
         ) {
             Field(code, { code = it.filter(Char::isDigit).take(6) }, "Code", placeholder = "6 digits", keyboardType = KeyboardType.NumberPassword)
@@ -478,9 +532,9 @@ fun SignUpScreen() {
                 val id = flow ?: return@PrimaryButton
                 run {
                     when (val answer = app.kratos.finishLogin(id, email.trim(), code.trim())) {
-                        is AuthStep.Done -> app.signedIn(answer.token)
+                        is AuthStep.Done -> app.signedIn(answer.token, via = linked)
                         is AuthStep.Refused -> error = answer.messages["code"] ?: answer.first()
-                        AuthStep.Expired -> { step = JoinStep.Account; error = "That code has expired. Continue with Google again for a new one." }
+                        AuthStep.Expired -> { step = JoinStep.Account; error = "That code has expired. Continue with $linking again for a new one." }
                         AuthStep.Sent -> error = "That code is not right. Check the email and try again."
                         is AuthStep.ConfirmEmail, is AuthStep.NoAccount -> error = CONNECTION
                     }

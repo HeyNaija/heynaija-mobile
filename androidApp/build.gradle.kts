@@ -33,6 +33,18 @@ val firebase: Map<String, String> = file("google-services.json").takeIf { it.exi
     )
 } ?: emptyMap()
 
+/**
+ * The upload key a release is signed with for Google Play, which then signs it
+ * again with the app's own key (Play App Signing; docs/release.md). None of it is
+ * in git: CI writes the keystore from the UPLOAD_KEYSTORE secret and passes the
+ * rest in the environment; on a computer they can go in ~/.gradle/gradle.properties
+ * as heynaija.upload.* instead. Without them a release build is unsigned.
+ */
+fun upload(name: String): String? =
+    System.getenv("HEYNAIJA_UPLOAD_${name.uppercase()}")?.takeIf { it.isNotBlank() }
+        ?: (findProperty("heynaija.upload.$name") as String?)?.takeIf { it.isNotBlank() }
+val uploadKeystore = upload("keystore")?.let(::file)?.takeIf { it.exists() }
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_11
@@ -58,7 +70,8 @@ android {
         applicationId = "ng.heynaija.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
+        // Each upload to Play needs a higher versionCode: CI passes its run number (-PversionCode).
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = "1.0"
         firebase.forEach { (name, value) -> resValue("string", name, value) }
     }
@@ -67,8 +80,19 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        if (uploadKeystore != null) {
+            create("upload") {
+                storeFile = uploadKeystore
+                storePassword = upload("store_password")
+                keyAlias = upload("key_alias")
+                keyPassword = upload("key_password")
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
