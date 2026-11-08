@@ -93,6 +93,12 @@ What the apps do now, what comes next, and what the backend
   an update's own screen names its place. The author writes the next update
   from the box at the end of the story ("Add update 3…") or the post's menu,
   in the sheet replies use, over the story. Needs the web's `feat/stories` API.
+- **Age checks with the app store** where a law requires them (Texas's so far):
+  before signing in or joining, Apple's Declared Age Range on iOS 26.2 and later,
+  through a Swift wrapper (`AgeRange.swift`, as the API is Swift-only), and Google
+  Play's Age Signals on Android. Under 18, or not confirmed where a law asks:
+  they cannot go on. Elsewhere the app's own "I am 18 or older" stands
+  ([release.md](release.md#age-checks)).
 - **Search** for people, communities and posts, with trending topics.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and

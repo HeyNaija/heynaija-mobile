@@ -57,6 +57,7 @@ import ng.heynaija.app.api.Servers
 import ng.heynaija.app.api.SignupExtras
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.SignInResult
+import ng.heynaija.app.platform.rememberAgeSignals
 import ng.heynaija.app.platform.rememberAppleSignIn
 import ng.heynaija.app.platform.rememberGoogleSignIn
 import ng.heynaija.app.reasonOf
@@ -144,6 +145,7 @@ fun SignInScreen() {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val providers = rememberProviders()
+    val ageSignals = rememberAgeSignals()
     var email by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
     var flow by rememberSaveable { mutableStateOf<String?>(null) }
@@ -174,6 +176,7 @@ fun SignInScreen() {
     }
 
     fun send() = run {
+        app.ageRefusal(ageSignals)?.let { error = it; return@run }
         val id = app.kratos.startLogin()
         flow = id
         linking = null
@@ -188,6 +191,7 @@ fun SignInScreen() {
     }
 
     fun withProvider(provider: Provider) = run {
+        app.ageRefusal(ageSignals)?.let { error = it; return@run }
         providerBusy = provider.name
         val result = try {
             provider.signIn()
@@ -336,6 +340,7 @@ fun SignUpScreen() {
     val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val providers = rememberProviders()
+    val ageSignals = rememberAgeSignals()
     var step by rememberSaveable { mutableStateOf(JoinStep.Invite) }
     var invite by rememberSaveable { mutableStateOf("") }
     var birth by rememberSaveable(stateSaver = BirthDate.Saver) { mutableStateOf(BirthDate()) }
@@ -447,6 +452,8 @@ fun SignUpScreen() {
             FormError(error)
             PrimaryButton("Continue", {
                 run {
+                    // Where the law asks, the app store confirms the age before anything else.
+                    app.ageRefusal(ageSignals)?.let { error = it; return@run }
                     if (app.api.inviteUsable(invite.trim())) step = if (asksBirthDate == true) JoinStep.Age else JoinStep.Account
                     else error = "That invite code is not valid. Check it, or ask whoever invited you for a new one."
                 }

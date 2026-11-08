@@ -27,10 +27,13 @@ import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.routeOf
+import ng.heynaija.app.platform.AgeSignals
 import ng.heynaija.app.platform.KeyValueStore
 import ng.heynaija.app.platform.Platform
 import ng.heynaija.app.platform.PushDevice
 import ng.heynaija.app.platform.PushEvents
+import ng.heynaija.app.platform.StoreAge
+import ng.heynaija.app.platform.storeAgeRefusal
 import ng.heynaija.app.ui.storyDraft
 
 /** Who is using the app. [Unknown] only while the app starts. */
@@ -167,6 +170,22 @@ class AppState(val platform: Platform) {
 
     fun updateMe(change: (Me) -> Me) {
         _account.update { if (it is Account.SignedIn) Account.SignedIn(change(it.me)) else it }
+    }
+
+    // What the app store said about the person's age while the app is open, once it let them in.
+    private var storeAge: StoreAge? = null
+
+    /**
+     * Whether the app store's age check lets this person sign in or join: null when
+     * it does, or what to tell them. Asked before either, where the store has a check
+     * ([signals]); an answer that lets them in is kept while the app is open, so the
+     * store asks once.
+     */
+    suspend fun ageRefusal(signals: AgeSignals?): String? {
+        if (signals == null || storeAge != null) return null
+        val age = signals.check()
+        if (age == StoreAge.Adult || age == StoreAge.Unchecked) storeAge = age
+        return storeAgeRefusal(age, signals.store)
     }
 
     /**

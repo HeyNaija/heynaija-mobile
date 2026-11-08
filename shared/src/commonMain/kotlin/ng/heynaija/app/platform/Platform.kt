@@ -21,6 +21,11 @@ class Platform(
     val gistAudio: GistAudioFactory? = null,
     /** Push notifications; null where there are none: an Android build without Firebase, tests. */
     val push: PushDevice? = null,
+    /**
+     * iOS's app store age check, which only Swift can call (iosApp's AgeRange.swift).
+     * Android's needs the activity, so [rememberAgeSignals] makes it there instead.
+     */
+    val ageSignals: AgeSignals? = null,
 )
 
 /** A picture chosen to post or to use as a profile photo, ready to upload. */

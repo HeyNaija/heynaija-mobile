@@ -14,6 +14,7 @@ coil = "3.6.3"
 credentials = "1.6.0"
 firebase-bom = "35.1.0"
 googleid = "1.2.1"
+play-age-signals = "0.0.4"
 composeMultiplatform = "1.12.2"
 junit = "4.13.2"
 kotlin = "2.4.21"
@@ -59,6 +60,7 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 credentials-play-services = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
+play-age-signals = { module = "com.google.android.play:age-signals", version.ref = "play-age-signals" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 livekit-android = { module = "io.livekit:livekit-android", version.ref = "livekit" }
