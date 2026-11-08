@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -292,6 +293,9 @@ fun SignUpScreen() {
     var invite by rememberSaveable { mutableStateOf("") }
     var birth by rememberSaveable(stateSaver = BirthDate.Saver) { mutableStateOf(BirthDate()) }
     var confirmed by rememberSaveable { mutableStateOf(false) }
+    // Whether this server asks for a date of birth or the "I am 18 or older" box; null until it says.
+    var asksBirthDate by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var adult by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var handle by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
@@ -300,7 +304,21 @@ fun SignUpScreen() {
     var googleBusy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var fieldErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    val extras = { SignupExtras(invite.trim(), birth.iso() ?: "") }
+    val extras = {
+        if (asksBirthDate == true) SignupExtras(invite.trim(), birthDate = birth.iso()) else SignupExtras(invite.trim(), adultDeclared = true)
+    }
+    LaunchedEffect(Unit) {
+        if (asksBirthDate == null) {
+            // Unreachable, or from before the question was a choice: a date, as servers asked then.
+            asksBirthDate = try {
+                app.api.signupAge().asksBirthDate
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                true
+            }
+        }
+    }
 
     fun run(block: suspend () -> Unit) {
         busy = true
@@ -372,13 +390,15 @@ fun SignUpScreen() {
     when (step) {
         JoinStep.Invite -> FormPage("Join HeyNaija", "HeyNaija is open by invite while it grows. Enter the code someone sent you.", close) {
             Field(invite, { invite = it.uppercase() }, "Invite code", placeholder = "HN-XXXX-XXXX-XXXX", onDone = { })
+            // As /join on the web: the box, unless the server asks for a date of birth (the next step then).
+            if (asksBirthDate == false) AdultBox(adult) { adult = it }
             FormError(error)
             PrimaryButton("Continue", {
                 run {
-                    if (app.api.inviteUsable(invite.trim())) step = JoinStep.Age
+                    if (app.api.inviteUsable(invite.trim())) step = if (asksBirthDate == true) JoinStep.Age else JoinStep.Account
                     else error = "That invite code is not valid. Check it, or ask whoever invited you for a new one."
                 }
-            }, Modifier.fillMaxWidth(), enabled = invite.isNotBlank(), busy = busy)
+            }, Modifier.fillMaxWidth(), enabled = invite.isNotBlank() && asksBirthDate != null && (asksBirthDate == true || adult), busy = busy)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Already a member? ", style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
                 Text("Sign in", Modifier.clickable { app.navigator.replace(Route.SignIn) }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
@@ -402,7 +422,7 @@ fun SignUpScreen() {
         JoinStep.Account -> FormPage(
             "Make your account",
             if (google != null) "Choose your handle, then join with your email or with Google. No password needed." else "We will email you a code to finish. No password needed.",
-            { step = JoinStep.Age },
+            { step = if (asksBirthDate == true) JoinStep.Age else JoinStep.Invite },
         ) {
             Field(
                 handle,
@@ -467,6 +487,23 @@ fun SignUpScreen() {
                 }
             }, Modifier.fillMaxWidth(), enabled = code.length == 6, busy = busy)
         }
+    }
+}
+
+/** The web's "I am 18 or older" box on /join, while the beta is 18+ and asks for no date. */
+@Composable
+private fun AdultBox(adult: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = HeyNaija.colors
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.clickable { onChange(!adult) }, verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(adult, onChange, colors = CheckboxDefaults.colors(checkedColor = colors.accent, checkmarkColor = colors.accentInk))
+            Text("I am 18 or older", style = MaterialTheme.typography.bodyLarge, color = colors.ink)
+        }
+        Text(
+            "During the beta, accounts are 18+. We don’t ask for your date of birth or any ID.",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.muted,
+        )
     }
 }
 

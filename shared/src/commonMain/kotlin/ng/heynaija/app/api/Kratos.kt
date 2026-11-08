@@ -43,8 +43,12 @@ sealed interface AuthStep {
 /** A Google ID token for this app, and the nonce it was asked for with (Kratos checks they match). */
 data class GoogleToken(val idToken: String, val nonce: String)
 
-/** What a signup carries that is not an account trait: read by the registration hooks (ADR 0022). */
-data class SignupExtras(val inviteCode: String, val birthDate: String)
+/**
+ * What a signup carries that is not an account trait: read by the registration
+ * hooks (ADR 0022). The age is either the "I am 18 or older" box ([adultDeclared])
+ * or, while the server asks for one, a date of birth.
+ */
+data class SignupExtras(val inviteCode: String, val birthDate: String? = null, val adultDeclared: Boolean = false)
 
 /**
  * Kratos's native flows for the emailed code (ADR 0022 in the web repository):
@@ -107,11 +111,15 @@ class KratosAuth(
     suspend fun signupWithGoogle(flow: String, google: GoogleToken, handle: String, extras: SignupExtras): AuthStep =
         submit("registration", flow, null, googleBody(google, buildJsonObject {
             put("traits", buildJsonObject { put("handle", handle) })
-            put("transient_payload", buildJsonObject {
-                put("invite_code", extras.inviteCode)
-                put("birth_date", extras.birthDate)
-            })
+            put("transient_payload", extras.payload())
         }))
+
+    /** As infra/kratos/invite-check.jsonnet in the web repository reads them. */
+    private fun SignupExtras.payload() = buildJsonObject {
+        put("invite_code", inviteCode)
+        birthDate?.let { put("birth_date", it) }
+        if (adultDeclared) put("adult_declared", true)
+    }
 
     private fun googleBody(google: GoogleToken, extra: JsonObject = JsonObject(emptyMap())) = JsonObject(
         buildJsonObject {
@@ -138,10 +146,7 @@ class KratosAuth(
             put("email", email)
             put("handle", handle)
         })
-        put("transient_payload", buildJsonObject {
-            put("invite_code", extras.inviteCode)
-            put("birth_date", extras.birthDate)
-        })
+        put("transient_payload", extras.payload())
         if (code != null) put("code", code)
     }
 
