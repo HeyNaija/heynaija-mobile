@@ -141,5 +141,4 @@ On a computer instead: the same four settings as `heynaija.upload.keystore`,
 
 - Links that open the app (Universal Links, App Links): the web has to serve
   `/.well-known/apple-app-site-association` and `assetlinks.json` first.
-- Google sign-in on iOS.
 - Gists with the phone locked.

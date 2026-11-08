@@ -10,8 +10,10 @@ What the apps do now, what comes next, and what the backend
   Sans, the wordmark, and the HN mark as the app icon. Text follows the phone's
   own size setting, one step smaller on small screens.
 - **Signing in and joining** with an emailed code, through Kratos's native
-  flows (ADR 0022 in the web repository), on iOS with Apple (below), or on
-  Android with Google:
+  flows (ADR 0022 in the web repository), with Apple on iOS (below), or with
+  Google. On iOS, Google's page opens in iOS's sign-in sheet as the app's own
+  iOS OAuth client (PKCE and a nonce, no Google SDK), whose ID tokens Kratos
+  takes as an extra audience. On Android:
   Credential Manager's "Sign in with Google" gives an ID token for Kratos's
   Google client, sent with its nonce to the native flow. A Google address that
   already has an account confirms an emailed code once and Google is connected
@@ -100,10 +102,7 @@ What the apps do now, what comes next, and what the backend
 
 1. **Session tokens on staging.** Done in HeyNaija/heynaija#107 (API reads
    `Authorization: Bearer`, signup reads `transient_payload`), waiting to merge.
-2. **Google on iOS.** Sign in with Apple is in (ADR 0026), so Guideline 4.8 is
-   met; Google there needs an iOS OAuth client in Kratos's
-   `additional_id_token_audiences`.
-3. **Links that open the app.** For `heynaija.ng/p/...` links to open in the
+2. **Links that open the app.** For `heynaija.ng/p/...` links to open in the
    app, the web app has to serve `/.well-known/assetlinks.json` (Android App
    Links) and `/.well-known/apple-app-site-association` (iOS Universal Links).
 
@@ -116,7 +115,7 @@ What the apps do now, what comes next, and what the backend
    The web's Connection sheet (route, loss and jitter) and microphone settings
    are not in the room yet.
 2. The ideas board, and continuing a video upload after the app was closed.
-3. Opening shared links in the app (after 3 above).
+3. Opening shared links in the app (after 2 above).
 4. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what
    only the account holders can do. LiveKit's WebRTC library makes the Android
@@ -152,3 +151,9 @@ with. One client per certificate:
 Without one, Google's sheet opens and then answers with an error, and the app
 says Google sign-in did not work. No secret is involved; the Android client has
 none.
+
+iOS signs in as its own client, type iOS, bundle ID `ng.heynaija.app`
+(`567185521629-68a94t7k…`, `Server.kt`): Google's page in iOS's sign-in sheet,
+coming back to the client's reversed ID. Its tokens are for that client, so
+Kratos lists it in the Google provider's `additional_id_token_audiences` (the
+web repository's compose files). One client serves every build.

@@ -23,6 +23,12 @@ data class Server(
      * them. Null where Google sign-in is off.
      */
     val googleClientId: String? = HEYNAIJA_GOOGLE_CLIENT,
+    /**
+     * The iOS app's own Google client, which it signs in as: its ID tokens are for
+     * it, and Kratos lists it among the Google provider's audiences
+     * (docs/deployment/google-sign-in.md in the web repository). Null where it does not.
+     */
+    val googleIosClientId: String? = HEYNAIJA_GOOGLE_IOS_CLIENT,
 ) {
     companion object {
         /** heynaija.ng: what release builds always use, and a debug build can choose. */
@@ -67,6 +73,9 @@ data class Server(
 
 /** The web client every HeyNaija server's Kratos uses for Google (staging, production and the dev stack's `.env`). */
 private const val HEYNAIJA_GOOGLE_CLIENT = "567185521629-rk7666tosiga37ljdvvi4tkivl3b0jil.apps.googleusercontent.com"
+
+/** The iOS app's Google client, in the same Google Cloud project; every server's Kratos takes its tokens. */
+private const val HEYNAIJA_GOOGLE_IOS_CLIENT = "567185521629-68a94t7k7jomu81msugkias5ltprp80p.apps.googleusercontent.com"
 
 /** The server the app talks to: production in a release build; a debug build can switch it in Settings. */
 object Servers {

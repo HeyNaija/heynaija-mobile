@@ -5,8 +5,8 @@ network built toward community ownership. The web app, API and everything
 behind them are in [HeyNaija/heynaija](https://github.com/HeyNaija/heynaija).
 
 **Status:** getting ready for the stores ([docs/release.md](docs/release.md)).
-Members can sign in and join with an invite (with Google on Android, with Apple on
-iOS), read the feeds, threads, profiles and communities, post with pictures,
+Members can sign in and join with an invite (by emailed code, with Google, and on
+iOS with Apple), read the feeds, threads, profiles and communities, post with pictures,
 polls and video, reply, like, repost, quote, bookmark, search, get notifications
 in the app and as push notifications, and listen and speak in Gists, the live
 audio rooms. [docs/plan.md](docs/plan.md) has what is done, what is left (Gists
@@ -106,7 +106,8 @@ Push on the iOS simulator works on a Mac with Apple silicon once the Xcode
 project has a team (`TEAM_ID` in `iosApp/Configuration/Config.xcconfig`) and the
 API has the Apple key (`docs/deployment/sign-in-with-apple.md` in the web
 repository); a build run from Xcode registers with Apple's sandbox. Sign in with
-Apple in the simulator needs an Apple Account signed in to the simulator.
+Apple in the simulator needs an Apple Account signed in to the simulator; Google
+works there as on a phone.
 
 Push on the emulator needs a Google Play system image, `google-services.json`
 at `androidApp/google-services.json` (from the Firebase console; git ignores it),

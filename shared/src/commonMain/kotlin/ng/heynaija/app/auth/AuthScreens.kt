@@ -112,18 +112,18 @@ private class Provider(
 private fun rememberProviders(): List<Provider> {
     val apple = rememberAppleSignIn()
     val google = rememberGoogleSignIn()
-    val googleClient = Servers.current.googleClientId
-    return remember(apple, google, googleClient) {
+    val server = Servers.current
+    return remember(apple, google, server) {
         listOfNotNull(
             apple?.let {
                 Provider(
                     "Apple",
                     "Apple gives HeyNaija your email address, or one that forwards to it if you hide yours, and nothing else.",
                     it::signIn,
-                ) { onClick, joining, enabled, busy -> it.Button(onClick, joining, enabled && !busy, Modifier.fillMaxWidth().height(48.dp)) }
+                ) { onClick, joining, enabled, busy -> it.Button(onClick, joining, enabled && !busy, Modifier.fillMaxWidth().height(44.dp)) }
             },
-            if (google != null && googleClient != null) {
-                Provider("Google", "Google gives HeyNaija your email address, and nothing else.", { google.signIn(googleClient) }) { onClick, _, enabled, busy ->
+            if (google != null && google.offeredOn(server)) {
+                Provider("Google", "Google gives HeyNaija your email address, and nothing else.", { google.signIn(server) }) { onClick, _, enabled, busy ->
                     GoogleButton(onClick, enabled, busy)
                 }
             } else {
@@ -214,7 +214,12 @@ fun SignInScreen() {
                 }
             }
             is AuthStep.NoAccount -> error =
-                "No one has joined HeyNaija with ${step.email ?: "that ${provider.name} account"} yet. Joining takes an invite: choose ${provider.name} when you join."
+                // Hide My Email gives an address of Apple's, which no account that joined by email has.
+                if (step.email?.endsWith("@privaterelay.appleid.com") == true) {
+                    "Apple hid your email, so it matches no HeyNaija account. To connect Apple, stop using Apple with HeyNaija in your iPhone’s Settings, then continue with Apple and share your email. Or sign in with your email."
+                } else {
+                    "No one has joined HeyNaija with ${step.email ?: "that ${provider.name} account"} yet. Joining takes an invite: choose ${provider.name} when you join."
+                }
             is AuthStep.Refused -> error = step.first()
             AuthStep.Expired -> error = "That took too long. Try again."
             AuthStep.Sent -> error = CONNECTION

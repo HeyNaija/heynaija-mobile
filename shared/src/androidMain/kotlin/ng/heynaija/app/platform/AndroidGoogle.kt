@@ -1,5 +1,6 @@
 package ng.heynaija.app.platform
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -14,6 +15,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import java.security.SecureRandom
 import kotlin.io.encoding.Base64
 import ng.heynaija.app.api.IdToken
+import ng.heynaija.app.api.Server
 
 /**
  * "Sign in with Google" through Credential Manager: Google's own sheet, then an
@@ -25,27 +27,32 @@ import ng.heynaija.app.api.IdToken
 @Composable
 actual fun rememberGoogleSignIn(): GoogleSignIn? {
     val context = LocalContext.current
-    return remember(context) {
-        GoogleSignIn { clientId ->
-            val nonce = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encode(ByteArray(24).also { SecureRandom().nextBytes(it) })
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(GetSignInWithGoogleOption.Builder(clientId).setNonce(nonce).build())
-                .build()
-            try {
-                val credential = CredentialManager.create(context).getCredential(context, request).credential
-                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    SignInResult.Signed(IdToken("google", GoogleIdTokenCredential.createFrom(credential.data).idToken, nonce))
-                } else {
-                    SignInResult.Failed("Google did not sign you in. Try again, or use your email.")
-                }
-            } catch (e: GetCredentialCancellationException) {
-                SignInResult.Cancelled
-            } catch (e: NoCredentialException) {
-                SignInResult.Failed("There is no Google account on this phone. Add one in Android's settings, or use your email.")
-            } catch (e: GetCredentialException) {
-                println("HeyNaija: Google sign-in failed: ${e.type} ${e.message}")
-                SignInResult.Failed("Google sign-in did not work. Try again, or use your email.")
+    return remember(context) { CredentialManagerGoogle(context) }
+}
+
+private class CredentialManagerGoogle(private val context: Context) : GoogleSignIn {
+    override fun offeredOn(server: Server): Boolean = server.googleClientId != null
+
+    override suspend fun signIn(server: Server): SignInResult {
+        val clientId = server.googleClientId ?: return SignInResult.Failed("Google sign-in is not available here. Use your email.")
+        val nonce = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encode(ByteArray(24).also { SecureRandom().nextBytes(it) })
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(GetSignInWithGoogleOption.Builder(clientId).setNonce(nonce).build())
+            .build()
+        return try {
+            val credential = CredentialManager.create(context).getCredential(context, request).credential
+            if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                SignInResult.Signed(IdToken("google", GoogleIdTokenCredential.createFrom(credential.data).idToken, nonce))
+            } else {
+                SignInResult.Failed("Google did not sign you in. Try again, or use your email.")
             }
+        } catch (e: GetCredentialCancellationException) {
+            SignInResult.Cancelled
+        } catch (e: NoCredentialException) {
+            SignInResult.Failed("There is no Google account on this phone. Add one in Android's settings, or use your email.")
+        } catch (e: GetCredentialException) {
+            println("HeyNaija: Google sign-in failed: ${e.type} ${e.message}")
+            SignInResult.Failed("Google sign-in did not work. Try again, or use your email.")
         }
     }
 }
