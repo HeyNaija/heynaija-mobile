@@ -6,5 +6,7 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>HeyNaija uses the microphone only when you speak in a Gist and turn your microphone on.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>HeyNaija does not use your camera. Gists are sound only, and photos and videos come from your library.</string>
 </dict>
 </plist>
