@@ -85,4 +85,17 @@ class LinksTest {
         WebLinks.handled(link)
         assertNull(WebLinks.opened.value)
     }
+
+    @Test
+    fun signingInKnowsTheScreenItWasAskedFor() {
+        val navigator = Navigator()
+        assertNull(navigator.beforeSignIn)
+        navigator.openFromLink(Route.Gist(gist))
+        assertNull(navigator.beforeSignIn)
+        navigator.push(Route.SignIn)
+        assertEquals(Route.Gist(gist), navigator.beforeSignIn)
+        // "Join with an invite" on the sign-in form swaps it for the sign-up one.
+        navigator.replace(Route.SignUp)
+        assertEquals(Route.Gist(gist), navigator.beforeSignIn)
+    }
 }

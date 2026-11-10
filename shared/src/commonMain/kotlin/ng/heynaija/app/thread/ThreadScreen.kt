@@ -55,6 +55,7 @@ import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.HeyNaijaApi
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.PostStory
+import ng.heynaija.app.gists.GistSignIn
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.withAuthor
@@ -85,6 +86,8 @@ data class ThreadState(
     val failed: Boolean = false,
     /** The post is gone, or the reader may not see it. */
     val missing: Boolean = false,
+    /** A reply in a Gist, signed out while Gists are on: asked to sign in first (GistSignIn). */
+    val signIn: Boolean = false,
     /** A reply in a Gist: whether the reader hosts it, and may hide replies. */
     val viewerIsHost: Boolean = false,
     /** On a story's first post: its updates shown, oldest first (the newest few until the rest are unfolded). */
@@ -179,7 +182,8 @@ class ThreadViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiException) {
-                _state.update { it.copy(failed = e.status != 404, missing = e.status == 404, loaded = it.post != null && e.status != 404) }
+                if (gist != null && e.status == 401) _state.update { it.copy(signIn = true) }
+                else _state.update { it.copy(failed = e.status != 404, missing = e.status == 404, loaded = it.post != null && e.status != 404) }
             } catch (e: Exception) {
                 _state.update { it.copy(failed = true) }
             }
@@ -437,6 +441,7 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
         TopBar(if (gist != null || state.post?.replyParentId != null) "Reply" else "Post", onBack = { app.navigator.pop() })
         val post = state.post
         when {
+            state.signIn -> GistSignIn()
             state.missing -> Problem("This post is not available. It may have been deleted.", onRetry = null)
             post == null && state.failed -> Problem("This post could not be loaded. Check your connection and try again.", viewModel::load)
             post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

@@ -26,9 +26,10 @@ import ng.heynaija.app.withAuthor
 
 /**
  * Where the member is with the room. [Missing]: the Gist is gone, or they may not
- * see it (removed, blocked): the API makes these the same 404.
+ * see it (removed, blocked): the API makes these the same 404. [SignIn]: signed
+ * out while Gists are on (a 401), so asked to sign in first (GistSignIn).
  */
-enum class Phase { Loading, Missing, LoadFailed, Prejoin, Connecting, Live, Reconnecting, Ended, Full, Locked, Failed, Elsewhere, Gone }
+enum class Phase { Loading, Missing, LoadFailed, SignIn, Prejoin, Connecting, Live, Reconnecting, Ended, Full, Locked, Failed, Elsewhere, Gone }
 
 data class GistState(
     val view: GistView? = null,
@@ -144,7 +145,12 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(phase = if ((e as? ApiException)?.status == 404) Phase.Missing else Phase.LoadFailed) }
+                val phase = when ((e as? ApiException)?.status) {
+                    404 -> Phase.Missing
+                    401 -> Phase.SignIn
+                    else -> Phase.LoadFailed
+                }
+                _state.update { it.copy(phase = phase) }
             }
         }
     }
