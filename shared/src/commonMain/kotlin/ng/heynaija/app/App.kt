@@ -82,6 +82,7 @@ import ng.heynaija.app.nav.Entry
 import ng.heynaija.app.nav.Motion
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.Tab
+import ng.heynaija.app.nav.WebLinks
 import ng.heynaija.app.notifications.NotificationsScreen
 import ng.heynaija.app.platform.Platform
 import ng.heynaija.app.platform.PushEvents
@@ -157,6 +158,13 @@ private fun Shell(app: AppState) {
             app.openLink(link)
             PushEvents.handled(link)
         }
+    }
+    // A link to the site that opened the app. Signed out too: posts and profiles show to anyone, as on the web.
+    val webLink by WebLinks.opened.collectAsStateWithLifecycle()
+    LaunchedEffect(webLink) {
+        val link = webLink ?: return@LaunchedEffect
+        app.openWebLink(link)
+        WebLinks.handled(link)
     }
 
     Scaffold(

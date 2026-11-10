@@ -26,8 +26,8 @@ Production has to be ready before a reviewer opens the app.
 ## 2. Apple developer account (once)
 
 - [ ] **You:** App ID `ng.heynaija.app` with **Push Notifications**, **Sign In
-      with Apple**, **Declared Age Range** and **App Groups**
-      (`group.ng.heynaija.app`); and
+      with Apple**, **Declared Age Range**, **Associated Domains** (links that
+      open the app) and **App Groups** (`group.ng.heynaija.app`); and
       `ng.heynaija.app.NotificationService` with **App Groups**. Xcode's automatic
       signing makes both, and the group, once the team is set below.
 - [ ] Put the team ID in `iosApp/Configuration/Config.xcconfig` (`TEAM_ID=`). It
@@ -113,6 +113,10 @@ For each version:
   (`keytool -list -v -keystore heynaija-upload.jks`), each need an Android OAuth
   client in Google Cloud ([plan.md](plan.md#google-sign-in)), or Google sign-in
   fails in the Play build.
+- **Links that open the app:** the same page's SHA-256 of Play's signing
+  certificate, and the upload key's, go in production's `ANDROID_CERT_SHA256`
+  (`docs/deployment/app-links.md` in the web repository). Until then heynaija.ng
+  links open in the browser on Android; iOS needs nothing more.
 - **App content** (Policy → App content):
   - Privacy policy: `https://heynaija.ng/privacy`.
   - App access: the review account (`docs/deployment/store-review.md`).
@@ -171,6 +175,4 @@ what both stores' age APIs offer an 18+ app.
 
 ## Not needed for the first release
 
-- Links that open the app (Universal Links, App Links): the web has to serve
-  `/.well-known/apple-app-site-association` and `assetlinks.json` first.
 - Gists with the phone locked.
