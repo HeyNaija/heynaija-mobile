@@ -172,7 +172,10 @@ private fun Shell(app: AppState) {
         // Each screen keeps clear of the system bars itself; full-screen ones go edge to edge.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = { if (!top.route.fullScreen) TabBar(app, (account as? Account.SignedIn)?.me?.unreadNotifications ?: 0) },
+        // No count while the list is on screen, which marks them read, as on the web.
+        bottomBar = {
+            if (!top.route.fullScreen) TabBar(app, if (top.route == Route.Notifications) 0 else (account as? Account.SignedIn)?.me?.unreadNotifications ?: 0)
+        },
     ) { padding ->
         val holder = rememberSaveableStateHolder()
         AnimatedContent(

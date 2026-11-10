@@ -161,11 +161,17 @@ class AppState(val platform: Platform) {
         }
     }
 
+    // How many times `/v1/me` was asked, so that an answer overtaken by a later ask is
+    // dropped: one sent before notifications were marked read would bring the old count back.
+    private var meAsked = 0
+
     /** Asks `/v1/me` again: for the unread count, a changed profile, or a finished welcome. */
     suspend fun refreshMe(firstLoad: Boolean = false) {
         if (token == null) return
+        val ask = ++meAsked
         try {
             val me = api.me()
+            if (ask != meAsked && this.me != null) return
             platform.settings.set(ME, HeyNaijaApi.json.encodeToString(Me.serializer(), me))
             show(me)
         } catch (e: CancellationException) {
