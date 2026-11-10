@@ -80,7 +80,9 @@ For each version:
 ## 4. An iOS build
 
 1. Raise `CURRENT_PROJECT_VERSION` in `Config.xcconfig` (every upload needs a new
-   one), and `MARKETING_VERSION` for a new version.
+   one), and `MARKETING_VERSION` for a new version. `MARKETING_VERSION` is the
+   version both stores show: the Android build reads it from there too, so the
+   two apps always match.
 2. Xcode → iosApp scheme → **Any iOS Device (arm64)** → Product → **Archive**.
 3. Organizer → **Distribute App** → App Store Connect → Upload. Automatic signing
    makes the distribution profiles for the app and its extension.
@@ -139,8 +141,9 @@ For each version:
 ## 6. An Android build
 
 1. Actions → **Release** → Run workflow (or push a `v*` tag). It builds the app
-   bundle signed with the upload key, with the run number as its version code, and
-   fails if a secret is missing.
+   bundle signed with the upload key, with the run number as its version code and
+   `MARKETING_VERSION` from `iosApp/Configuration/Config.xcconfig` as its version
+   name, and fails if a secret is missing.
 2. Download the `heynaija-android-<run>` artifact, and upload the `.aab` in Play
    Console → Test and release → Internal testing (then closed, then production).
 
