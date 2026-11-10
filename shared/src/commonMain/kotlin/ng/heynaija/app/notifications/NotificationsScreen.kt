@@ -250,7 +250,10 @@ fun NotificationsScreen() {
             .distinctUntilChanged()
             .collect { if (it) viewModel.loadMore() }
     }
-    LaunchedEffect(app.navigator.reselected) { if (app.navigator.reselected > 0) list.animateScrollToItem(0) }
+    // Pressing the tab again scrolls back to the newest. A press made before the list was
+    // shown (on another tab, say) does not, so coming back keeps the place.
+    val seen = remember { app.navigator.reselected }
+    LaunchedEffect(app.navigator.reselected) { if (app.navigator.reselected > seen) list.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Notifications", actions = {
