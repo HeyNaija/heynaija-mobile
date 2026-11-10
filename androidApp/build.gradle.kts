@@ -33,6 +33,11 @@ val firebase: Map<String, String> = file("google-services.json").takeIf { it.exi
     )
 } ?: emptyMap()
 
+/** The version people see in the stores, the same as the iOS app's: one place to change it. */
+val appVersion: String = rootProject.file("iosApp/Configuration/Config.xcconfig").readLines()
+    .firstNotNullOfOrNull { Regex("""^MARKETING_VERSION\s*=\s*(\S+)""").find(it)?.groupValues?.get(1) }
+    ?: error("MARKETING_VERSION is missing from iosApp/Configuration/Config.xcconfig")
+
 /**
  * The upload key a release is signed with for Google Play, which then signs it
  * again with the app's own key (Play App Signing; docs/release.md). None of it is
@@ -72,7 +77,7 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         // Each upload to Play needs a higher versionCode: CI passes its run number (-PversionCode).
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = "1.0"
+        versionName = appVersion
         firebase.forEach { (name, value) -> resValue("string", name, value) }
     }
     packaging {

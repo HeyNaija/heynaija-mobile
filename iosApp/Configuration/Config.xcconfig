@@ -8,4 +8,5 @@ PRODUCT_BUNDLE_IDENTIFIER=ng.heynaija.app
 // Every upload to App Store Connect needs a higher build number (docs/release.md).
 // The notification service extension takes both from here, as Apple requires.
 CURRENT_PROJECT_VERSION=3
-MARKETING_VERSION=0.1.0
+// The version people see in both stores: the Android app reads it from here too.
+MARKETING_VERSION=1.0.0
