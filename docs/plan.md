@@ -111,9 +111,8 @@ What the apps do now, what comes next, and what the backend
 2. **Links that open the app.** HeyNaija/heynaija#140: the site serves
    `/.well-known/apple-app-site-association` (iOS Universal Links) and
    `/.well-known/assetlinks.json` (Android App Links) for the pages the app has
-   a screen for (`apps/web/lib/app-links.ts` there). Android's also needs
-   production's `ANDROID_CERT_SHA256` once Play has signed the app
-   ([release.md](release.md#5-google-play-once)).
+   a screen for (`apps/web/lib/app-links.ts` there), with Play's signing
+   certificate for Android.
 
 ## Next in the app
 

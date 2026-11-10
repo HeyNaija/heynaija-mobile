@@ -113,10 +113,11 @@ For each version:
   (`keytool -list -v -keystore heynaija-upload.jks`), each need an Android OAuth
   client in Google Cloud ([plan.md](plan.md#google-sign-in)), or Google sign-in
   fails in the Play build.
-- **Links that open the app:** the same page's SHA-256 of Play's signing
-  certificate, and the upload key's, go in production's `ANDROID_CERT_SHA256`
-  (`docs/deployment/app-links.md` in the web repository). Until then heynaija.ng
-  links open in the browser on Android; iOS needs nothing more.
+- **Links that open the app:** nothing to do. Play's signing certificate is in
+  the web repository's `apps/web/lib/app-links.ts` (HeyNaija/heynaija#141), and
+  links open in copies installed from Play. A copy not from Play (the Release
+  workflow's `.aab`, a debug build) asks first: `docs/deployment/app-links.md`
+  there.
 - **App content** (Policy → App content):
   - Privacy policy: `https://heynaija.ng/privacy`.
   - App access: the review account (`docs/deployment/store-review.md`).
