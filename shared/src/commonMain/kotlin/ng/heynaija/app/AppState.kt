@@ -49,6 +49,20 @@ sealed interface PostChange {
     data class Deleted(val id: String) : PostChange
     /** The member posted: feeds that would show it start again from the top. [replyTo]: the post it answers. */
     data class Created(val id: String, val replyTo: String? = null) : PostChange
+    /** A member changed their name or photo: their posts on every screen show the new ones. */
+    data class Author(val id: String, val handle: String, val name: String?, val avatar: String?) : PostChange
+}
+
+/** This post with [change]'s name and photo wherever its author appears on it. */
+fun Post.withAuthor(change: PostChange.Author): Post {
+    val mine = authorId == change.id
+    return copy(
+        authorName = if (mine) change.name else authorName,
+        authorAvatar = if (mine) change.avatar else authorAvatar,
+        quote = quote?.let { if (it.authorHandle == change.handle) it.copy(authorName = change.name, authorAvatar = change.avatar) else it },
+        replyTo = replyTo?.let { if (it.authorHandle == change.handle) it.copy(authorName = change.name, authorAvatar = change.avatar) else it },
+        repostedBy = repostedBy?.let { if (it.id == change.id) it.copy(displayName = change.name) else it },
+    )
 }
 
 private const val TOKEN = "session_token"
@@ -153,7 +167,7 @@ class AppState(val platform: Platform) {
         try {
             val me = api.me()
             platform.settings.set(ME, HeyNaijaApi.json.encodeToString(Me.serializer(), me))
-            _account.value = Account.SignedIn(me)
+            show(me)
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiException) {
@@ -169,7 +183,16 @@ class AppState(val platform: Platform) {
     }
 
     fun updateMe(change: (Me) -> Me) {
-        _account.update { if (it is Account.SignedIn) Account.SignedIn(change(it.me)) else it }
+        show(change(me ?: return))
+    }
+
+    /** Signs [me] in, and puts a new name or photo on their posts already on screen. */
+    private fun show(me: Me) {
+        val before = this.me
+        _account.value = Account.SignedIn(me)
+        if (before != null && before.id == me.id && (before.displayName != me.displayName || before.avatar != me.avatar)) {
+            emit(PostChange.Author(me.id, before.handle, me.displayName, me.avatar))
+        }
     }
 
     // What the app store said about the person's age while the app is open, once it let them in.

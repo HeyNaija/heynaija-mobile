@@ -57,6 +57,7 @@ import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.PostStory
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.ListGutter
+import ng.heynaija.app.withAuthor
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
@@ -155,6 +156,7 @@ class ThreadViewModel(
                         }
                     }
                     is PostChange.Created -> posted(change.id, change.replyTo)
+                    is PostChange.Author -> _state.update { s -> s.mapPosts { it.withAuthor(change) } }
                 }
             }
         }

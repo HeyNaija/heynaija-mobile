@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.FeedPage
 import ng.heynaija.app.api.Post
+import ng.heynaija.app.withAuthor
 
 data class PostListState(
     val posts: List<Post> = emptyList(),
@@ -64,6 +65,9 @@ class PostListViewModel(
                         state.copy(posts = state.posts.filterNot { it.id == change.id }, pinned = state.pinned?.takeUnless { it.id == change.id })
                     }
                     is PostChange.Created -> if (refreshOnPost) load(fresh = true)
+                    is PostChange.Author -> _state.update { state ->
+                        state.copy(posts = state.posts.map { it.withAuthor(change) }, pinned = state.pinned?.withAuthor(change))
+                    }
                 }
             }
         }

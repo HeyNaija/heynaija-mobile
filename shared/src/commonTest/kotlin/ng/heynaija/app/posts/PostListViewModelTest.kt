@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.setMain
 import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.FeedPage
 import ng.heynaija.app.api.Post
+import ng.heynaija.app.api.QuotedPost
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PostListViewModelTest {
@@ -87,5 +88,21 @@ class PostListViewModelTest {
 
         assertEquals(2, latestLoads)
         assertEquals(1, discoverLoads)
+    }
+
+    @Test
+    fun aNewNameShowsOnTheMembersPostsAtOnce() = runTest {
+        val changes = MutableSharedFlow<PostChange>(extraBufferCapacity = 4)
+        val mine = post("a").copy(authorId = "m1", authorName = "Ada")
+        val quoting = post("b").copy(authorId = "t1", authorHandle = "tunde", authorName = "Tunde", quote = QuotedPost(id = "a", authorHandle = "ada", authorName = "Ada"))
+        val vm = PostListViewModel(load = { FeedPage(listOf(mine, quoting), null) }, changes = changes)
+
+        changes.emit(PostChange.Author(id = "m1", handle = "ada", name = "Ada Obi", avatar = "avatars/m1/2"))
+
+        val (a, b) = vm.state.value.posts
+        assertEquals("Ada Obi", a.authorName)
+        assertEquals("avatars/m1/2", a.authorAvatar)
+        assertEquals("Tunde", b.authorName)
+        assertEquals("Ada Obi", b.quote?.authorName)
     }
 }
