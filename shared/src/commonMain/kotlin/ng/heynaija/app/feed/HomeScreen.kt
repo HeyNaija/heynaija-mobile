@@ -16,24 +16,41 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import ng.heynaija.app.Account
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.gists.LiveNow
@@ -68,10 +85,6 @@ fun HomeScreen() {
     val account by app.account.collectAsStateWithLifecycle()
     val member = account is Account.SignedIn
     val feeds = if (member) Feed.entries else listOf(Feed.Discover, Feed.Latest)
-    // The tab last chosen, else Discover, as on the web.
-    var feed by remember(member) {
-        mutableStateOf(feeds.firstOrNull { it.name == app.platform.settings.get(FEED) } ?: Feed.Discover)
-    }
     val lists = remember { mutableMapOf<Feed, LazyListState>() }
     // Gists, for members on their list (ADR 0017): Live now above every feed, and starting one from the bar.
     val gists = (account as? Account.SignedIn)?.me?.has("gists") == true
@@ -86,38 +99,62 @@ fun HomeScreen() {
     var starting by remember { mutableStateOf(false) }
     if (starting) StartGistDialog(onDismiss = { starting = false })
 
+    val scope = rememberCoroutineScope()
+
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WordmarkBar(onStartGist = if (gists) ({ starting = true }) else null)
-            Tabs(feeds, feed) {
-                feed = it
-                app.platform.settings.set(FEED, it.name)
-            }
-            key(feed, member) {
-                val viewModel = viewModel(key = "home-${feed.name}-$member") {
-                    PostListViewModel(
-                        load = { cursor ->
-                            when (feed) {
-                                Feed.Discover -> app.api.discover(cursor)
-                                Feed.Latest -> app.api.latest(cursor)
-                                Feed.Following -> app.api.following(cursor)
-                            }
-                        },
-                        changes = app.changes,
-                        refreshOnPost = feed != Feed.Discover,
-                    )
+            key(member) {
+                // The tab last chosen, else Discover, as on the web.
+                val initialPage = remember {
+                    val saved = app.platform.settings.get(FEED)
+                    val index = feeds.indexOfFirst { it.name == saved }
+                    if (index >= 0) index else 0
                 }
-                PostList(
-                    viewModel,
-                    list = lists.getOrPut(feed) { LazyListState() },
-                    empty = when (feed) {
-                        Feed.Following -> "Follow people and join communities, and their posts show here."
-                        else -> "Nothing has been posted yet."
-                    },
-                    bottomPadding = 72.dp,
-                ) {
-                    if (!member) item(key = "visitor") { VisitorCard() }
-                    if (gists && live.isNotEmpty()) item(key = "live-now") { LiveNow(live) }
+                val pagerState = rememberPagerState(initialPage = initialPage) { feeds.size }
+
+                LaunchedEffect(pagerState, feeds) {
+                    snapshotFlow { pagerState.settledPage }
+                        .drop(1) // not the page it opened on
+                        .collect { page -> feeds.getOrNull(page)?.let { app.platform.settings.set(FEED, it.name) } }
+                }
+
+                Tabs(feeds, pagerState) { targetPage ->
+                    scope.launch {
+                        if (abs(targetPage - pagerState.currentPage) > 1) pagerState.scrollToPage(targetPage)
+                        else pagerState.animateScrollToPage(targetPage)
+                    }
+                }
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                ) { page ->
+                    val feed = feeds[page]
+                    val viewModel = viewModel(key = "home-${feed.name}-$member") {
+                        PostListViewModel(
+                            load = { cursor ->
+                                when (feed) {
+                                    Feed.Discover -> app.api.discover(cursor)
+                                    Feed.Latest -> app.api.latest(cursor)
+                                    Feed.Following -> app.api.following(cursor)
+                                }
+                            },
+                            changes = app.changes,
+                            refreshOnPost = feed != Feed.Discover,
+                        )
+                    }
+                    PostList(
+                        viewModel,
+                        list = lists.getOrPut(feed) { LazyListState() },
+                        empty = when (feed) {
+                            Feed.Following -> "Follow people and join communities, and their posts show here."
+                            else -> "Nothing has been posted yet."
+                        },
+                        bottomPadding = 72.dp,
+                    ) {
+                        if (!member) item(key = "visitor") { VisitorCard() }
+                        if (gists && live.isNotEmpty()) item(key = "live-now") { LiveNow(live) }
+                    }
                 }
             }
         }
@@ -162,14 +199,44 @@ private fun WordmarkBar(onStartGist: (() -> Unit)?) {
 }
 
 @Composable
-private fun Tabs(feeds: List<Feed>, current: Feed, onSelect: (Feed) -> Unit) {
+private fun Tabs(
+    feeds: List<Feed>,
+    pagerState: PagerState,
+    onSelect: (Int) -> Unit,
+) {
     val colors = HeyNaija.colors
+
     Column(Modifier.background(colors.bg)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            for (feed in feeds) {
-                val selected = feed == current
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .selectableGroup()
+                .drawBehind {
+                    val slot = size.width / feeds.size
+                    val at = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    val w = 36.dp.toPx()
+                    val h = 3.dp.toPx()
+                    val centre = if (layoutDirection == LayoutDirection.Rtl) {
+                        size.width - slot * (at + 0.5f)
+                    } else {
+                        slot * (at + 0.5f)
+                    }
+                    drawRoundRect(
+                        colors.accent,
+                        Offset(centre - w / 2, size.height - h),
+                        Size(w, h),
+                        CornerRadius(1.5.dp.toPx()),
+                    )
+                },
+        ) {
+            feeds.forEachIndexed { index, feed ->
+                val selected = pagerState.targetPage == index
                 Column(
-                    Modifier.weight(1f).clickable { onSelect(feed) }.padding(top = 10.dp),
+                    Modifier
+                        .weight(1f)
+                        .selectable(selected = selected, role = Role.Tab) { onSelect(index) }
+                        .padding(top = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
@@ -178,8 +245,7 @@ private fun Tabs(feeds: List<Feed>, current: Feed, onSelect: (Feed) -> Unit) {
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         color = if (selected) colors.ink else colors.muted,
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Box(Modifier.width(36.dp).height(3.dp).background(if (selected) colors.accent else colors.bg, Radii.chip))
+                    Spacer(Modifier.height(13.dp))
                 }
             }
         }
