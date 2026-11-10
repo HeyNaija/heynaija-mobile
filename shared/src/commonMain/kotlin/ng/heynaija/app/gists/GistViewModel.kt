@@ -22,6 +22,7 @@ import ng.heynaija.app.api.SpeakRequest
 import ng.heynaija.app.platform.GistAudio
 import ng.heynaija.app.platform.GistAudioEvents
 import ng.heynaija.app.reasonOf
+import ng.heynaija.app.withAuthor
 
 /**
  * Where the member is with the room. [Missing]: the Gist is gone, or they may not
@@ -126,6 +127,7 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
                     }
                     // A reply was posted, here or under one of these: show it.
                     is PostChange.Created -> loadReplies()
+                    is PostChange.Author -> updateReplies { r -> r.copy(posts = r.posts.map { it.withAuthor(change) }) }
                 }
             }
         }

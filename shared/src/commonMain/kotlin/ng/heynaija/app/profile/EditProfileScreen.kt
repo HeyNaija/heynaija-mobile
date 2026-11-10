@@ -108,6 +108,8 @@ fun EditProfileScreen() {
                 scope.launch {
                     try {
                         app.api.updateProfile(name.trim(), bio.trim())
+                        // Shown at once; /v1/me then gives the name and bio as the server keeps them.
+                        app.updateMe { it.copy(displayName = name.trim().ifEmpty { null }, bio = bio.trim()) }
                         app.refreshMe()
                         app.say("Profile saved")
                         app.navigator.pop()
