@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,24 +17,31 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import ng.heynaija.app.Account
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.gists.LiveNow
@@ -69,9 +77,19 @@ fun HomeScreen() {
     val member = account is Account.SignedIn
     val feeds = if (member) Feed.entries else listOf(Feed.Discover, Feed.Latest)
     // The tab last chosen, else Discover, as on the web.
-    var feed by remember(member) {
-        mutableStateOf(feeds.firstOrNull { it.name == app.platform.settings.get(FEED) } ?: Feed.Discover)
+    val initialPage = remember(member) {
+        val saved = app.platform.settings.get(FEED)
+        val index = feeds.indexOfFirst { it.name == saved }
+        if (index >= 0) index else 0
     }
+    val pagerState = rememberPagerState(initialPage = initialPage) { feeds.size }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(pagerState.currentPage) {
+        val currentFeed = feeds.getOrNull(pagerState.currentPage) ?: Feed.Discover
+        app.platform.settings.set(FEED, currentFeed.name)
+    }
+
     val lists = remember { mutableMapOf<Feed, LazyListState>() }
     // Gists, for members on their list (ADR 0017): Live now above every feed, and starting one from the bar.
     val gists = (account as? Account.SignedIn)?.me?.has("gists") == true
@@ -89,11 +107,14 @@ fun HomeScreen() {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WordmarkBar(onStartGist = if (gists) ({ starting = true }) else null)
-            Tabs(feeds, feed) {
-                feed = it
-                app.platform.settings.set(FEED, it.name)
+            Tabs(feeds, pagerState) { targetPage ->
+                scope.launch { pagerState.animateScrollToPage(targetPage) }
             }
-            key(feed, member) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) { page ->
+                val feed = feeds[page]
                 val viewModel = viewModel(key = "home-${feed.name}-$member") {
                     PostListViewModel(
                         load = { cursor ->
@@ -162,26 +183,57 @@ private fun WordmarkBar(onStartGist: (() -> Unit)?) {
 }
 
 @Composable
-private fun Tabs(feeds: List<Feed>, current: Feed, onSelect: (Feed) -> Unit) {
+private fun Tabs(
+    feeds: List<Feed>,
+    pagerState: PagerState,
+    onSelect: (Int) -> Unit,
+) {
     val colors = HeyNaija.colors
+    val density = LocalDensity.current
+    val indicatorWidth = 36.dp
+
     Column(Modifier.background(colors.bg)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            for (feed in feeds) {
-                val selected = feed == current
-                Column(
-                    Modifier.weight(1f).clickable { onSelect(feed) }.padding(top = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        feed.label,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) colors.ink else colors.muted,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Box(Modifier.width(36.dp).height(3.dp).background(if (selected) colors.accent else colors.bg, Radii.chip))
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            val tabWidth = maxWidth / feeds.size
+            val tabWidthPx = with(density) { tabWidth.toPx() }
+            val baseOffsetPx = with(density) { ((tabWidth - indicatorWidth) / 2).toPx() }
+
+            Column {
+                Row(Modifier.fillMaxWidth()) {
+                    feeds.forEachIndexed { index, feed ->
+                        val selected = pagerState.currentPage == index
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .clickable { onSelect(index) }
+                                .padding(top = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                feed.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) colors.ink else colors.muted,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(3.dp))
+                        }
+                    }
                 }
             }
+
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .width(indicatorWidth)
+                    .height(3.dp)
+                    .graphicsLayer {
+                        val position = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+                            .coerceIn(0f, (feeds.size - 1).coerceAtLeast(0).toFloat())
+                        translationX = baseOffsetPx + position * tabWidthPx
+                    }
+                    .background(colors.accent, Radii.chip)
+            )
         }
         HorizontalDivider(color = colors.line)
     }
