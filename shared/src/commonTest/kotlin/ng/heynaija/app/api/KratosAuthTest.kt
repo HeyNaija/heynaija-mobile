@@ -2,6 +2,7 @@ package ng.heynaija.app.api
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
+import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -115,6 +116,45 @@ class KratosAuthTest {
         }
 
         assertEquals(AuthStep.NoAccount("new@example.com"), server.kratos.loginWith("f1", google))
+    }
+
+    /** Kratos 26.2's answer then: the sign-in flow, with the signup's missing handle on a field of its own and no address. */
+    private val handleMissing = """
+        { "id": "f1", "type": "api", "state": "choose_method", "ui": {
+          "action": "https://test.heynaija.ng/kratos/self-service/login?flow=f1",
+          "messages": [],
+          "nodes": [
+            { "group": "default", "attributes": { "name": "csrf_token", "value": "" }, "messages": [] },
+            { "group": "default", "attributes": { "name": "traits.handle", "type": "text" }, "messages": [
+              { "id": 4000002, "type": "error", "text": "Property handle is missing.", "context": { "property": "handle" } }
+            ] }
+          ]
+        } }
+    """.trimIndent()
+
+    @Test
+    fun googleThatNobodyHasJoinedWithIsNoAccountAsKratosAnswersIt() = runTest {
+        val server = FakeServer { HttpStatusCode.BadRequest to handleMissing }
+        val claims = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encode("""{"sub":"1","email":"new@example.com"}""".encodeToByteArray())
+
+        assertEquals(AuthStep.NoAccount("new@example.com"), server.kratos.loginWith("f1", IdToken("google", "eyJhbGciOiJSUzI1NiJ9.$claims.c2ln", "n0nce")))
+    }
+
+    @Test
+    fun noAccountWithoutAnAddressStillSaysSo() = runTest {
+        val server = FakeServer { HttpStatusCode.BadRequest to handleMissing }
+
+        assertEquals(AuthStep.NoAccount(null), server.kratos.loginWith("f1", google))
+    }
+
+    @Test
+    fun aMissingHandleOnASignupIsTheFormsToShow() = runTest {
+        val server = FakeServer { HttpStatusCode.BadRequest to handleMissing.replace("/login?", "/registration?") }
+
+        assertEquals(
+            AuthStep.Refused(mapOf("traits.handle" to "Property handle is missing.")),
+            server.kratos.signupWith("f1", google, "", SignupExtras("HN-1", adultDeclared = true)),
+        )
     }
 
     @Test

@@ -14,6 +14,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import kotlin.io.encoding.Base64
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -111,7 +112,11 @@ class KratosAuth(
 
     /** Signs in with Google or Apple: an ID token from the platform's own sign-in. */
     suspend fun loginWith(flow: String, token: IdToken): AuthStep =
-        submit("login", flow, null, idTokenBody(token))
+        when (val step = submit("login", flow, null, idTokenBody(token))) {
+            // Kratos's answer may not say which address it was; the token Kratos just checked does.
+            is AuthStep.NoAccount -> if (step.email == null) AuthStep.NoAccount(emailIn(token.idToken)) else step
+            else -> step
+        }
 
     /** Joins with Google or Apple, which gives the email; the handle and the signup's extras come from the form. */
     suspend fun signupWith(flow: String, token: IdToken, handle: String, extras: SignupExtras): AuthStep =
@@ -175,8 +180,10 @@ class KratosAuth(
             val email = nodeValue(json, "identifier")
             if (id != null && email != null) return AuthStep.ConfirmEmail(id, email)
         }
-        // Signing in with Google or Apple that nobody has joined with: Kratos turns it into a signup.
-        if (kind == "login" && (actionOf(json)?.contains("/self-service/registration") == true || redirectOf(json)?.contains("registration") == true)) {
+        // Signing in with Google or Apple that nobody has joined with: Kratos turns it into a
+        // signup, which needs a handle neither gives. Kratos 26.2 then answers with the sign-in
+        // flow carrying the signup's "Property handle is missing.", not with the signup flow.
+        if (kind == "login" && (asksForHandle(json) || actionOf(json)?.contains("/self-service/registration") == true || redirectOf(json)?.contains("registration") == true)) {
             return AuthStep.NoAccount(nodeValue(json, "traits.email"))
         }
         // A sign-in again keeps the session's token, so the answer has none.
@@ -205,6 +212,28 @@ class KratosAuth(
     companion object {
         /** HeyNaija's Kratos policy: "Google (or Apple) confirmed your email. Confirm your existing HeyNaija account with an email code…" */
         private const val LINK_PROVIDER_MESSAGE = 4900102L
+
+        /** Kratos's "Property {property} is missing." */
+        private const val REQUIRED_MESSAGE = 4000002L
+
+        /** Whether Kratos said a handle is missing, for the form or any field: only a new account needs one. */
+        private fun asksForHandle(flow: JsonObject): Boolean {
+            val ui = flow["ui"] as? JsonObject ?: return false
+            val lists = listOf(ui["messages"]) + (ui["nodes"] as? JsonArray).orEmpty().map { (it as? JsonObject)?.get("messages") }
+            return lists.any { list ->
+                (list as? JsonArray).orEmpty().any {
+                    val message = it as? JsonObject
+                    (message?.get("id") as? JsonPrimitive)?.contentOrNull?.toLongOrNull() == REQUIRED_MESSAGE &&
+                        ((message?.get("context") as? JsonObject)?.get("property") as? JsonPrimitive)?.contentOrNull == "handle"
+                }
+            }
+        }
+
+        /** The address in an ID token's claims, to name it on the screen; null if it has none. */
+        internal fun emailIn(idToken: String): String? = runCatching {
+            val claims = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL).decode(idToken.split('.')[1]).decodeToString()
+            (HeyNaijaApi.json.parseToJsonElement(claims).jsonObject["email"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        }.getOrNull()
 
         private fun hasMessage(flow: JsonObject, id: Long): Boolean =
             ((flow["ui"] as? JsonObject)?.get("messages") as? JsonArray).orEmpty().any {
