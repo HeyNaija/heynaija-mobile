@@ -23,6 +23,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,7 +73,8 @@ fun PostList(
             .collect { (nearEnd, _) -> if (nearEnd) viewModel.loadMore() }
     }
     // Pressing the tab again at its top scrolls back to the newest.
-    LaunchedEffect(navigator.reselected) { if (navigator.reselected > 0) list.animateScrollToItem(0) }
+    val seen = remember { navigator.reselected }
+    LaunchedEffect(navigator.reselected) { if (navigator.reselected > seen) list.animateScrollToItem(0) }
 
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = modifier.fillMaxSize()) {
         LazyColumn(
