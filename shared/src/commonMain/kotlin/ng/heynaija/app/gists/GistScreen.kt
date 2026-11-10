@@ -125,6 +125,7 @@ fun GistScreen(id: String) {
             }
         })
         when {
+            view == null && state.phase == Phase.SignIn -> GistSignIn()
             view == null && state.phase == Phase.Missing ->
                 Problem("This Gist is not available. It may have been taken down, or it is not open to you.", onRetry = null)
             view == null && state.phase == Phase.LoadFailed ->
@@ -321,7 +322,7 @@ private fun PhaseCard(view: GistView, state: GistState, viewModel: GistViewModel
             )
             GistButton("Back", home, primary = true)
         }
-        Phase.Loading, Phase.LoadFailed -> Unit
+        Phase.Loading, Phase.LoadFailed, Phase.SignIn -> Unit
     }
 }
 

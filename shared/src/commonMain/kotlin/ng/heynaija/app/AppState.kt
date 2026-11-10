@@ -218,10 +218,13 @@ class AppState(val platform: Platform) {
      * repository). If that fails, the next Apple sign-in sends another.
      */
     suspend fun signedIn(newToken: String, via: IdToken? = null) {
+        // A Gist, or a reply in one, that asked to sign in first (GistSignIn) opens again, as on the web.
+        val back = navigator.beforeSignIn?.takeIf { it is Route.Gist || (it is Route.Thread && it.gist != null) }
         token = newToken
         platform.secure.set(TOKEN, newToken)
         refreshMe(firstLoad = true)
         navigator.reset()
+        back?.let(navigator::openFromLink)
         via?.appleCode?.let { code ->
             scope.launch {
                 try {

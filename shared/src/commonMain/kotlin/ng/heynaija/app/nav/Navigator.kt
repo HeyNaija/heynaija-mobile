@@ -98,6 +98,10 @@ class Navigator {
 
     val canPop: Boolean get() = stack.size > 1 || tab != Tab.Home
 
+    /** With the sign-in or sign-up form on top, the screen it was opened from. */
+    val beforeSignIn: Route?
+        get() = stack.takeIf { it.size > 1 && (top.route == Route.SignIn || top.route == Route.SignUp) }?.let { it[it.lastIndex - 1].route }
+
     fun push(route: Route) {
         motion = Motion.Push
         stacks.getValue(tab).add(Entry(route))
