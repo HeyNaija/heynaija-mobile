@@ -108,9 +108,12 @@ What the apps do now, what comes next, and what the backend
 
 1. **Session tokens on staging.** Done in HeyNaija/heynaija#107 (API reads
    `Authorization: Bearer`, signup reads `transient_payload`), waiting to merge.
-2. **Links that open the app.** For `heynaija.ng/p/...` links to open in the
-   app, the web app has to serve `/.well-known/assetlinks.json` (Android App
-   Links) and `/.well-known/apple-app-site-association` (iOS Universal Links).
+2. **Links that open the app.** HeyNaija/heynaija#140: the site serves
+   `/.well-known/apple-app-site-association` (iOS Universal Links) and
+   `/.well-known/assetlinks.json` (Android App Links) for the pages the app has
+   a screen for (`apps/web/lib/app-links.ts` there). Android's also needs
+   production's `ANDROID_CERT_SHA256` once Play has signed the app
+   ([release.md](release.md#5-google-play-once)).
 
 ## Next in the app
 
@@ -121,8 +124,7 @@ What the apps do now, what comes next, and what the backend
    The web's Connection sheet (route, loss and jitter) and microphone settings
    are not in the room yet.
 2. The ideas board, and continuing a video upload after the app was closed.
-3. Opening shared links in the app (after 2 above).
-4. The stores: [release.md](release.md) has every step, what is in the
+3. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what
    only the account holders can do. LiveKit's WebRTC library makes the Android
    debug APK about 75 MB with every processor type in it; the Play Store's app

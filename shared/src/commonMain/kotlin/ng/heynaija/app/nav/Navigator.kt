@@ -141,6 +141,28 @@ class Navigator {
         if (root == null) push(route)
     }
 
+    /**
+     * Opens [route] from a link to the site: a tab's own screen as that tab,
+     * anything else over whatever is open, as a link tapped inside the app would.
+     * Back returns there. The screen already on top is not opened twice.
+     */
+    fun openFromLink(route: Route) {
+        val root = Tab.entries.firstOrNull { it.root == route }
+        if (root != null) {
+            if (root != tab) {
+                motion = Motion.Tab
+                tab = root
+            }
+            val stack = stacks.getValue(tab)
+            if (stack.size > 1) {
+                motion = Motion.Pop
+                while (stack.size > 1) stack.removeAt(stack.lastIndex).viewModelStore.clear()
+            }
+            return
+        }
+        if (top.route != route) push(route)
+    }
+
     fun select(target: Tab) {
         if (target == tab) {
             val stack = stacks.getValue(tab)

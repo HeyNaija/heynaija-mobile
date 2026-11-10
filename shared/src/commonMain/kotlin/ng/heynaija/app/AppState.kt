@@ -313,6 +313,15 @@ class AppState(val platform: Platform) {
         navigator.openFromNotification(routeOf(link, Servers.current.web) ?: Route.Notifications)
     }
 
+    /**
+     * A link to the site the system opened the app with ([WebLinks]). One the app
+     * has no screen for, or to another server than the one in use (a debug build on
+     * staging given a heynaija.ng link), leaves the app where it was.
+     */
+    fun openWebLink(link: String) {
+        routeOf(link, Servers.current.web)?.let(navigator::openFromLink)
+    }
+
     val currentToken: String? get() = token
 
     fun switchServer(server: Server) {

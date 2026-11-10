@@ -114,6 +114,20 @@ at `androidApp/google-services.json` (from the Firebase console; git ignores it)
 and the dev API started with `FCM_SERVICE_ACCOUNT` set to the project's service
 account key in base64 (`docs/deployment/app-push.md` in the web repository).
 
+### Links that open the app
+
+heynaija.ng links to a post, Gist, profile, community or hashtag open in the app
+(App Links, Universal Links; `docs/deployment/app-links.md` in the web
+repository). They are for production, so a debug build opens them only with its
+Server set to Production. On the emulator, without Play's verification:
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d "https://heynaija.ng/u/<handle>" ng.heynaija.app
+```
+
+On iOS they work in a build signed with the team, once heynaija.ng serves the
+file: `xcrun simctl openurl booted "https://heynaija.ng/u/<handle>"`.
+
 ## Licence
 
 AGPL-3.0-or-later, as the main repository: [LICENSE](LICENSE). Plus Jakarta Sans
