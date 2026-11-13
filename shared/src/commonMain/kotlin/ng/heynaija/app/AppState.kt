@@ -393,6 +393,17 @@ class AppState(val platform: Platform) {
         replying = Route.Compose(story = story)
     }
 
+    /**
+     * The app was opened afresh over a state that was already running (Android: its
+     * activity had finished, the process had not): every tab at its top and no reply
+     * half-open, as the app has always opened. The Gist the member is in is not a
+     * screen, so it stays, with its bar.
+     */
+    fun freshStart() {
+        navigator.reset()
+        replying = null
+    }
+
     /** Runs [block] for a member, or sends a visitor to sign in. */
     fun requireMember(block: (Me) -> Unit) {
         val me = me

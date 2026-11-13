@@ -16,9 +16,8 @@ class MainActivity : ComponentActivity() {
         // One state for the process, not one per activity: turning the phone must not start the app again.
         val app = AppHolder.get(applicationContext)
         if (savedInstanceState == null) {
-            // A fresh start (not the activity made again): every tab at its top, as the app has always opened.
-            // The Gist the member is in, if any, is not a screen: it stays, with its bar.
-            app.navigator.reset()
+            // A fresh start, not the activity made again.
+            app.freshStart()
             // Started by tapping a notification or a link; not again when the activity is only recreated.
             opened(intent)
         }
