@@ -37,7 +37,9 @@ import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.AuthStep
 import ng.heynaija.app.api.Deletion
+import ng.heynaija.app.api.HIGHLIGHTS_PREFERENCE
 import ng.heynaija.app.api.NOTIFICATION_KINDS
+import ng.heynaija.app.api.offersHighlights
 import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Route
@@ -176,6 +178,17 @@ fun NotificationSettingsScreen() {
                 Group(listOf {
                     Toggle("Email me what I missed", current["email"] ?: false, detail = "At most one email every half hour, only for what you have not seen in the app.") { set("email", it) }
                 })
+                // Only while weekly highlights are offered to this member: the API leaves the key out otherwise.
+                if (offersHighlights(current)) {
+                    SectionTitle("WEEKLY HIGHLIGHTS")
+                    Group(listOf {
+                        Toggle(
+                            "Send me weekly highlights",
+                            current[HIGHLIGHTS_PREFERENCE] ?: false,
+                            detail = "A few conversations you missed, at most once a week and only when you have not opened HeyNaija for a few days.",
+                        ) { set(HIGHLIGHTS_PREFERENCE, it) }
+                    })
+                }
                 if (push.available) {
                     SectionTitle("ON THIS PHONE")
                     Group(buildList {

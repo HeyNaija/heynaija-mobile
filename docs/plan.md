@@ -115,7 +115,10 @@ What the apps do now, what comes next, and what the backend
 - **Search** for people, communities and posts, with trending topics.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and
-  privacy notice. Changing the email or handle is on the web for now.
+  privacy notice. Changing the email or handle is on the web for now. Under
+  Notifications, "Send me weekly highlights" (ADR 0027 in the web repository),
+  shown only where the server offers them: its preferences then carry
+  `highlights`. Their push arrives like any other and opens its conversation.
 
 ## What the backend still needs
 

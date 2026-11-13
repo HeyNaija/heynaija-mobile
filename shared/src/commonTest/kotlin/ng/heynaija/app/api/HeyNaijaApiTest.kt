@@ -1,9 +1,12 @@
 package ng.heynaija.app.api
 
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -207,5 +210,32 @@ class HeyNaijaApiTest {
         } finally {
             Servers.current = was
         }
+    }
+
+    @Test
+    fun weeklyHighlightsAreOfferedOnlyWhereTheServerSendsTheirPreference() = runTest {
+        // Staging and production today: no weekly highlights, so no key, and no switch.
+        val without = FakeServer(token = "t") { HttpStatusCode.OK to """{ "reply": true, "like": false, "email": true }""" }
+        val with = FakeServer(token = "t") { HttpStatusCode.OK to """{ "reply": true, "email": false, "highlights": false }""" }
+
+        assertFalse(offersHighlights(without.api.notificationPreferences()))
+        val offered = with.api.notificationPreferences()
+        assertTrue(offersHighlights(offered))
+        assertEquals(false, offered[HIGHLIGHTS_PREFERENCE])
+        // Not a kind of notification: never listed with replies and likes, whose switches default to on.
+        assertTrue(NOTIFICATION_KINDS.none { it.first == HIGHLIGHTS_PREFERENCE })
+    }
+
+    @Test
+    fun turningWeeklyHighlightsOffSendsThatAlone() = runTest {
+        val server = FakeServer(token = "t") { HttpStatusCode.OK to """{ "reply": true, "email": true, "highlights": false }""" }
+
+        val saved = server.api.setNotificationPreference(HIGHLIGHTS_PREFERENCE, false)
+
+        val request = server.requests.single()
+        assertEquals(HttpMethod.Put, request.method)
+        assertEquals("/api/v1/notifications/preferences", request.url.encodedPath)
+        assertEquals("""{"highlights":false}""", (request.body as TextContent).text)
+        assertEquals(false, saved[HIGHLIGHTS_PREFERENCE])
     }
 }
