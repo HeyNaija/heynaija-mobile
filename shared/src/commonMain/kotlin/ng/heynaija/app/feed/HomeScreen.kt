@@ -86,8 +86,10 @@ fun HomeScreen() {
     val member = account is Account.SignedIn
     val feeds = if (member) Feed.entries else listOf(Feed.Discover, Feed.Latest)
     val lists = remember { mutableMapOf<Feed, LazyListState>() }
-    // Gists, for members on their list (ADR 0017): Live now above every feed, and starting one from the bar.
+    // Gists, for members on their list (ADR 0017): Live now above every feed, and starting one from the bar
+    // for those who may host. A member who may only listen (under 18, or no age on record) still gets Live now.
     val gists = (account as? Account.SignedIn)?.me?.has("gists") == true
+    val mayHost = (account as? Account.SignedIn)?.me?.mayTakeStage == true
     val liveNow = viewModel(key = "live-now") { LiveNowViewModel(app.api) }
     val live by liveNow.items.collectAsStateWithLifecycle()
     if (gists) {
@@ -103,7 +105,7 @@ fun HomeScreen() {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            WordmarkBar(onStartGist = if (gists) ({ starting = true }) else null)
+            WordmarkBar(onStartGist = if (mayHost) ({ starting = true }) else null)
             key(member) {
                 // The tab last chosen, else Discover, as on the web.
                 val initialPage = remember {

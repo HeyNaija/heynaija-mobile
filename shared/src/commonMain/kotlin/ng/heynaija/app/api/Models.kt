@@ -22,12 +22,22 @@ data class Me(
     val birthDateNeeded: Boolean = false,
     /** What is switched on for this member; a missing key is off. */
     val features: Map<String, Boolean> = emptyMap(),
+    /**
+     * Whether they may start a Gist and speak in one, or only listen: under 18, and
+     * no age on record, listen (ADR 0020 in the web repository). A server from before
+     * that rule does not say, and let everyone with Gists on stage, so missing is true;
+     * the API checks every one of these again whatever the app shows.
+     */
+    val gistStage: Boolean = true,
     /** The limits a video is checked against before sending; null while video is closed to this member. */
     val videoLimits: VideoLimits? = null,
     /** Posts marked sensitive (ADR 0020): whether they count as an adult for them, and their choices. */
     val sensitive: SensitiveSettings = SensitiveSettings(),
 ) {
     fun has(feature: String) = features[feature] == true
+
+    /** May host a Gist, ask to speak and use the microphone; a member who may not only listens. */
+    val mayTakeStage get() = has("gists") && gistStage
 
     /** May mark posts sensitive: the adultLabels flag is on for them, and they count as an adult. */
     val canMarkSensitive get() = has("adultLabels") && sensitive.adult

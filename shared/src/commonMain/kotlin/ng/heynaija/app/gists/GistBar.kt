@@ -58,7 +58,7 @@ fun GistBar(room: GistRoom, modifier: Modifier = Modifier) {
     val colors = HeyNaija.colors
     val state by room.state.collectAsStateWithLifecycle()
     val view = state.view ?: return
-    val mayUseMic = controlsFor(view).mic
+    val mayUseMic = controlsFor(view, app.me?.mayTakeStage == true).mic
     val askMic = rememberMicrophonePermission { granted -> if (granted) room.setMic(true) else room.micDenied() }
     // Why the microphone did not start is written in the room; away from it, say it here.
     var told by remember { mutableStateOf(state.micProblem) }
