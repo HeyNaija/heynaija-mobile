@@ -29,7 +29,8 @@ What the apps do now, what comes next, and what the backend
   replies, media, pinned post), communities (join, leave, rules, pinned post),
   hashtags and bookmarks.
 - **Posts:** threads with the conversation above and replies below; posting
-  with up to four pictures, a video (sent in parts, then waited on until the
+  (Post sits at the right of the rail on top of the keyboard, with what can be
+  attached on its left) with up to four pictures, a video (sent in parts, then waited on until the
   worker has it ready), a poll, a community and who can reply; @mention
   suggestions while writing; replies,
   likes, reposts, quotes, bookmarks, sharing a link, pinning to your profile,
@@ -41,8 +42,11 @@ What the apps do now, what comes next, and what the backend
   room as on the web: host, stage and listeners, joining to listen, asking to
   speak, the microphone (asked for only then), and the host's and co-hosts'
   controls (let speak, mute, make co-host, back to the listeners, remove, lock,
-  requests on or off, end), and reporting the Gist. The room follows the web's join, reconnect and leave
-  rules (`gist-session.ts`) and polls as it does. Sound goes through LiveKit:
+  requests on or off, end), reporting the Gist, and sharing its link (the web's
+  `/gists/:id` page, which opens the app). The room follows the web's join, reconnect and leave
+  rules (`gist-session.ts`) and polls as it does. A tap on the microphone waits
+  for the room to allow it: every connection starts as a listener's, and the
+  server lets a speaker publish a moment later. Sound goes through LiveKit:
   its Android SDK, and on iOS its Swift SDK behind a small Swift wrapper in
   `iosApp` (`GistAudio.swift`) that implements the shared `GistAudio` interface.
   The screen stays awake while in a room; the sound keeps playing on other

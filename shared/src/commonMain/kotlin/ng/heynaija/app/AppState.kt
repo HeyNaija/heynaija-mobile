@@ -460,6 +460,12 @@ class AppState(val platform: Platform) {
 
     /** The address of a post on the web, to share. */
     fun postLink(post: Post) = "${Servers.current.web}/p/${post.id}"
+
+    /** The address of a Gist on the web, to share: the page the web app has for it, which opens the app where it is installed. */
+    fun gistLink(id: String) = gistLink(Servers.current.web, id)
 }
+
+/** A Gist's page on the site at [web] (`/gists/:id`, as `routeOf` reads it back). */
+fun gistLink(web: String, id: String) = "$web/gists/$id"
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("AppState is provided by App()") }

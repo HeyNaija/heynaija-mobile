@@ -48,6 +48,7 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
                 onMain { [self] in
                     emitMics()
                     emitWeak()
+                    events.onMayPublish(allowed: room.localParticipant.permissions.canPublish)
                     done(nil)
                 }
             } catch {
@@ -123,6 +124,13 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
 
     func room(_: Room, participant _: LocalParticipant, didPublishTrack _: LocalTrackPublication) {
         onMain { [self] in emitMics() }
+    }
+
+    func room(_: Room, participant: Participant, didUpdatePermissions permissions: ParticipantPermissions) {
+        // Every token is a listener's; the server lets a speaker publish a moment after they connect, or when a host lets them speak.
+        guard participant is LocalParticipant else { return }
+        let allowed = permissions.canPublish
+        onMain { [self] in events.onMayPublish(allowed: allowed) }
     }
 
     func room(_: Room, participant _: RemoteParticipant, didPublishTrack _: RemoteTrackPublication) {

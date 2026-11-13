@@ -388,15 +388,6 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
             },
             onBack = close,
             backIcon = Icons.Close,
-            actions = {
-                PrimaryButton(
-                    if (reply != null || gist != null) "Reply" else "Post",
-                    { viewModel.post(close) },
-                    Modifier.padding(end = 8.dp),
-                    enabled = viewModel.canPost(state),
-                    busy = state.posting,
-                )
-            },
         )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
             if (reply != null) ReplyingTo(reply) else if (gist != null) ReplyingToGist() else route.story?.let { AddingTo(it) }
@@ -456,8 +447,10 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
             }
         }
         HorizontalDivider(color = colors.line)
+        // The rail: it rides on top of the keyboard (imePadding above) and rests at the foot of the screen without
+        // it. What to attach on the left; how much room is left, and Post, on the right, under the thumb.
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp).heightIn(min = 48.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp).heightIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // A Gist's replies are text only, as on the web.
@@ -483,6 +476,12 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                     color = if (left < 0) colors.danger else colors.muted,
                 )
             }
+            PrimaryButton(
+                if (reply != null || gist != null) "Reply" else "Post",
+                { viewModel.post(close) },
+                enabled = viewModel.canPost(state),
+                busy = state.posting,
+            )
         }
     }
 }

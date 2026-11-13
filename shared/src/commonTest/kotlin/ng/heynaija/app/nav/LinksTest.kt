@@ -3,6 +3,7 @@ package ng.heynaija.app.nav
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import ng.heynaija.app.gistLink
 
 class LinksTest {
     private val web = "https://staging.heynaija.ng"
@@ -20,6 +21,13 @@ class LinksTest {
         assertEquals(Route.Community("lagos-tech"), routeOf("/c/lagos-tech", web))
         assertEquals(Route.Hashtag("jollof"), routeOf("/hashtag/Jollof", web))
         assertEquals(Route.Home, routeOf("/", web))
+    }
+
+    @Test
+    fun aSharedGistLinkIsTheWebsPageForItAndOpensTheGist() {
+        val link = gistLink(web, gist)
+        assertEquals("$web/gists/$gist", link)
+        assertEquals(Route.Gist(gist), routeOf(link, web))
     }
 
     @Test

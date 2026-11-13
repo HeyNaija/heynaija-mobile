@@ -79,6 +79,7 @@ import ng.heynaija.app.api.Person
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.KeepScreenOn
 import ng.heynaija.app.platform.rememberMicrophonePermission
+import ng.heynaija.app.platform.rememberShare
 import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
@@ -114,9 +115,17 @@ fun GistScreen(id: String) {
         onPauseOrDispose { viewModel.setVisible(false) }
     }
     if (state.polling || state.phase == Phase.Connecting) KeepScreenOn()
+    val share = rememberShare()
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Gist", onBack = { app.navigator.pop() }, actions = {
+            // The Gist's page on the web, which opens in the app where it is installed. Only a member Gists are open
+            // to gets past that page, so the link shows the room to nobody new.
+            if (view != null) {
+                IconButton(onClick = { share(app.gistLink(id)) }) {
+                    Icon(Icons.Share, "Share this Gist", Modifier.size(22.dp), tint = HeyNaija.colors.muted)
+                }
+            }
             // Anyone in the room may report it, except its host (ADR 0017).
             if (state.polling && view?.viewer?.role != "host") {
                 IconButton(onClick = { app.navigator.push(Route.Report("gistId" to id, "this Gist")) }) {
@@ -513,7 +522,8 @@ private fun Controls(view: GistView, state: GistState, viewModel: GistViewModel)
         ) {
             when {
                 controls.mic -> GistButton(
-                    if (state.micOn) "Microphone on" else "Microphone off",
+                    // A tap waits for the room to allow the microphone, which can take a moment just after joining.
+                    if (state.micOn) "Microphone on" else if (state.micBusy) "Starting…" else "Microphone off",
                     onClick = { if (state.micOn) viewModel.setMic(false) else askMic() },
                     icon = if (state.micOn) Icons.Mic else Icons.MicOff,
                     primary = state.micOn,
