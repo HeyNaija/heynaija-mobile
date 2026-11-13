@@ -513,7 +513,8 @@ private fun Controls(view: GistView, state: GistState, viewModel: GistViewModel)
         ) {
             when {
                 controls.mic -> GistButton(
-                    if (state.micOn) "Microphone on" else "Microphone off",
+                    // A tap waits for the room to allow the microphone, which can take a moment just after joining.
+                    if (state.micOn) "Microphone on" else if (state.micBusy) "Starting…" else "Microphone off",
                     onClick = { if (state.micOn) viewModel.setMic(false) else askMic() },
                     icon = if (state.micOn) Icons.Mic else Icons.MicOff,
                     primary = state.micOn,

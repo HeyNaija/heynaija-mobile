@@ -15,7 +15,9 @@ interface GistAudio {
 
     /**
      * Publishes the microphone, or mutes it. Ask for the system's permission first
-     * ([rememberMicrophonePermission]). [done] gets null, or what failed.
+     * ([rememberMicrophonePermission]), and turn it on only once the room allows it
+     * ([GistAudioEvents.onMayPublish]): before that LiveKit refuses. [done] gets
+     * null, or what failed.
      */
     fun setMicrophone(on: Boolean, done: (String?) -> Unit)
 
@@ -43,6 +45,13 @@ interface GistAudioEvents {
 
     /** The server took the member's microphone: a host muted them, or made them a listener. */
     fun onMicOff()
+
+    /**
+     * Whether the room lets the member publish their microphone. Every connection
+     * starts as a listener's: the server allows a host, co-host or speaker a
+     * moment after they connect, and anyone else when a host lets them speak.
+     */
+    fun onMayPublish(allowed: Boolean)
 }
 
 /** Makes a [GistAudio] for each visit to a room. */

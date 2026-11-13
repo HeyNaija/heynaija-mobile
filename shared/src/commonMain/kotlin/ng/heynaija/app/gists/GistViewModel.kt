@@ -4,23 +4,29 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import ng.heynaija.app.AppState
 import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.GistView
+import ng.heynaija.app.api.HeyNaijaApi
 import ng.heynaija.app.api.Person
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.SpeakRequest
 import ng.heynaija.app.platform.GistAudio
 import ng.heynaija.app.platform.GistAudioEvents
+import ng.heynaija.app.platform.GistAudioFactory
 import ng.heynaija.app.reasonOf
 import ng.heynaija.app.withAuthor
 
@@ -83,8 +89,18 @@ private enum class Outcome { Ok, Retry, Stop }
  * The visit lasts as long as the screen is on the stack: a screen pushed on top
  * (a report, a profile) keeps the sound playing; going back leaves.
  */
-class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
-    private val api = app.api
+class GistViewModel internal constructor(
+    val id: String,
+    private val api: HeyNaijaApi,
+    private val audioFactory: GistAudioFactory?,
+    private val changes: SharedFlow<PostChange>,
+    private val say: (String) -> Unit,
+    /** Outlives the screen: the /leave sent on the way out runs here. */
+    private val background: CoroutineScope,
+    private val debug: Boolean,
+) : ViewModel() {
+    constructor(app: AppState, id: String) : this(id, app.api, app.platform.gistAudio, app.changes, app::say, app.scope, app.platform.debug)
+
     private val _state = MutableStateFlow(GistState())
     val state: StateFlow<GistState> = _state.asStateFlow()
 
@@ -94,6 +110,8 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
     private var present = false
     private var reconnecting = false
     private var audio: GistAudio? = null
+    /** Whether the room lets this connection publish the microphone (GistAudioEvents.onMayPublish). */
+    private val mayPublish = MutableStateFlow(false)
     private val latest = Latest()
     private var lastRole: String? = null
     private var lastStatus = "live"
@@ -119,7 +137,7 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
             }
         }
         viewModelScope.launch {
-            app.changes.collect { change ->
+            changes.collect { change ->
                 when (change) {
                     is PostChange.Updated -> updateReplies { r -> r.copy(posts = r.posts.map { if (it.id == change.post.id) change.post else it }) }
                     is PostChange.Deleted -> updateReplies { r ->
@@ -170,7 +188,7 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         audio = null
         if (leave && present) {
             // Not the view model's scope: leaving the screen cancels that, and the API should still hear.
-            app.scope.launch { runCatching { api.leaveGist(id) } }
+            background.launch { runCatching { api.leaveGist(id) } }
         }
         present = false
         _state.update { it.copy(micOn = false, micBusy = false) }
@@ -209,20 +227,21 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         lastRole = joined.role
         lastStatus = joined.gist.status
         _state.update { it.copy(view = joined.gist) }
-        val factory = app.platform.gistAudio
+        val factory = audioFactory
         if (factory == null) {
             _state.update { it.copy(problem = "Gists cannot play on this device.") }
             return Outcome.Retry
         }
         // Every attempt starts a new connection: a dropped one is never reused, and its microphone went with it.
         audio?.disconnect()
+        mayPublish.value = false
         val made = factory.create(events(my))
         audio = made
         _state.update { it.copy(micOn = false, micBusy = false) }
         val failure = suspendCancellableCoroutine { done -> made.connect(joined.url, joined.token) { done.resume(it) } }
         if (stale(my)) return bail()
         if (failure != null) {
-            if (app.platform.debug) println("HeyNaija: the Gist's audio did not connect: $failure")
+            if (debug) println("HeyNaija: the Gist's audio did not connect: $failure")
             _state.update { it.copy(problem = "Could not connect the audio. Check your connection and try again.") }
             return Outcome.Retry
         }
@@ -247,6 +266,8 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         override fun onWeak(ids: List<String>) { if (current) _state.update { it.copy(weak = ids.toSet()) } }
 
         override fun onMicOff() { if (current) _state.update { it.copy(micOn = false) } }
+
+        override fun onMayPublish(allowed: Boolean) { if (current) mayPublish.value = allowed }
     }
 
     private fun sync() {
@@ -369,7 +390,7 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         lastRole = next.role
         lastStatus = next.status
         _state.update { it.copy(view = view) }
-        next.announcement?.let(app::say)
+        next.announcement?.let(say)
         if (next.ended) {
             finish()
             return true
@@ -405,14 +426,26 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
     private suspend fun setMicNow(on: Boolean) {
         val made = audio ?: return
         _state.update { it.copy(micBusy = true, micProblem = null) }
+        if (on && !mayPublish.value) {
+            // The room shows as live, and the microphone button with it, a moment before the server has let this
+            // connection publish. A tap in that moment used to be refused ("did not start... still listening") and
+            // work the second time. Wait for the room instead, asking the server again in case the first /sync was lost.
+            sync()
+            val allowed = withTimeoutOrNull(STAGE_WAIT_MS) { mayPublish.first { it } } != null
+            if (made !== audio) return
+            if (!allowed) {
+                _state.update { it.copy(micOn = false, micBusy = false, micProblem = MIC_NOT_READY) }
+                return
+            }
+        }
         val failure = suspendCancellableCoroutine { done -> made.setMicrophone(on) { done.resume(it) } }
         // The connection was replaced meanwhile (a reconnect): the new one starts muted.
         if (made !== audio) return
         if (failure == null) {
             _state.update { it.copy(micOn = on, micBusy = false) }
-            app.say(if (on) "Microphone on" else "You are muted")
+            say(if (on) "Microphone on" else "You are muted")
         } else {
-            if (app.platform.debug) println("HeyNaija: the microphone did not ${if (on) "start" else "stop"}: $failure")
+            if (debug) println("HeyNaija: the microphone did not ${if (on) "start" else "stop"}: $failure")
             _state.update {
                 it.copy(
                     micOn = false,
@@ -431,7 +464,7 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 api.setSpeakRequest(id, on)
-                app.say(if (on) "Request sent. The host will see it." else "Request withdrawn.")
+                say(if (on) "Request sent. The host will see it." else "Request withdrawn.")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -449,11 +482,11 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 call()
-                app.say(done)
+                say(done)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                app.say(reasonOf(e) ?: "That did not work. Try again.")
+                say(reasonOf(e) ?: "That did not work. Try again.")
             }
             _state.update { it.copy(busy = false) }
             refreshAfterAction()
@@ -529,17 +562,22 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 api.setGistReplyAudience(id, audience)
-                app.say(GIST_REPLY_AUDIENCES.first { it.first == audience }.second)
+                say(GIST_REPLY_AUDIENCES.first { it.first == audience }.second)
                 loadReplies()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 updateReplies { it.copy(audience = before) }
-                app.say(reasonOf(e) ?: "That did not save. Try again.")
+                say(reasonOf(e) ?: "That did not save. Try again.")
             }
         }
     }
 }
+
+/** How long a tap on the microphone waits for the room to allow it. The server's answer is normally there in well under a second. */
+internal const val STAGE_WAIT_MS = 8_000L
+
+private const val MIC_NOT_READY = "Your microphone is not ready yet. Try again in a moment. You are still listening."
 
 private const val MIC_DENIED =
     "HeyNaija may not use the microphone, so you are still listening. Allow the microphone for HeyNaija in your phone's settings, then tap the microphone again."

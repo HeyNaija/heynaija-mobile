@@ -24,6 +24,7 @@ import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.track.LocalAudioTrack
 import io.livekit.android.room.track.Track
+import io.livekit.android.util.flow
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +99,16 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
             }
         }
         scope.launch {
+            // Every token is a listener's; the server lets a speaker publish a moment after they connect, or when a host
+            // lets them speak. Read from the participant's own state, which holds the answer whenever it came: the
+            // room's event for it is dropped when the answer arrives while the connection is still being made.
+            room.localParticipant::permissions.flow.collect { permissions ->
+                val allowed = permissions?.canPublish == true
+                if (debug) println("HeyNaija: the room ${if (allowed) "lets" else "does not let"} this member publish")
+                on.onMayPublish(allowed)
+            }
+        }
+        scope.launch {
             room.localParticipant.events.collect { event ->
                 when (event) {
                     is ParticipantEvent.LocalTrackPublished -> emitMics()
@@ -151,27 +162,30 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
                     return@launch
                 }
                 if (mic != null) return@launch done(null)
-                // Throws SecurityException without RECORD_AUDIO.
                 val track = room.localParticipant.createAudioTrack("microphone")
-                mic = track
-                val published = room.localParticipant.publishAudioTrack(
-                    track,
-                    AudioTrackPublishOptions(name = "microphone", audioBitrate = VOICE_BITRATE, source = Track.Source.MICROPHONE),
-                )
+                val published = try {
+                    // Throws when the server has not let this member publish (GistAudio.setMicrophone).
+                    room.localParticipant.publishAudioTrack(
+                        track,
+                        AudioTrackPublishOptions(name = "microphone", audioBitrate = VOICE_BITRATE, source = Track.Source.MICROPHONE),
+                    )
+                } catch (e: Throwable) {
+                    // Not published, so the room will not let it go: do it here, or the track is left behind.
+                    track.dispose()
+                    throw e
+                }
                 if (!published) {
-                    mic = null
                     track.dispose()
                     return@launch done("The microphone could not be published.")
                 }
+                mic = track
                 emitMics()
                 done(null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SecurityException) {
-                mic = null
                 done("denied")
             } catch (e: Exception) {
-                mic = null
                 done(e.message ?: e.toString())
             }
         }

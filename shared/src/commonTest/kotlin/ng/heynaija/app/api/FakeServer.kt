@@ -1,11 +1,13 @@
 package ng.heynaija.app.api
 
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CoroutineDispatcher
 
 val TestServer = Server(
     key = "test",
@@ -19,16 +21,27 @@ val TestServer = Server(
 /**
  * An API that answers from [handle] and keeps every request it was sent. [token]
  * is the session the app holds; [signedOut] counts the API telling it the session ended.
+ * It answers on its own thread, as the real one does, unless given a [dispatcher]:
+ * with the test's own, a request is answered where it was made, in the test's time.
  */
-class FakeServer(var token: String? = null, private val handle: (HttpRequestData) -> Pair<HttpStatusCode, String>) {
+class FakeServer(
+    var token: String? = null,
+    dispatcher: CoroutineDispatcher? = null,
+    private val handle: (HttpRequestData) -> Pair<HttpStatusCode, String>,
+) {
     val requests = mutableListOf<HttpRequestData>()
     var signedOut = 0
 
-    private val engine = MockEngine { request ->
-        requests += request
-        val (status, body) = handle(request)
-        respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
-    }
+    private val engine = MockEngine(
+        MockEngineConfig().apply {
+            this.dispatcher = dispatcher
+            addHandler { request ->
+                requests += request
+                val (status, body) = handle(request)
+                respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
+            }
+        },
+    )
 
     val api = HeyNaijaApi(server = { TestServer }, token = { token }, engine = engine, onSignedOut = { signedOut++ })
     val kratos = KratosAuth(server = { TestServer }, engine = engine)
