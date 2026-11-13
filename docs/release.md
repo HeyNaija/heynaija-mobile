@@ -71,6 +71,16 @@ For each version:
   `docs/deployment/store-review.md`. Add: "HeyNaija is invite-only during its
   beta. Members can report posts and accounts, block and mute, and the rules are
   at heynaija.ng/rules. Accounts are deleted from Settings → Delete your account."
+- **Audio in the background.** The app declares the audio background mode
+  (`UIBackgroundModes` in `iosApp/iosApp/Info.plist`), which App Review checks is
+  really used (Guideline 2.5.4). Add to the review note: "HeyNaija plays audio in
+  the background for Gists, its live audio rooms. A member who joins a Gist keeps
+  hearing it, and can keep speaking, with the phone locked or another app open,
+  until they tap Leave. To see it: sign in, tap the broadcast icon at the top of
+  Home to start a Gist (or open one under Live now), tap Join, then lock the
+  phone or go to the Home Screen." The review account needs Gists switched on
+  and a date of birth that makes it an adult, or it can only listen. Nothing to
+  add to the App ID: background modes are not a capability Apple signs.
 - **Export compliance:** asked for each build. The app uses HTTPS, Apple's own
   AES-GCM (CryptoKit) for push, and WebRTC's DTLS-SRTP for Gists' sound, all
   standard algorithms. Decide the answer once (with advice if unsure), then add
@@ -134,6 +144,22 @@ For each version:
     which says how, links to Settings → Delete your account, and gives the
     address to write to without signing in.
   - News app, health, financial features, government: no.
+  - **Foreground service permissions.** The app keeps a Gist playing with the app
+    off screen or the phone locked through a foreground service
+    (`GistService`), and Play asks an app that targets Android 14 or later to say
+    what each type is for, with a short video, before a release with it is
+    accepted. Two types:
+    - **Media playback**: "Gists are live audio rooms. After a member joins one,
+      its sound keeps playing when they leave the app or lock the phone, until
+      they tap Leave in the app or on the notification."
+    - **Microphone**: "A member the host has let speak in a Gist can keep
+      speaking with the app off screen. The microphone is used only while they
+      have switched it on in the room; the notification says when it is on."
+    The video for each (a screen recording, as an unlisted YouTube or Drive
+    link): join a Gist, for the microphone turn it on, go to the phone's home
+    screen, show the notification, and tap Leave on it. For "what happens if the
+    task is interrupted": the member stops hearing the room, and speakers are
+    cut off mid-sentence.
 - **Testing first.** A personal developer account made after November 2023 must
   run a closed test with at least 12 testers for 14 days before it can publish to
   production. An organisation account can go straight on.
@@ -177,6 +203,33 @@ Before signing in or joining, the app asks the store:
 Apple's and Google's own words leave whether this is enough to counsel; it is
 what both stores' age APIs offer an 18+ app.
 
-## Not needed for the first release
+## Gists in the background
 
-- Gists with the phone locked.
+What a release with it carries, for the forms above:
+
+- **Android:** `GistService`, a foreground service of the types `mediaPlayback`
+  and, only while the member's microphone is on, `microphone`, with the
+  permissions `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` and
+  `FOREGROUND_SERVICE_MICROPHONE`. None of them asks the member anything, and
+  Data safety does not change. Play Console must be told what the two types are
+  for (section 5, "Foreground service permissions") or the release is refused.
+  The notification ("Gist you are in": the Gist's title, whether the microphone
+  is on, and Leave) shows only to members who have allowed notifications
+  (Android 13 and later); the Gist plays on either way, and is left from the app.
+- **iOS:** the audio background mode. No new capability, entitlement or
+  permission; say why in the review note (section 3). Nothing shows on the lock
+  screen yet.
+- **iOS, to check on a real iPhone before relying on it:** iOS keeps a
+  background app running only while it is playing sound. Muting unpublishes a
+  speaker's microphone here, so while nobody on stage has theirs on the room is
+  silent in the strict sense: no stream at all. The app holds its audio session
+  for the whole visit (`GistAudio.swift`), so the next speaker can be heard
+  without opening the app; whether iOS still pauses the app when that silence
+  is long cannot be seen on the simulator, which never pauses an app with this
+  mode. The test: join as a listener, lock the phone, have the only speaker
+  mute for two or three minutes, then speak again. If the sound does not come
+  back, the room has to keep a stream going between speakers (plan.md).
+- Swiping the app away on Android leaves the Gist.
+- Not tried on real phones yet, only on the emulator and the simulator, which
+  have no real lock screen or microphone: a long Gist with the phone locked, a
+  phone call arriving during one, and earphones being plugged in or taken out.
