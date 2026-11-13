@@ -299,8 +299,12 @@ private fun TabBar(app: AppState, unread: Int) {
 }
 
 private val TabBarHeight = 56.dp
-/** How far the curve under the selected tab rises above the bar. */
-private val TabRise = 27.dp
+/**
+ * How far the curve under the selected tab rises above the bar, over the bottom of
+ * the screen. Anything pinned to a screen's foot stands at least this high (GistBar,
+ * a Gist's controls), or the selected tab covers part of it.
+ */
+internal val TabRise = 27.dp
 private val TabCurveWidth = 120.dp
 private val TabBubble = 48.dp
 /** How far the selected tab's bubble rises: it stops short of the curve's top, leaving a margin above it. */

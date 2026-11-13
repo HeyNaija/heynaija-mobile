@@ -49,11 +49,12 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 import platform.posix.memcpy
 
-fun iosPlatform(debug: Boolean, gistAudio: GistAudioFactory?, ageRange: AppleAgeRange?) = Platform(
+fun iosPlatform(debug: Boolean, gistAudio: GistAudioFactory?, gistKeeper: GistKeeper?, ageRange: AppleAgeRange?) = Platform(
     secure = KeychainStore("ng.heynaija.app"),
     settings = DefaultsStore(),
     debug = debug,
     gistAudio = gistAudio,
+    gistKeeper = gistKeeper,
     push = ApnsPushDevice(KeychainStore("ng.heynaija.app.shared", accessGroup = APP_GROUP)),
     ageSignals = ageRange?.let(::DeclaredAgeSignals),
 )

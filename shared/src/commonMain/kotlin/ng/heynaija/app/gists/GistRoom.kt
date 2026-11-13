@@ -45,6 +45,8 @@ data class GistState(
     val micOn: Boolean = false,
     val micBusy: Boolean = false,
     val micProblem: String? = null,
+    /** False while the member has paused the sound, from the lock screen or their headphones: they are still in the room. */
+    val hearing: Boolean = true,
     /** Member ids: who is speaking now, whose microphone is live, whose connection is weak. */
     val speaking: Set<String> = emptySet(),
     val mics: Set<String> = emptySet(),
@@ -211,7 +213,7 @@ class GistRoom internal constructor(
             background.launch { runCatching { api.leaveGist(id) } }
         }
         present = false
-        _state.update { it.copy(micOn = false, micBusy = false) }
+        _state.update { it.copy(micOn = false, micBusy = false, hearing = true) }
     }
 
     private fun bail(): Outcome {
@@ -265,6 +267,8 @@ class GistRoom internal constructor(
             _state.update { it.copy(problem = "Could not connect the audio. Check your connection and try again.") }
             return Outcome.Retry
         }
+        // Paused before a reconnect: the new connection stays quiet too.
+        if (!_state.value.hearing) made.setHearing(false)
         // The server lets a speaker publish only after this; the poll repeats it if the role changes.
         sync()
         return Outcome.Ok
@@ -464,10 +468,24 @@ class GistRoom internal constructor(
 
     // ---- the member's own controls ------------------------------------------------------
 
-    /** Turns the microphone on or off; the screen has asked the system for the permission first. */
+    /** Turns the microphone on or off; the screen has asked the system for the permission first. Talking brings the sound back. */
     fun setMic(on: Boolean) {
         if (_state.value.micBusy) return
+        if (on) setHearing(true)
         scope.launch { setMicNow(on) }
+    }
+
+    /**
+     * Plays the room's sound again, or silences it on this phone: iOS's play and pause
+     * on the lock screen, and taking AirPods out. The member stays in the room; pausing
+     * turns their microphone off, as they have stopped listening.
+     */
+    fun setHearing(on: Boolean) {
+        val s = _state.value
+        if (!s.inRoom || s.hearing == on) return
+        _state.update { it.copy(hearing = on) }
+        audio?.setHearing(on)
+        if (!on && s.micOn) setMic(false)
     }
 
     private suspend fun setMicNow(on: Boolean) {

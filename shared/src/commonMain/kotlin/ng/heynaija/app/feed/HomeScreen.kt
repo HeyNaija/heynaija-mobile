@@ -30,10 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,9 +51,9 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import ng.heynaija.app.Account
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.gists.GistsButton
 import ng.heynaija.app.gists.LiveNow
 import ng.heynaija.app.gists.LiveNowViewModel
-import ng.heynaija.app.gists.StartGistDialog
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.PostList
 import ng.heynaija.app.posts.PostListViewModel
@@ -86,8 +84,9 @@ fun HomeScreen() {
     val member = account is Account.SignedIn
     val feeds = if (member) Feed.entries else listOf(Feed.Discover, Feed.Latest)
     val lists = remember { mutableMapOf<Feed, LazyListState>() }
-    // Gists, for members on their list (ADR 0017): Live now above every feed, and starting one from the bar
-    // for those who may host. A member who may only listen (under 18, or no age on record) still gets Live now.
+    // Gists, for members on their list (ADR 0017): Live now above every feed, and the Gists button on the bar, which
+    // shows the one the member is in and what is live, and starts one for those who may host. A member who may only
+    // listen (under 18, or no age on record) still gets both, without starting.
     val gists = (account as? Account.SignedIn)?.me?.has("gists") == true
     val mayHost = (account as? Account.SignedIn)?.me?.mayTakeStage == true
     val liveNow = viewModel(key = "live-now") { LiveNowViewModel(app.api) }
@@ -98,14 +97,11 @@ fun HomeScreen() {
             onPauseOrDispose { liveNow.stop() }
         }
     }
-    var starting by remember { mutableStateOf(false) }
-    if (starting) StartGistDialog(onDismiss = { starting = false })
-
     val scope = rememberCoroutineScope()
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            WordmarkBar(onStartGist = if (mayHost) ({ starting = true }) else null)
+            WordmarkBar(gists = if (gists) ({ GistsButton(live, mayHost) }) else null)
             key(member) {
                 // The tab last chosen, else Discover, as on the web.
                 val initialPage = remember {
@@ -172,9 +168,9 @@ fun HomeScreen() {
     }
 }
 
-/** The wordmark on the ground, like the web's top bar; starting a Gist and settings sit on the right for members. */
+/** The wordmark on the ground, like the web's top bar; Gists and settings sit on the right for members. */
 @Composable
-private fun WordmarkBar(onStartGist: (() -> Unit)?) {
+private fun WordmarkBar(gists: (@Composable () -> Unit)?) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     Column(Modifier.background(colors.bg).statusBarsPadding()) {
@@ -185,11 +181,7 @@ private fun WordmarkBar(onStartGist: (() -> Unit)?) {
                 modifier = Modifier.height(30.dp),
             )
             Spacer(Modifier.weight(1f))
-            if (onStartGist != null) {
-                Box(Modifier.size(44.dp).clickable(onClick = onStartGist), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Live, "Start a Gist", Modifier.size(22.dp), tint = colors.muted)
-                }
-            }
+            gists?.invoke()
             // Visitors on a debug build need it too, to pick the server.
             if (app.me != null || app.platform.debug) {
                 Box(Modifier.size(44.dp).clickable { app.navigator.push(Route.Settings) }, contentAlignment = Alignment.Center) {

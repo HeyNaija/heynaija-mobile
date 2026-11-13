@@ -163,4 +163,22 @@ class GistsTest {
         assertEquals("People @ada follows can reply", gistReplyAudienceNote("following", "ada", viewerIsHost = false))
         assertEquals("Replies off", gistReplyAudienceNote("off", "ada", viewerIsHost = false))
     }
+
+    @Test
+    fun theBarSaysWhenTheSoundIsPaused() {
+        val live = GistState(phase = Phase.Live)
+        assertEquals("Listening", gistBarStatus(live, mayUseMic = false))
+        assertEquals("Your microphone is off", gistBarStatus(live, mayUseMic = true))
+        assertEquals("Paused. You are still in the Gist.", gistBarStatus(live.copy(hearing = false), mayUseMic = true))
+        // A lost connection is the bigger news.
+        assertEquals("Reconnecting…", gistBarStatus(live.copy(phase = Phase.Reconnecting, hearing = false), mayUseMic = true))
+    }
+
+    @Test
+    fun theGistsButtonSaysWhatIsOn() {
+        assertEquals("Gists", gistsButtonLabel(inGist = false, othersLive = 0))
+        assertEquals("Gists. 2 live now.", gistsButtonLabel(inGist = false, othersLive = 2))
+        assertEquals("Gists. You are in one.", gistsButtonLabel(inGist = true, othersLive = 0))
+        assertEquals("Gists. You are in one, and 1 more is live.", gistsButtonLabel(inGist = true, othersLive = 1))
+    }
 }

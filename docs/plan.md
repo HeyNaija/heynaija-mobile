@@ -135,9 +135,8 @@ What the apps do now, what comes next, and what the backend
 ## Next in the app
 
 1. More of the Gist room: the web's Connection sheet (route, loss and jitter)
-   and microphone settings are not in it yet;
-   and iOS shows nothing on the lock screen for a Gist playing in the
-   background (the app has to be opened to leave it). On a real iPhone, check
+   and microphone settings are not in it yet, and iOS's Now Playing can pause
+   a Gist but not leave it (the app has to be opened for that). On a real iPhone, check
    a long silence in the background (release.md, "Gists in the background"):
    if iOS pauses the app while nobody on stage has a microphone on, keep the
    stage's microphones published and muted, or keep the audio engine running

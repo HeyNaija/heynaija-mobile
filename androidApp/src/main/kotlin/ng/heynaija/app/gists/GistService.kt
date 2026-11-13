@@ -26,7 +26,8 @@ import ng.heynaija.app.platform.GistNow
  * app leaves the screen.
  */
 class AndroidGistKeeper(private val context: Context) : GistKeeper {
-    override fun keep(now: GistNow, leave: () -> Unit) {
+    // Android's notification has Leave, not pause, so [hear] goes unused here.
+    override fun keep(now: GistNow, leave: () -> Unit, hear: (Boolean) -> Unit) {
         val starting = GistService.now == null
         GistService.now = now
         GistService.leave = leave
@@ -44,7 +45,7 @@ class AndroidGistKeeper(private val context: Context) : GistKeeper {
         }
     }
 
-    override fun release() {
+    override fun stop() {
         GistService.now = null
         GistService.leave = null
         GistService.running?.finish()
@@ -140,6 +141,7 @@ class GistService : Service() {
         .setContentText(
             when {
                 now.reconnecting -> "Reconnecting…"
+                !now.hearing -> "You are in this Gist. The sound is paused."
                 now.micOn -> "You are in this Gist. Your microphone is on."
                 else -> "You are in this Gist."
             },

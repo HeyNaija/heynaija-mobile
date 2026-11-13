@@ -21,6 +21,13 @@ interface GistAudio {
      */
     fun setMicrophone(on: Boolean, done: (String?) -> Unit)
 
+    /**
+     * Plays the room's sound, or silences it on this phone: the system's pause, from
+     * the lock screen or headphones. The member stays in the room. A connection
+     * starts with the sound on, and speakers who start later follow this.
+     */
+    fun setHearing(on: Boolean)
+
     /** Leaves the room. No events follow. */
     fun disconnect()
 }
@@ -59,22 +66,37 @@ interface GistAudioFactory {
     fun create(events: GistAudioEvents): GistAudio
 }
 
-/** The Gist the member is in, as the system is told: for the notification Android shows while it plays. */
-data class GistNow(val id: String, val title: String, val micOn: Boolean, val reconnecting: Boolean)
+/**
+ * The Gist the member is in, as the system is told: for the notification Android
+ * shows while it plays, and iOS's Now Playing. [hearing] is false while its sound is
+ * paused.
+ */
+data class GistNow(
+    val id: String,
+    val title: String,
+    val micOn: Boolean,
+    val reconnecting: Boolean,
+    val host: String = "",
+    val hearing: Boolean = true,
+)
 
 /**
- * Keeps the Gist the member is in going while the app is off screen or the phone is
- * locked. Android stops an app's sound and microphone soon after it leaves the
- * screen unless a foreground service, with a notification, says they are in use
- * (androidApp's GistService). iOS needs only the audio background mode in
- * Info.plist, so it has no keeper.
+ * Tells the system about the Gist the member is in, outside the app. Android stops
+ * an app's sound and microphone soon after it leaves the screen unless a foreground
+ * service, with a notification, says they are in use (androidApp's GistService).
+ * iOS keeps the sound going with the audio background mode alone; its keeper puts
+ * the Gist on the lock screen, in Control Center and the Dynamic Island, as Now
+ * Playing (iosApp's GistNowPlaying.swift).
  */
 interface GistKeeper {
-    /** In a room, or something about it changed. [leave] leaves it: the notification's button. */
-    fun keep(now: GistNow, leave: () -> Unit)
+    /**
+     * In a room, or something about it changed. [leave] leaves it: the Android
+     * notification's button. [hear] plays or silences its sound: iOS's play and pause.
+     */
+    fun keep(now: GistNow, leave: () -> Unit, hear: (Boolean) -> Unit)
 
-    /** Out of the room. */
-    fun release()
+    /** Out of the room: the system stops showing it. */
+    fun stop()
 }
 
 /**
