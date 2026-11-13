@@ -19,6 +19,8 @@ class Platform(
     val debug: Boolean,
     /** A Gist's sound; null where there is none (tests), and Gists then say they cannot play. */
     val gistAudio: GistAudioFactory? = null,
+    /** Keeps a Gist playing with the app off screen, where the system needs telling (Android). */
+    val gistKeeper: GistKeeper? = null,
     /** Push notifications; null where there are none: an Android build without Firebase, tests. */
     val push: PushDevice? = null,
     /**

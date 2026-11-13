@@ -24,6 +24,8 @@ import ng.heynaija.app.api.Me
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
+import ng.heynaija.app.gists.GistRoom
+import ng.heynaija.app.gists.GistRooms
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.routeOf
@@ -145,6 +147,11 @@ class AppState(val platform: Platform) {
         _changes.tryEmit(change)
     }
 
+    /** The Gists that are open, and the one the member is in: it plays on over the rest of the app. */
+    val gists = GistRooms(platform.gistKeeper, scope) { id, onPresence, foreground ->
+        GistRoom(id, api, platform.gistAudio, changes, ::say, scope, platform.debug, onPresence, foreground)
+    }
+
     /** Reads the saved session: shown at once from the last copy of `/v1/me`, then checked. */
     fun start() {
         val saved = token
@@ -248,6 +255,8 @@ class AppState(val platform: Platform) {
     /** Ends the session here and in Kratos. */
     suspend fun signOut() {
         val ending = token ?: return
+        // Out of any Gist while the session can still tell the API.
+        gists.leave()
         platform.push?.let { stopPush(it) }
         runCatching { api.logout() }
         kratos.logout(ending)
@@ -255,6 +264,8 @@ class AppState(val platform: Platform) {
     }
 
     private fun forget() {
+        // The session ended some other way (the API said so): still out of any Gist here.
+        gists.leave()
         token = null
         platform.secure.set(TOKEN, null)
         platform.settings.set(ME, null)

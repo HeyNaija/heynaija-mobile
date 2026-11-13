@@ -75,6 +75,7 @@ import ng.heynaija.app.communities.CommunityScreen
 import ng.heynaija.app.compose.ComposeScreen
 import ng.heynaija.app.compose.ReplySheet
 import ng.heynaija.app.feed.HomeScreen
+import ng.heynaija.app.gists.GistBar
 import ng.heynaija.app.gists.GistScreen
 import ng.heynaija.app.media.ImageViewer
 import ng.heynaija.app.media.VideoScreen
@@ -106,14 +107,22 @@ import ng.heynaija.app.ui.Loading
 
 /** The whole app, the same on Android and iOS. */
 @Composable
-fun App(platform: Platform) {
+fun App(platform: Platform) = App(remember { AppState(platform).also { it.start() } })
+
+/**
+ * The app over a state that is already running. Android keeps one for the whole
+ * process (androidApp's AppHolder): its screen is made again when the phone is
+ * turned or the theme changes, and the app, and the Gist playing in it, must not
+ * start again with it.
+ */
+@Composable
+fun App(app: AppState) {
     setSingletonImageLoaderFactory { context ->
         ImageLoader.Builder(context)
             .components { add(KtorNetworkFetcherFactory()) }
             .crossfade(true)
             .build()
     }
-    val app = remember { AppState(platform).also { it.start() } }
     HeyNaijaTheme {
         CompositionLocalProvider(LocalApp provides app) { Root(app) }
     }
@@ -122,11 +131,12 @@ fun App(platform: Platform) {
 @Composable
 private fun Root(app: AppState) {
     val account by app.account.collectAsStateWithLifecycle()
-    // Coming back to the app: the unread count may have moved.
+    // Coming back to the app: the unread count may have moved. A Gist is followed only while the app is on screen.
     LifecycleResumeEffect(Unit) {
         app.scope.launch { app.refreshMe() }
         app.pushMayHaveChanged()
-        onPauseOrDispose {}
+        app.gists.setForeground(true)
+        onPauseOrDispose { app.gists.setForeground(false) }
     }
     Box(Modifier.fillMaxSize().background(HeyNaija.colors.bg)) {
         val me = (account as? Account.SignedIn)?.me
@@ -147,6 +157,7 @@ private fun Shell(app: AppState) {
     val top = navigator.top
     val snackbar = remember { SnackbarHostState() }
     val account by app.account.collectAsStateWithLifecycle()
+    val inGist by app.gists.current.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { app.messages.collect { snackbar.showSnackbar(it) } }
     BackHandler(enabled = navigator.canPop) { navigator.pop() }
     app.replying?.let { ReplySheet(app, it) }
@@ -174,7 +185,14 @@ private fun Shell(app: AppState) {
         snackbarHost = { SnackbarHost(snackbar) },
         // No count while the list is on screen, which marks them read, as on the web.
         bottomBar = {
-            if (!top.route.fullScreen) TabBar(app, if (top.route == Route.Notifications) 0 else (account as? Account.SignedIn)?.me?.unreadNotifications ?: 0)
+            if (!top.route.fullScreen) Column {
+                // The Gist the member is in, on every screen but its own. It stands clear of the curve the
+                // selected tab raises above the tab bar.
+                inGist?.takeIf { top.route != Route.Gist(it.id) }?.let { room ->
+                    GistBar(room, Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = TabRise + 6.dp))
+                }
+                TabBar(app, if (top.route == Route.Notifications) 0 else (account as? Account.SignedIn)?.me?.unreadNotifications ?: 0)
+            }
         },
     ) { padding ->
         val holder = rememberSaveableStateHolder()

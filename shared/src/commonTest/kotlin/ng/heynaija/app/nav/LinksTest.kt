@@ -31,6 +31,26 @@ class LinksTest {
     }
 
     @Test
+    fun goingBackToAScreenTheTabHasOpenClosesWhatIsAboveItInsteadOfOpeningItAgain() {
+        val navigator = Navigator()
+        navigator.push(Route.Gist(gist))
+        navigator.push(Route.Profile("ada"))
+        navigator.push(Route.Thread(post))
+
+        navigator.returnTo(Route.Gist(gist))
+        assertEquals(listOf(Route.Home, Route.Gist(gist)), navigator.stack.map { it.route })
+
+        // Already on top: nothing moves.
+        navigator.returnTo(Route.Gist(gist))
+        assertEquals(listOf(Route.Home, Route.Gist(gist)), navigator.stack.map { it.route })
+
+        // Another tab has not got it open: it opens there, over what that tab shows.
+        navigator.select(Tab.Search)
+        navigator.returnTo(Route.Gist(gist))
+        assertEquals(listOf(Route.Search, Route.Gist(gist)), navigator.stack.map { it.route })
+    }
+
+    @Test
     fun anythingElseIsNotOpenedInTheApp() {
         assertNull(routeOf("https://evil.example/p/$post", web))
         assertNull(routeOf("https://staging.heynaija.ng.evil.example/p/$post", web))
