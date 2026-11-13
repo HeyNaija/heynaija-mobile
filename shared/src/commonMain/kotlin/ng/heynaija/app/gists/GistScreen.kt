@@ -176,7 +176,7 @@ private fun Room(view: GistView, state: GistState, room: GistRoom, modifier: Mod
             state.problem?.let { problem -> item(key = "problem") { Notice(problem, danger = true) } }
             if (state.phase == Phase.Live && me != null && me.id in state.weak) {
                 item(key = "weak") {
-                    Notice("Your connection is weak, so the sound may break up${if (controlsFor(view).mic) " and others may not hear you clearly" else ""}. Move closer to your Wi-Fi, or switch between Wi-Fi and mobile data.")
+                    Notice("Your connection is weak, so the sound may break up${if (controlsFor(view, me.mayTakeStage).mic) " and others may not hear you clearly" else ""}. Move closer to your Wi-Fi, or switch between Wi-Fi and mobile data.")
                 }
             }
             item(key = "stage") { Stage(view, state) }
@@ -283,7 +283,12 @@ private fun PhaseCard(view: GistView, state: GistState, room: GistRoom) {
                 color = colors.ink,
             )
             Text(DATA_HINT, style = MaterialTheme.typography.bodyMedium, color = colors.muted)
-            Text("The sound starts when you tap Join. You only need your microphone if the host lets you speak.", style = MaterialTheme.typography.bodyMedium, color = colors.muted)
+            // A member who may only listen is not told about a microphone they will not be offered.
+            Text(
+                "The sound starts when you tap Join." + if (app.me?.mayTakeStage == true) " You only need your microphone if the host lets you speak." else "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+            )
             GistButton("Join the Gist", room::join, primary = true, modifier = Modifier.fillMaxWidth())
         }
         Phase.Connecting -> Card {
@@ -399,7 +404,7 @@ private fun Tile(p: OnStage, self: Boolean, state: GistState, modifier: Modifier
 private fun HostPanel(view: GistView, state: GistState, room: GistRoom, onListeners: () -> Unit) {
     val colors = HeyNaija.colors
     val role = view.viewer.role
-    val controls = controlsFor(view)
+    val controls = controlsFor(view, LocalApp.current.me?.mayTakeStage == true)
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     Section(if (role == "host") "Host controls" else "Co-host controls") {
         Subhead("Requests to speak (${state.requests.size})")
@@ -515,7 +520,7 @@ private fun PersonRow(p: Person, detail: String?, action: (@Composable () -> Uni
 private fun Controls(view: GistView, state: GistState, room: GistRoom) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
-    val controls = controlsFor(view)
+    val controls = controlsFor(view, app.me?.mayTakeStage == true)
     val askMic = rememberMicrophonePermission { granted -> if (granted) room.setMic(true) else room.micDenied() }
     Column(Modifier.background(colors.surface)) {
         HorizontalDivider(color = colors.line)
@@ -536,7 +541,7 @@ private fun Controls(view: GistView, state: GistState, room: GistRoom) {
                 )
                 controls.request -> GistButton("Request to speak", { room.requestToSpeak(true) }, icon = Icons.Hand, primary = true, modifier = Modifier.weight(1f))
                 controls.cancelRequest -> GistButton("Cancel request", { room.requestToSpeak(false) }, modifier = Modifier.weight(1f))
-                view.viewer.role == "listener" -> Text(
+                controls.requestsClosed -> Text(
                     "The host is not taking requests to speak.",
                     Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,

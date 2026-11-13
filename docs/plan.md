@@ -43,7 +43,9 @@ What the apps do now, what comes next, and what the backend
   speak, the microphone (asked for only then), and the host's and co-hosts'
   controls (let speak, mute, make co-host, back to the listeners, remove, lock,
   requests on or off, end), reporting the Gist, and sharing its link (the web's
-  `/gists/:id` page, which opens the app). The room follows the web's join, reconnect and leave
+  `/gists/:id` page, which opens the app). A member who may only listen (under
+  18, or no age on record: `gistStage` in `/v1/me`) is not offered to start a
+  Gist, to ask to speak, or a microphone, as on the web. The room follows the web's join, reconnect and leave
   rules (`gist-session.ts`) and polls as it does. A tap on the microphone waits
   for the room to allow it: every connection starts as a listener's, and the
   server lets a speaker publish a moment later. Sound goes through LiveKit:
@@ -133,9 +135,7 @@ What the apps do now, what comes next, and what the backend
 ## Next in the app
 
 1. More of the Gist room: the web's Connection sheet (route, loss and jitter)
-   and microphone settings are not in it yet; `/v1/me`'s `gistStage` is not read,
-   so a member who may only listen (under 18, or no age on record) is still
-   offered "Request to speak" and "Start a Gist", which the API then refuses;
+   and microphone settings are not in it yet;
    and iOS shows nothing on the lock screen for a Gist playing in the
    background (the app has to be opened to leave it). On a real iPhone, check
    a long silence in the background (release.md, "Gists in the background"):
