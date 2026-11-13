@@ -179,10 +179,17 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
 
     override fun disconnect() {
         closing = true
-        mic?.dispose()
+        // The room unpublishes the microphone and lets it go as it closes. Disposing it here first crashed the app
+        // when leaving with the microphone on: the room then asked the disposed track for its id, on the main thread
+        // ("MediaStreamTrack has been disposed").
         mic = null
-        room.disconnect()
-        room.release()
+        try {
+            room.disconnect()
+            room.release()
+        } catch (e: Exception) {
+            // Leaving must never take the app down with it.
+            if (debug) println("HeyNaija: the Gist's room did not close cleanly: $e")
+        }
         scope.cancel()
     }
 }
