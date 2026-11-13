@@ -49,8 +49,17 @@ What the apps do now, what comes next, and what the backend
   server lets a speaker publish a moment later. Sound goes through LiveKit:
   its Android SDK, and on iOS its Swift SDK behind a small Swift wrapper in
   `iosApp` (`GistAudio.swift`) that implements the shared `GistAudio` interface.
-  The screen stays awake while in a room; the sound keeps playing on other
-  screens of the app and stops when the member goes back out of the room.
+  Once joined, a Gist plays until the member taps Leave or it ends: going back
+  from the room, to any other screen, keeps them in it, with a bar above the
+  tabs that names the Gist, says what their microphone is doing (and switches
+  it), leads back to the room and can leave. It plays on with the app off
+  screen or the phone locked too: Android runs a foreground service with a
+  notification that can leave the Gist (media playback, and microphone while
+  theirs is on); iOS has the audio background mode. One Gist at a time: joining
+  another leaves the first. The room is followed while the app is on screen and
+  its replies while the room is; the screen stays awake only on the room itself.
+  On Android the app's state now belongs to the process, not the activity, so
+  turning the phone no longer starts the app, or a Gist, again.
   Replies to a Gist use the post card and composer (text only, liked through the
   Gist, hidden by its host), and a reply's notification opens it in its Gist.
 - **Notifications** in the app, with the count on the tab, and which kinds you
@@ -120,12 +129,16 @@ What the apps do now, what comes next, and what the backend
 
 ## Next in the app
 
-1. Gists with the phone locked or another app open. Today the sound can stop,
-   and the room says to keep the screen open, as the web does. Listening on
-   needs iOS's audio background mode, and on Android a foreground service with a
-   notification (of the microphone type while speaking, from Android 14).
-   The web's Connection sheet (route, loss and jitter) and microphone settings
-   are not in the room yet.
+1. More of the Gist room: the web's Connection sheet (route, loss and jitter)
+   and microphone settings are not in it yet; `/v1/me`'s `gistStage` is not read,
+   so a member who may only listen (under 18, or no age on record) is still
+   offered "Request to speak" and "Start a Gist", which the API then refuses;
+   and iOS shows nothing on the lock screen for a Gist playing in the
+   background (the app has to be opened to leave it). On a real iPhone, check
+   a long silence in the background (release.md, "Gists in the background"):
+   if iOS pauses the app while nobody on stage has a microphone on, keep the
+   stage's microphones published and muted, or keep the audio engine running
+   between speakers.
 2. The ideas board, and continuing a video upload after the app was closed.
 3. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what

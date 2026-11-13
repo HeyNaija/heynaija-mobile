@@ -1,11 +1,12 @@
 package ng.heynaija.app.gists
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -16,7 +17,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
-import ng.heynaija.app.AppState
 import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.GistView
@@ -58,6 +58,9 @@ data class GistState(
     val replies: Replies = Replies(),
 ) {
     val polling get() = phase == Phase.Live || phase == Phase.Reconnecting
+
+    /** In the room, or on the way in: the sound is the member's until they leave or it ends. */
+    val inRoom get() = polling || phase == Phase.Connecting
 }
 
 /** The Gist's replies: posts, read and written only through the Gist. */
@@ -76,7 +79,7 @@ data class Replies(
 private enum class Outcome { Ok, Retry, Stop }
 
 /**
- * One visit to a Gist: the join / reconnect / leave state machine of the web's
+ * A Gist the app has open: the join / reconnect / leave state machine of the web's
  * gist-session.ts, polling the room (there is no realtime channel), the
  * microphone, the host's controls, and the replies.
  *
@@ -86,28 +89,36 @@ private enum class Outcome { Ok, Retry, Stop }
  * joined; and why a connection ended decides what comes next (a network drop
  * reconnects, a duplicate or a removal never does).
  *
- * The visit lasts as long as the screen is on the stack: a screen pushed on top
- * (a report, a profile) keeps the sound playing; going back leaves.
+ * Unlike the web's page, the room does not belong to its screen. Once joined it
+ * lasts until the member leaves or it ends ([GistRooms] keeps it), so the sound
+ * goes on over the rest of the app and with the app in the background; a room
+ * nobody is in lasts as long as a screen shows it.
  */
-class GistViewModel internal constructor(
+class GistRoom internal constructor(
     val id: String,
     private val api: HeyNaijaApi,
     private val audioFactory: GistAudioFactory?,
     private val changes: SharedFlow<PostChange>,
     private val say: (String) -> Unit,
-    /** Outlives the screen: the /leave sent on the way out runs here. */
+    /** Outlives the room: the /leave sent on the way out runs here. */
     private val background: CoroutineScope,
     private val debug: Boolean,
-) : ViewModel() {
-    constructor(app: AppState, id: String) : this(id, app.api, app.platform.gistAudio, app.changes, app::say, app.scope, app.platform.debug)
-
+    /** Hears when the member goes into the room (joining counts), and when they are out of it again. */
+    private val onPresence: (GistRoom, Boolean) -> Unit = { _, _ -> },
+    /** Whether the app is on screen: nothing is polled while it is not. */
+    private val foreground: () -> Boolean = { true },
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(GistState())
     val state: StateFlow<GistState> = _state.asStateFlow()
 
     private var gen = 0
+    /** The member left (or never joined): attempts in flight are stale. Joining opens it again, as the web's `open()` does. */
     private var closed = false
+    private var disposed = false
     private var ended = false
     private var present = false
+    private var inRoom = false
     private var reconnecting = false
     private var audio: GistAudio? = null
     /** Whether the room lets this connection publish the microphone (GistAudioEvents.onMayPublish). */
@@ -115,28 +126,30 @@ class GistViewModel internal constructor(
     private val latest = Latest()
     private var lastRole: String? = null
     private var lastStatus = "live"
-    private var visible = true
+    /** How many screens show this room now: replies are looked for only while one does. */
+    private var shown = 0
     private var pollNow: Job? = null
 
     init {
         load()
         loadReplies()
-        viewModelScope.launch {
+        scope.launch {
             var failures = 0
             var sinceReplies = 0L
             while (true) {
                 val wait = nextPollDelay(failures)
                 delay(wait)
-                failures = if (_state.value.polling && visible) (if (poll()) 0 else failures + 1) else 0
-                // Replies come in while people talk; there is no push, so look again now and then.
+                // The room is followed wherever the member is in the app (the bar shows it), but not with the app off screen.
+                failures = if (_state.value.polling && foreground()) (if (poll()) 0 else failures + 1) else 0
+                // Replies come in while people talk; there is no push, so look again now and then, while they are on screen.
                 sinceReplies += wait
-                if (visible && sinceReplies >= LIVE_POLL_MS) {
+                if (shown > 0 && foreground() && sinceReplies >= LIVE_POLL_MS) {
                     sinceReplies = 0
                     loadReplies()
                 }
             }
         }
-        viewModelScope.launch {
+        scope.launch {
             changes.collect { change ->
                 when (change) {
                     is PostChange.Updated -> updateReplies { r -> r.copy(posts = r.posts.map { if (it.id == change.post.id) change.post else it }) }
@@ -154,7 +167,7 @@ class GistViewModel internal constructor(
 
     fun load() {
         _state.update { it.copy(phase = Phase.Loading) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val view = api.gist(id)
                 lastRole = view.viewer.role
@@ -177,9 +190,16 @@ class GistViewModel internal constructor(
 
     private fun stale(my: Int) = closed || my != gen
 
-    private fun setPhase(phase: Phase) = _state.update {
-        if (phase == Phase.Live || phase == Phase.Reconnecting) it.copy(phase = phase)
-        else it.copy(phase = phase, micOn = false, micBusy = false, speaking = emptySet(), mics = emptySet(), weak = emptySet(), requests = emptyList())
+    private fun setPhase(phase: Phase) {
+        _state.update {
+            if (phase == Phase.Live || phase == Phase.Reconnecting) it.copy(phase = phase)
+            else it.copy(phase = phase, micOn = false, micBusy = false, speaking = emptySet(), mics = emptySet(), weak = emptySet(), requests = emptyList())
+        }
+        val now = _state.value.inRoom
+        if (now != inRoom) {
+            inRoom = now
+            onPresence(this, now)
+        }
     }
 
     /** Stops the sound. Sends /leave once if the API thinks the member is in and [leave] is set. */
@@ -187,7 +207,7 @@ class GistViewModel internal constructor(
         audio?.disconnect()
         audio = null
         if (leave && present) {
-            // Not the view model's scope: leaving the screen cancels that, and the API should still hear.
+            // Not the room's own scope: that goes with the room, and the API should still hear.
             background.launch { runCatching { api.leaveGist(id) } }
         }
         present = false
@@ -257,7 +277,7 @@ class GistViewModel internal constructor(
 
         override fun onReconnected() { if (current) setPhase(Phase.Live) }
 
-        override fun onLost(reason: String) { if (current) viewModelScope.launch { lost(reason) } }
+        override fun onLost(reason: String) { if (current) scope.launch { lost(reason) } }
 
         override fun onSpeaking(ids: List<String>) { if (current) _state.update { it.copy(speaking = ids.toSet()) } }
 
@@ -271,15 +291,16 @@ class GistViewModel internal constructor(
     }
 
     private fun sync() {
-        viewModelScope.launch { runCatching { api.syncGist(id) } }
+        scope.launch { runCatching { api.syncGist(id) } }
     }
 
     fun join() {
-        if (closed) return
+        if (disposed) return
+        closed = false
         val my = ++gen
         _state.update { it.copy(problem = null) }
         setPhase(Phase.Connecting)
-        viewModelScope.launch {
+        scope.launch {
             val result = connectOnce(my)
             if (stale(my)) return@launch
             when (result) {
@@ -345,25 +366,51 @@ class GistViewModel internal constructor(
         setPhase(Phase.Ended)
     }
 
-    /** The Leave button. */
+    /**
+     * Leave: the button in the room, on the bar over the rest of the app, or on the
+     * notification. The member is out, and may join again.
+     */
     fun leave() {
+        if (!inRoom) return
         closed = true
         gen++
         teardown(leave = true)
-    }
-
-    override fun onCleared() {
-        // Going back from the screen by any route leaves, as closing the page does on the web.
-        if (!closed) leave()
-    }
-
-    /** The app is on screen or not: no polling in the background, and a fresh look on coming back. */
-    fun setVisible(on: Boolean) {
-        visible = on
-        if (on && _state.value.polling) {
-            pollNow?.cancel()
-            pollNow = viewModelScope.launch { poll() }
+        setPhase(Phase.Prejoin)
+        // What the room looks like from outside now: the count without them, or that it has ended meanwhile.
+        scope.launch {
+            val view = runCatching { api.gist(id) }.getOrNull() ?: return@launch
+            if (_state.value.phase != Phase.Prejoin) return@launch
+            lastRole = view.viewer.role
+            lastStatus = view.status
+            _state.update { it.copy(view = view, phase = if (view.status == "ended") Phase.Ended else it.phase) }
         }
+    }
+
+    /** The room is let go: no screen shows it, and the member is not in it. */
+    internal fun dispose() {
+        if (disposed) return
+        disposed = true
+        if (inRoom) {
+            closed = true
+            gen++
+            teardown(leave = true)
+            inRoom = false
+            onPresence(this, false)
+        }
+        scope.cancel()
+    }
+
+    /** A screen shows the room, or stopped showing it. */
+    fun shown(on: Boolean) {
+        shown = (shown + if (on) 1 else -1).coerceAtLeast(0)
+        if (on) lookNow()
+    }
+
+    /** A fresh look, without waiting for the next poll: the room came on screen, or the app did. */
+    fun lookNow() {
+        if (!_state.value.polling) return
+        pollNow?.cancel()
+        pollNow = scope.launch { poll() }
     }
 
     // ---- following the room by polling ----------------------------------------------
@@ -420,7 +467,7 @@ class GistViewModel internal constructor(
     /** Turns the microphone on or off; the screen has asked the system for the permission first. */
     fun setMic(on: Boolean) {
         if (_state.value.micBusy) return
-        viewModelScope.launch { setMicNow(on) }
+        scope.launch { setMicNow(on) }
     }
 
     private suspend fun setMicNow(on: Boolean) {
@@ -461,7 +508,7 @@ class GistViewModel internal constructor(
 
     fun requestToSpeak(on: Boolean) {
         _state.update { it.copy(problem = null) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 api.setSpeakRequest(id, on)
                 say(if (on) "Request sent. The host will see it." else "Request withdrawn.")
@@ -479,7 +526,7 @@ class GistViewModel internal constructor(
     private fun act(done: String, call: suspend () -> Unit) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, problem = null) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 call()
                 say(done)
@@ -513,7 +560,7 @@ class GistViewModel internal constructor(
     fun end() = act("The Gist has ended.") { api.endGist(id) }
 
     fun loadListeners() {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { api.gistListeners(id) }.onSuccess { people -> _state.update { it.copy(listeners = people) } }
         }
     }
@@ -525,7 +572,7 @@ class GistViewModel internal constructor(
     private fun updateReplies(change: (Replies) -> Replies) = _state.update { it.copy(replies = change(it.replies)) }
 
     fun loadReplies() {
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val page = api.gistReplies(id)
                 updateReplies {
@@ -544,7 +591,7 @@ class GistViewModel internal constructor(
         val cursor = r.cursor ?: return
         if (r.loadingMore) return
         updateReplies { it.copy(loadingMore = true) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val page = api.gistReplies(id, cursor)
                 updateReplies { it.copy(posts = (it.posts + page.replies).distinctBy(Post::id), cursor = page.cursor, loadingMore = false) }
@@ -559,7 +606,7 @@ class GistViewModel internal constructor(
     fun setReplyAudience(audience: String) {
         val before = _state.value.replies.audience
         updateReplies { it.copy(audience = audience) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 api.setGistReplyAudience(id, audience)
                 say(GIST_REPLY_AUDIENCES.first { it.first == audience }.second)

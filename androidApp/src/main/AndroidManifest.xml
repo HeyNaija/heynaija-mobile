@@ -8,11 +8,17 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Push notifications (Android 13 and later ask); asked for only when a member turns them on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- A Gist keeps playing with the app off screen or the phone locked: a foreground
+         service (GistService), of the media playback type while the member listens and
+         the microphone type too while theirs is on. Play Console asks what each type is
+         for (docs/release.md). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- LiveKit's SDK brings the camera and its screen-sharing service, which Gists do
          not use. Taken out, so that nobody is asked for the camera and Play does not
          ask for a media-projection service to be justified. -->
     <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
 
     <application
@@ -62,6 +68,10 @@
         <service
             android:name="io.livekit.android.room.track.screencapture.ScreenCaptureService"
             tools:node="remove" />
+        <service
+            android:name=".gists.GistService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback|microphone" />
         <service
             android:name=".push.PushService"
             android:exported="false">

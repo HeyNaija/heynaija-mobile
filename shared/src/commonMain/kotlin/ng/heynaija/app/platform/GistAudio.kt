@@ -59,6 +59,24 @@ interface GistAudioFactory {
     fun create(events: GistAudioEvents): GistAudio
 }
 
+/** The Gist the member is in, as the system is told: for the notification Android shows while it plays. */
+data class GistNow(val id: String, val title: String, val micOn: Boolean, val reconnecting: Boolean)
+
+/**
+ * Keeps the Gist the member is in going while the app is off screen or the phone is
+ * locked. Android stops an app's sound and microphone soon after it leaves the
+ * screen unless a foreground service, with a notification, says they are in use
+ * (androidApp's GistService). iOS needs only the audio background mode in
+ * Info.plist, so it has no keeper.
+ */
+interface GistKeeper {
+    /** In a room, or something about it changed. [leave] leaves it: the notification's button. */
+    fun keep(now: GistNow, leave: () -> Unit)
+
+    /** Out of the room. */
+    fun release()
+}
+
 /**
  * The system's microphone permission: the returned function asks for it when it has
  * not been given (Android's RECORD_AUDIO, iOS's record permission), and [onResult]

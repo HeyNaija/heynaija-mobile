@@ -167,6 +167,20 @@ class Navigator {
         if (top.route != route) push(route)
     }
 
+    /**
+     * Back to [route] where this tab already has it open, with everything above it
+     * closed; opened on top otherwise. For the bar that leads back to the Gist the
+     * member is in, so that going back and forth does not stack up copies of it.
+     */
+    fun returnTo(route: Route) {
+        val stack = stacks.getValue(tab)
+        val at = stack.indexOfLast { it.route == route }
+        if (at < 0) return push(route)
+        if (at == stack.lastIndex) return
+        motion = Motion.Pop
+        while (stack.lastIndex > at) stack.removeAt(stack.lastIndex).viewModelStore.clear()
+    }
+
     fun select(target: Tab) {
         if (target == tab) {
             val stack = stacks.getValue(tab)

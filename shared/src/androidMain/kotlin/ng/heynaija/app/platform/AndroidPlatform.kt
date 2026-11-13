@@ -11,13 +11,19 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-fun androidPlatform(context: Context, debug: Boolean, push: (secure: KeyValueStore) -> PushDevice? = { null }): Platform {
+fun androidPlatform(
+    context: Context,
+    debug: Boolean,
+    push: (secure: KeyValueStore) -> PushDevice? = { null },
+    gistKeeper: GistKeeper? = null,
+): Platform {
     val secure = androidSecureStore(context)
     return Platform(
         secure = secure,
         settings = androidSettingsStore(context),
         debug = debug,
         gistAudio = LiveKitGistAudioFactory(context, debug),
+        gistKeeper = gistKeeper,
         push = push(secure),
     )
 }

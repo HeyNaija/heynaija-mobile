@@ -28,6 +28,13 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
     /** Set while we change the microphone ourselves, so our own unpublish is not taken for the server's. */
     private var changingMic = false
     private var closing = false
+    /**
+     * Held from joining to leaving, so the audio session stays active between speakers. Muting unpublishes
+     * the microphone here, so while nobody on stage has theirs on the room has no sound at all, and LiveKit
+     * would switch the session off. With the app in the background iOS does not let a session be switched
+     * back on, so the next speaker would not be heard until the app was opened again.
+     */
+    private var session: SessionRequirementHandle?
 
     init(events: any GistAudioEvents) {
         self.events = events
@@ -42,6 +49,8 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
     // MARK: GistAudio
 
     func connect(url: String, token: String, done: @escaping (String?) -> Void) {
+        // Joining is a tap in the app, so the session may be switched on now.
+        session = try? AudioManager.shared.acquireSessionRequirement(.playbackOnly)
         Task {
             do {
                 try await room.connect(url: url, token: token)
@@ -80,7 +89,12 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
 
     func disconnect() {
         closing = true
-        Task { await room.disconnect() }
+        let held = session
+        session = nil
+        Task {
+            await room.disconnect()
+            try? held?.release()
+        }
     }
 
     // MARK: RoomDelegate (any thread)
