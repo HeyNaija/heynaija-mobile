@@ -514,6 +514,18 @@ val NOTIFICATION_KINDS = listOf(
     "story_update" to "Stories you follow",
 )
 
+/**
+ * Weekly highlights (ADR 0027 in the web repository): a few conversations a member
+ * missed, at most once a week, as a push notification or an email. Its key in the
+ * notification preferences. The API sends it only while highlights are offered to
+ * the member, so a server without them shows no switch; and it is not a kind of
+ * notification ([NOTIFICATION_KINDS]), so it is not listed with those.
+ */
+const val HIGHLIGHTS_PREFERENCE = "highlights"
+
+/** Whether these preferences offer weekly highlights, to be switched on or off. */
+fun offersHighlights(preferences: Map<String, Boolean>) = HIGHLIGHTS_PREFERENCE in preferences
+
 /** The reasons a report can give, as the web lists them (apps/web/lib/report-reasons.ts). */
 val REPORT_REASONS = listOf(
     "spam" to "Spam",

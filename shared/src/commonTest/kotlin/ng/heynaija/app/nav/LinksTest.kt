@@ -98,4 +98,13 @@ class LinksTest {
         navigator.replace(Route.SignUp)
         assertEquals(Route.Gist(gist), navigator.beforeSignIn)
     }
+
+    @Test
+    fun aWeeklyHighlightsPushOpensItsConversation() {
+        // It arrives like any other push, with the tag "highlights" and the path of a post (ADR 0027 in the web repository).
+        val navigator = Navigator()
+        navigator.openFromNotification(routeOf("/p/$post", web)!!)
+        assertEquals(Tab.Notifications, navigator.tab)
+        assertEquals(listOf(Route.Notifications, Route.Thread(post)), navigator.stack.map { it.route })
+    }
 }
