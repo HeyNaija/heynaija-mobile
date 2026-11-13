@@ -59,6 +59,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,6 +71,7 @@ import kotlinx.coroutines.launch
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.PostChange
+import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.CommunityRef
 import ng.heynaija.app.api.MemberSummary
 import ng.heynaija.app.api.NewPoll
@@ -90,6 +93,8 @@ import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
+import ng.heynaija.app.ui.announcementWait
+import ng.heynaija.app.ui.rememberNow
 import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PrimaryButton
@@ -137,6 +142,14 @@ data class ComposeState(
     val audience: String = "everyone",
     /** Marked sensitive (ADR 0020); sent only while pictures or a video are attached. */
     val sensitive: Boolean = false,
+    /**
+     * The communities whose members the writer may notify of a new post (ADR 0029),
+     * as one of their moderators, by slug: each with when it can next be done, or
+     * null if it can now.
+     */
+    val announcers: Map<String, String?> = emptyMap(),
+    /** Notify every member of [community]; sent only while that is offered for it. */
+    val announce: Boolean = false,
     val posting: Boolean = false,
     val error: String? = null,
 )
@@ -188,7 +201,12 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
     init {
         if (route.replyTo == null && route.gist == null) viewModelScope.launch {
             runCatching { app.api.communities() }.onSuccess { all ->
-                _state.update { s -> s.copy(joined = all.filter { it.viewerIsMember }.map { CommunityRef(it.slug, it.name) }) }
+                _state.update { s ->
+                    s.copy(
+                        joined = all.filter { it.viewerIsMember }.map { CommunityRef(it.slug, it.name) },
+                        announcers = all.filter { it.viewerCanAnnounce }.associate { it.slug to it.nextAnnouncementAt },
+                    )
+                }
             }
         }
     }
@@ -295,7 +313,20 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
 
     fun setPoll(change: (PollDraft) -> PollDraft) = _state.update { s -> s.copy(poll = s.poll?.let(change)) }
 
-    fun setCommunity(community: CommunityRef?) = _state.update { it.copy(community = community) }
+    fun setCommunity(community: CommunityRef?) = _state.update { it.copy(community = community, announce = false) }
+
+    fun toggleAnnounce() = _state.update { it.copy(announce = !it.announce) }
+
+    /** Whether notifying the chosen community's members is offered: to its moderators, for a new post there. */
+    fun offersAnnounce(s: ComposeState): Boolean =
+        route.replyTo == null && route.gist == null && route.story == null && s.community?.slug in s.announcers
+
+    /** How long until that community may notify its members again; null if it may now. */
+    fun announceWait(s: ComposeState, now: Instant): String? = announcementWait(s.announcers[s.community?.slug], now)
+
+    /** Whether this post will notify them. */
+    fun announcing(s: ComposeState, now: Instant = Clock.System.now()): Boolean =
+        s.announce && offersAnnounce(s) && announceWait(s, now) == null
 
     fun setAudience(audience: String) = _state.update { it.copy(audience = audience) }
 
@@ -330,6 +361,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
                         storyOf = route.story?.id,
                         video = s.video?.mediaId?.let { it to "" },
                         sensitive = s.sensitive && (s.images.isNotEmpty() || s.video != null),
+                        announce = announcing(s),
                     ),
                 )
                 app.emit(PostChange.Created(created.id, route.replyTo?.id))
@@ -339,8 +371,13 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                val reason = when ((e as? ApiException)?.code) {
+                    "announcement_too_soon" -> "This community has already notified its members today. Turn that off to post now."
+                    "not_a_moderator" -> "Only this community’s moderators can notify its members. Turn that off to post."
+                    else -> reasonOf(e)
+                }
                 _state.update {
-                    it.copy(posting = false, error = reasonOf(e) ?: "Your post did not go through. Check your connection and try again.")
+                    it.copy(posting = false, error = reason ?: "Your post did not go through. Check your connection and try again.")
                 }
             }
         }
@@ -367,6 +404,8 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
     val reply = route.replyTo
     val gist = route.gist
     val length = visibleLength(state.text.trim())
+    val now = rememberNow()
+    val announcing = viewModel.announcing(state, now)
     // The field keeps the cursor, which the @mention suggestions need.
     var field by remember { mutableStateOf(TextFieldValue(state.text)) }
     val mentions by viewModel.mentions.collectAsStateWithLifecycle()
@@ -427,6 +466,9 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                     if (gist == null && me.composerOffersMark && (state.images.isNotEmpty() || state.video != null)) {
                         SensitiveToggle(state.sensitive) { viewModel.toggleSensitive() }
                     }
+                    if (viewModel.offersAnnounce(state)) {
+                        AnnounceToggle(state.announce, viewModel.announceWait(state, now)) { viewModel.toggleAnnounce() }
+                    }
                     state.poll?.let { PollEditor(it, viewModel) }
                     route.quote?.let { quoted ->
                         Spacer(Modifier.height(12.dp))
@@ -477,7 +519,7 @@ fun ComposeScreen(route: Route.Compose, onClose: (() -> Unit)? = null, onDraft: 
                 )
             }
             PrimaryButton(
-                if (reply != null || gist != null) "Reply" else "Post",
+                if (reply != null || gist != null) "Reply" else if (announcing) "Post and notify" else "Post",
                 { viewModel.post(close) },
                 enabled = viewModel.canPost(state),
                 busy = state.posting,
@@ -778,6 +820,44 @@ private fun PollEditor(poll: PollDraft, viewModel: ComposeViewModel) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Notifying every member of the community (ADR 0029), for its moderators: the
+ * same quiet switch, with what it does said under it once it is on. [wait] is
+ * how long until the community may do it again, when today's has gone.
+ */
+@Composable
+private fun AnnounceToggle(on: Boolean, wait: String?, onToggle: () -> Unit) {
+    val colors = HeyNaija.colors
+    val active = on && wait == null
+    val tint = if (active) colors.accentStrong else colors.muted
+    Spacer(Modifier.height(8.dp))
+    Row(
+        Modifier
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .border(1.dp, if (active) colors.accent.copy(alpha = 0.35f) else colors.line, androidx.compose.foundation.shape.CircleShape)
+            .background(if (active) colors.accentSoft else Color.Transparent)
+            .clickable(enabled = wait == null, onClickLabel = if (active) "Do not notify all members" else "Notify all members", onClick = onToggle)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Megaphone, null, Modifier.size(15.dp), tint = tint)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            if (wait != null) "Members notified today · again $wait" else if (active) "Notifying all members" else "Notify all members",
+            style = MaterialTheme.typography.labelMedium,
+            color = tint,
+        )
+    }
+    if (active) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Every member of this community will be notified. A community can do this once a day.",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.muted,
+        )
     }
 }
 
