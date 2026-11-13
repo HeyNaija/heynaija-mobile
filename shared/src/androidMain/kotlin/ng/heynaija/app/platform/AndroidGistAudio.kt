@@ -23,7 +23,10 @@ import io.livekit.android.room.participant.AudioTrackPublishOptions
 import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.track.LocalAudioTrack
+import io.livekit.android.room.track.RemoteAudioTrack
+import io.livekit.android.room.track.RemoteTrackPublication
 import io.livekit.android.room.track.Track
+import io.livekit.android.room.track.TrackPublication
 import io.livekit.android.util.flow
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +60,8 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
     )
     private var mic: LocalAudioTrack? = null
     private var closing = false
+    /** False while the member has paused the sound (GistAudio.setHearing). */
+    private var hearing = true
 
     private val Participant.id get() = identity?.value
     private val everyone get() = listOf<Participant>(room.localParticipant) + room.remoteParticipants.values
@@ -92,6 +97,8 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
                     is RoomEvent.ConnectionQualityChanged -> emitWeak()
                     is RoomEvent.TrackSubscribed -> {
                         if (debug) println("HeyNaija: hearing ${event.participant.id}")
+                        // Someone who starts speaking while the member has paused stays quiet too.
+                        if (!hearing) quiet(event.publication, event.track, on = false)
                         emitMics()
                     }
                     else -> Unit
@@ -189,6 +196,19 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
                 done(e.message ?: e.toString())
             }
         }
+    }
+
+    override fun setHearing(on: Boolean) {
+        hearing = on
+        for (participant in room.remoteParticipants.values) {
+            for ((publication, track) in participant.audioTrackPublications) quiet(publication, track, on)
+        }
+    }
+
+    /** Silences one speaker here at once, and asks the server to stop sending their sound, which saves data while paused. */
+    private fun quiet(publication: TrackPublication, track: Track?, on: Boolean) {
+        (track as? RemoteAudioTrack)?.setVolume(if (on) 1.0 else 0.0)
+        (publication as? RemoteTrackPublication)?.setEnabled(on)
     }
 
     override fun disconnect() {

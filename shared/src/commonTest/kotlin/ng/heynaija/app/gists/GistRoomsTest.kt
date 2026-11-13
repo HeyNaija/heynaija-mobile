@@ -51,6 +51,12 @@ class GistRoomsTest {
 
         override fun setMicrophone(on: Boolean, done: (String?) -> Unit) = done(null)
 
+        var heard = true
+
+        override fun setHearing(on: Boolean) {
+            heard = on
+        }
+
         override fun disconnect() {
             open = false
         }
@@ -61,16 +67,18 @@ class GistRoomsTest {
         override fun create(events: GistAudioEvents): GistAudio = Connection(events).also { connections += it }
     }
 
-    /** What the system was told, in order: a [GistNow] for each keep, null for a release. */
+    /** What the system was told, in order: a [GistNow] for each keep, null for a stop. */
     private val told = mutableListOf<GistNow?>()
     private var leaveFromNotification: (() -> Unit)? = null
+    private var hearFromLockScreen: ((Boolean) -> Unit)? = null
     private val keeper = object : GistKeeper {
-        override fun keep(now: GistNow, leave: () -> Unit) {
+        override fun keep(now: GistNow, leave: () -> Unit, hear: (Boolean) -> Unit) {
             told += now
             leaveFromNotification = leave
+            hearFromLockScreen = hear
         }
 
-        override fun release() {
+        override fun stop() {
             told += null
         }
     }
@@ -186,10 +194,10 @@ class GistRoomsTest {
         assertTrue(told.isEmpty())
 
         room.join()
-        assertEquals(GistNow("g1", "Gist g1", micOn = false, reconnecting = false), told.last())
+        assertEquals(GistNow("g1", "Gist g1", micOn = false, reconnecting = false, host = "Amaka"), told.last())
 
         room.setMic(true)
-        assertEquals(GistNow("g1", "Gist g1", micOn = true, reconnecting = false), told.last())
+        assertEquals(GistNow("g1", "Gist g1", micOn = true, reconnecting = false, host = "Amaka"), told.last())
 
         connections.last().events.onReconnecting()
         assertEquals(true, told.last()?.reconnecting)
@@ -203,6 +211,60 @@ class GistRoomsTest {
         assertNull(rooms.current.value)
         assertEquals(Phase.Prejoin, room.state.value.phase)
         assertEquals(1, asked("g1/leave"))
+    }
+
+    @Test
+    fun pauseOnTheLockScreenSilencesTheGistAndTheMemberStaysIn() = withRooms {
+        val room = rooms.open("g1")
+        room.join()
+        room.setMic(true)
+        assertTrue(room.state.value.micOn)
+
+        // Pause: on the lock screen, or by taking AirPods out.
+        hearFromLockScreen!!(false)
+
+        assertFalse(room.state.value.hearing)
+        assertFalse(connections.last().heard)
+        assertEquals(false, told.last()?.hearing)
+        // They have stopped listening, so their microphone goes off; they are still in the room.
+        assertFalse(room.state.value.micOn)
+        assertEquals(Phase.Live, room.state.value.phase)
+        assertSame(room, rooms.current.value)
+        assertEquals(0, asked("g1/leave"))
+
+        // A dropped connection comes back quiet.
+        connections.last().events.onLost("network")
+        advanceTimeBy(reconnectDelay(0) + 1)
+        assertEquals(2, connections.size)
+        assertEquals(Phase.Live, room.state.value.phase)
+        assertFalse(connections.last().heard)
+
+        // Play.
+        hearFromLockScreen!!(true)
+
+        assertTrue(room.state.value.hearing)
+        assertTrue(connections.last().heard)
+        assertEquals(true, told.last()?.hearing)
+    }
+
+    @Test
+    fun talkingPlaysTheSoundAgainAndLeavingForgetsThePause() = withRooms {
+        val room = rooms.open("g1")
+        room.join()
+        hearFromLockScreen!!(false)
+
+        room.setMic(true)
+        assertTrue(room.state.value.hearing)
+        assertTrue(connections.last().heard)
+        assertTrue(room.state.value.micOn)
+
+        hearFromLockScreen!!(false)
+        room.leave()
+
+        assertTrue(room.state.value.hearing)
+        // Out of the room, a stray pause changes nothing.
+        room.setHearing(false)
+        assertTrue(room.state.value.hearing)
     }
 
     @Test

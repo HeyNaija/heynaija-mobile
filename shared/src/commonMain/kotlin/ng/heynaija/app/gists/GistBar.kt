@@ -36,10 +36,11 @@ import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Icons
 
-/** What the bar says under the Gist's title: the connection while it is being made, then the member's microphone. */
+/** What the bar says under the Gist's title: the connection while it is being made, a pause, then the member's microphone. */
 fun gistBarStatus(state: GistState, mayUseMic: Boolean): String = when {
     state.phase == Phase.Connecting -> "Connecting…"
     state.phase == Phase.Reconnecting -> "Reconnecting…"
+    !state.hearing -> "Paused. You are still in the Gist."
     !mayUseMic -> "Listening"
     state.micOn -> "Your microphone is on"
     state.micBusy -> "Starting your microphone…"
@@ -83,6 +84,12 @@ fun GistBar(room: GistRoom, modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
             Text(view.title, style = MaterialTheme.typography.labelLarge, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(gistBarStatus(state, mayUseMic), style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        // Paused from the lock screen or by taking headphones out: the way to hear it again.
+        if (!state.hearing) {
+            IconButton(onClick = { room.setHearing(true) }) {
+                Icon(Icons.PlayFilled, "Play the Gist", Modifier.size(22.dp), tint = colors.accentStrong)
+            }
         }
         if (mayUseMic) {
             IconButton(

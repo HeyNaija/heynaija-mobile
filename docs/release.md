@@ -76,9 +76,10 @@ For each version:
   really used (Guideline 2.5.4). Add to the review note: "HeyNaija plays audio in
   the background for Gists, its live audio rooms. A member who joins a Gist keeps
   hearing it, and can keep speaking, with the phone locked or another app open,
-  until they tap Leave. To see it: sign in, tap the broadcast icon at the top of
-  Home to start a Gist (or open one under Live now), tap Join, then lock the
-  phone or go to the Home Screen." The review account needs Gists switched on
+  until they tap Leave, and it shows on the lock screen as Now Playing. To see
+  it: sign in, tap the broadcast icon at the top of Home, then Start a Gist (or
+  open one under Live now), tap Join, then lock the phone or go to the Home
+  Screen." The review account needs Gists switched on
   and a date of birth that makes it an adult, or it can only listen. Nothing to
   add to the App ID: background modes are not a capability Apple signs.
 - **Export compliance:** asked for each build. The app uses HTTPS, Apple's own
@@ -217,8 +218,13 @@ What a release with it carries, for the forms above:
   is on, and Leave) shows only to members who have allowed notifications
   (Android 13 and later); the Gist plays on either way, and is left from the app.
 - **iOS:** the audio background mode. No new capability, entitlement or
-  permission; say why in the review note (section 3). Nothing shows on the lock
-  screen yet.
+  permission; say why in the review note (section 3). The Gist shows as Now
+  Playing, on the lock screen, in Control Center and in the Dynamic Island
+  (`GistNowPlaying.swift`): its title, who hosts it or that the microphone is
+  on, and pause and play, which silence the Gist on the phone and bring it back
+  without leaving it (taking AirPods out pauses it too). iOS shows only an app
+  whose sound does not mix with other apps', so joining a Gist now pauses music
+  playing in another app, as a speaker's microphone already did.
 - **iOS, to check on a real iPhone before relying on it:** iOS keeps a
   background app running only while it is playing sound. Muting unpublishes a
   speaker's microphone here, so while nobody on stage has theirs on the room is
@@ -232,4 +238,5 @@ What a release with it carries, for the forms above:
 - Swiping the app away on Android leaves the Gist.
 - Not tried on real phones yet, only on the emulator and the simulator, which
   have no real lock screen or microphone: a long Gist with the phone locked, a
-  phone call arriving during one, and earphones being plugged in or taken out.
+  phone call arriving during one, earphones being plugged in or taken out, and
+  pause and play on the iPhone's lock screen.

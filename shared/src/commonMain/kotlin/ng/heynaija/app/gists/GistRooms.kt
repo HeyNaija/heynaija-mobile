@@ -67,21 +67,30 @@ class GistRooms(
                 _current.value = null
                 telling?.cancel()
                 telling = null
-                keeper?.release()
+                keeper?.stop()
             }
             held[room.id]?.let(::drop)
         }
     }
 
-    /** Keeps the system up to date with the room: its title, the microphone, a lost connection. */
+    /** Keeps the system up to date with the room: its title and host, the microphone, a lost connection, a pause. */
     private fun tell(room: GistRoom) {
         telling?.cancel()
         val keeper = keeper ?: return
         telling = scope.launch {
             room.state
-                .map { GistNow(room.id, it.view?.title.orEmpty(), micOn = it.micOn, reconnecting = it.phase == Phase.Reconnecting) }
+                .map {
+                    GistNow(
+                        room.id,
+                        it.view?.title.orEmpty(),
+                        micOn = it.micOn,
+                        reconnecting = it.phase == Phase.Reconnecting,
+                        host = it.view?.host?.name.orEmpty(),
+                        hearing = it.hearing,
+                    )
+                }
                 .distinctUntilChanged()
-                .collect { now -> keeper.keep(now, leave = room::leave) }
+                .collect { now -> keeper.keep(now, leave = room::leave, hear = room::setHearing) }
         }
     }
 

@@ -35,6 +35,8 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
      * back on, so the next speaker would not be heard until the app was opened again.
      */
     private var session: SessionRequirementHandle?
+    /** False while the member has paused the sound: the lock screen's pause, or AirPods taken out. Main thread. */
+    private var hearing = true
 
     init(events: any GistAudioEvents) {
         self.events = events
@@ -49,8 +51,11 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
     // MARK: GistAudio
 
     func connect(url: String, token: String, done: @escaping (String?) -> Void) {
+        // Before LiveKit's audio starts: a listener's session must not mix, or iOS will not show the Gist as Now Playing.
+        UnmixedGistSession.install()
         // Joining is a tap in the app, so the session may be switched on now.
         session = try? AudioManager.shared.acquireSessionRequirement(.playbackOnly)
+        UnmixedGistSession.unmix()
         Task {
             do {
                 try await room.connect(url: url, token: token)
@@ -85,6 +90,21 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
                 onMain { done(denied ? "denied" : error.localizedDescription) }
             }
         }
+    }
+
+    func setHearing(on: Bool) {
+        hearing = on
+        for participant in room.remoteParticipants.values {
+            for case let publication as RemoteTrackPublication in participant.audioTracks {
+                quiet(publication, on: on)
+            }
+        }
+    }
+
+    /** Silences one speaker here at once, and asks the server to stop sending their sound, which saves data while paused. */
+    private func quiet(_ publication: RemoteTrackPublication, on: Bool) {
+        (publication.track as? RemoteAudioTrack)?.volume = on ? 1 : 0
+        Task { try? await publication.set(enabled: on) }
     }
 
     func disconnect() {
@@ -155,10 +175,14 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
         onMain { [self] in emitMics() }
     }
 
-    func room(_: Room, participant: RemoteParticipant, didSubscribeTrack _: RemoteTrackPublication) {
+    func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         #if DEBUG
         print("HeyNaija: hearing \(participant.identity?.stringValue ?? "someone")")
         #endif
+        // Someone who starts speaking while the member has paused stays quiet too.
+        onMain { [self] in
+            if !hearing { quiet(publication, on: false) }
+        }
     }
 
     func room(_: Room, participantDidConnect _: RemoteParticipant) {

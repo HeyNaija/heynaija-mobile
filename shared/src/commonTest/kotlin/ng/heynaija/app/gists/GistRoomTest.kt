@@ -40,6 +40,12 @@ private class FakeAudio : GistAudioFactory, GistAudio {
         done(null)
     }
 
+    val hearing = mutableListOf<Boolean>()
+
+    override fun setHearing(on: Boolean) {
+        hearing += on
+    }
+
     override fun disconnect() {
         disconnects++
     }
