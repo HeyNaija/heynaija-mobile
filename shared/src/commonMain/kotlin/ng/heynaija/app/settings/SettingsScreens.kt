@@ -171,7 +171,8 @@ fun NotificationSettingsScreen() {
             current == null -> Loading()
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SectionTitle("NOTIFY ME ABOUT")
-                Group(NOTIFICATION_KINDS.map { (key, label) ->
+                // Community announcements have a switch only while they are switched on for this member.
+                Group(NOTIFICATION_KINDS.filter { (key, _) -> key != "community_announcement" || app.me?.has("communityAnnouncements") == true }.map { (key, label) ->
                     { Toggle(label, current[key] ?: true) { set(key, it) } }
                 })
                 SectionTitle("EMAIL")

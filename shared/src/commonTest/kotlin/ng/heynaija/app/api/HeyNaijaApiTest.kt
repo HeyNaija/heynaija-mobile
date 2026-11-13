@@ -146,6 +146,19 @@ class HeyNaijaApiTest {
         assertTrue("\"options\":[\"Jollof\",\"Fried rice\"]" in json, json)
         assertTrue("replyTo" !in json, json)
         assertTrue("images" !in json, json)
+        assertTrue("announce" !in json, json)
+    }
+
+    @Test
+    fun anAnnouncementAsksForItsCommunityToBeNotified() = runTest {
+        val server = FakeServer(token = "t") { HttpStatusCode.Created to """{"id":"p9"}""" }
+
+        server.api.createPost(NewPost("Meet-up on Saturday", community = "lagos", announce = true))
+
+        val body = (server.requests.single().body as io.ktor.http.content.TextContent).text
+        val json = HeyNaijaApi.json.parseToJsonElement(body).toString()
+        assertTrue("\"community\":\"lagos\"" in json, json)
+        assertTrue("\"announce\":true" in json, json)
     }
 
     @Test

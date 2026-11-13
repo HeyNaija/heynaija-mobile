@@ -32,6 +32,23 @@ fun timeAgo(at: Instant, now: Instant, zone: TimeZone = TimeZone.currentSystemDe
     }
 }
 
+/**
+ * How long until a community may notify its members again (ADR 0029 in the web
+ * repository), in the web's words (apps/web/lib/announcements.ts): "in about 5
+ * hours", "in less than an hour". Null when it may now.
+ */
+fun announcementWait(nextAt: String?, now: Instant): String? {
+    val next = nextAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return null
+    val ms = (next - now).inWholeMilliseconds
+    if (ms <= 0) return null
+    val hours = (ms + 1_800_000) / 3_600_000
+    return when {
+        hours < 1 -> "in less than an hour"
+        hours == 1L -> "in about an hour"
+        else -> "in about $hours hours"
+    }
+}
+
 /** A clip's length: "0:47", "1:19". */
 fun clipLength(durationMs: Long): String {
     val seconds = durationMs / 1000

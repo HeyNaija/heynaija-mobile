@@ -62,6 +62,8 @@ data class NewPost(
     val video: Pair<String, String>? = null,
     /** Marked sensitive by its author (ADR 0020). */
     val sensitive: Boolean = false,
+    /** Notify every member of [community] (ADR 0029): its moderators only, once a day. */
+    val announce: Boolean = false,
 )
 
 data class NewPoll(val options: List<String>, val multiple: Boolean, val expiresIn: String)
@@ -219,6 +221,7 @@ class HeyNaijaApi(
             post.replyAudience?.let { put("replyAudience", it) }
             post.storyOf?.let { put("storyOf", it) }
             if (post.sensitive) put("sensitive", true)
+            if (post.announce) put("announce", true)
         }
         return send("POST", "/posts", body).body()
     }
@@ -347,6 +350,11 @@ class HeyNaijaApi(
 
     suspend fun setMembership(slug: String, on: Boolean) {
         send(if (on) "PUT" else "DELETE", "/communities/${seg(slug)}/membership")
+    }
+
+    /** Whether the member is told when a moderator notifies the whole community (ADR 0029). */
+    suspend fun setAnnouncements(slug: String, on: Boolean) {
+        send(if (on) "PUT" else "DELETE", "/communities/${seg(slug)}/announcements")
     }
 
     // Search and topics

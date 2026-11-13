@@ -313,6 +313,12 @@ data class Community(
     /** Photo path without the size suffix; null for the subject icon. */
     val photo: String? = null,
     val viewerIsMember: Boolean = false,
+    /** Announcements: the viewer may notify its members of a new post, as one of its moderators. */
+    val viewerCanAnnounce: Boolean = false,
+    /** For someone who may: when its next announcement can go; null if one can go now. */
+    val nextAnnouncementAt: String? = null,
+    /** Whether the viewer is told of its announcements; null if they are not a member, or there are none to be told of. */
+    val viewerGetsAnnouncements: Boolean? = null,
     // Only on a community's own page.
     val rules: String = "",
     val moderators: List<String> = emptyList(),
@@ -522,6 +528,7 @@ val NOTIFICATION_KINDS = listOf(
     "repost" to "Reposts",
     "follow" to "New followers",
     "story_update" to "Stories you follow",
+    "community_announcement" to "Community announcements",
 )
 
 /**
