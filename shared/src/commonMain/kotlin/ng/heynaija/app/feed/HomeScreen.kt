@@ -54,6 +54,8 @@ import ng.heynaija.app.LocalApp
 import ng.heynaija.app.gists.GistsButton
 import ng.heynaija.app.gists.LiveNow
 import ng.heynaija.app.gists.LiveNowViewModel
+import ng.heynaija.app.gists.StartGistCard
+import ng.heynaija.app.gists.StartGistDialog
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.PostList
 import ng.heynaija.app.posts.PostListViewModel
@@ -151,6 +153,7 @@ fun HomeScreen() {
                         bottomPadding = 72.dp,
                     ) {
                         if (!member) item(key = "visitor") { VisitorCard() }
+                        if (gists) item(key = "start-gist") { StartGistCard() }
                         if (gists && live.isNotEmpty()) item(key = "live-now") { LiveNow(live) }
                     }
                 }

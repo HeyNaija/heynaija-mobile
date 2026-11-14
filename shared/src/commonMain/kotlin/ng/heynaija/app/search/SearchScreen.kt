@@ -74,6 +74,7 @@ import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PostCard
+import ng.heynaija.app.ui.PostCardSkeleton
 import ng.heynaija.app.ui.SectionTitle
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.plural
@@ -170,7 +171,7 @@ fun SearchScreen() {
         val results = state.results
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ListGutter), verticalArrangement = Arrangement.spacedBy(ListGutter)) {
             when {
-                state.searching && results == null -> item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+                state.searching && results == null -> items(3) { PostCardSkeleton() }
                 state.failed -> item { Empty("Search is not working right now. Try again in a moment.") }
                 results == null -> {
                     if (state.topics.isNotEmpty()) {

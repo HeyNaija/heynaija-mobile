@@ -73,6 +73,7 @@ import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PostCard
 import ng.heynaija.app.ui.Problem
 import ng.heynaija.app.ui.SecondaryButton
+import ng.heynaija.app.ui.ThreadSkeleton
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.rememberNow
 
@@ -444,7 +445,7 @@ fun ThreadScreen(id: String, first: Post?, gist: String? = null) {
             state.signIn -> GistSignIn()
             state.missing -> Problem("This post is not available. It may have been deleted.", onRetry = null)
             post == null && state.failed -> Problem("This post could not be loaded. Check your connection and try again.", viewModel::load)
-            post == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            post == null -> ThreadSkeleton()
             else -> LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 48.dp),

@@ -321,7 +321,12 @@ private fun GoogleButton(onClick: () -> Unit, enabled: Boolean = true, busy: Boo
 private fun ServerNote() {
     val app = LocalApp.current
     if (!app.platform.debug) return
-    Text("Server: ${Servers.current.label}. Change it in Settings.", style = MaterialTheme.typography.labelSmall, color = HeyNaija.colors.faint)
+    Text(
+        "Server: ${Servers.current.label}. Tap here to change in Settings.",
+        Modifier.clickable { app.navigator.push(Route.Settings) },
+        style = MaterialTheme.typography.labelSmall,
+        color = HeyNaija.colors.accentStrong,
+    )
 }
 
 private enum class JoinStep { Invite, Age, Account, Code, Link }

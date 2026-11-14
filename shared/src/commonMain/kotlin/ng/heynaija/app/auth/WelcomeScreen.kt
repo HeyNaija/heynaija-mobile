@@ -51,8 +51,10 @@ import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
+import ng.heynaija.app.ui.CommunitiesSkeletonList
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
+import ng.heynaija.app.ui.NotificationsSkeletonList
 import ng.heynaija.app.ui.PrimaryButton
 import ng.heynaija.app.ui.SecondaryButton
 import ng.heynaija.app.ui.plural
@@ -136,7 +138,7 @@ fun WelcomeScreen() {
         }
         Box(Modifier.weight(1f)) {
             if (state.step == 1) {
-                if (state.communities.isEmpty()) Loading()
+                if (state.communities.isEmpty()) CommunitiesSkeletonList(count = 4)
                 else LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(state.communities, key = { it.id }) { community ->
                         Choice(community.slug in state.chosen, { viewModel.toggleCommunity(community.slug) }) {
@@ -152,7 +154,7 @@ fun WelcomeScreen() {
             } else {
                 val suggestions = state.suggestions
                 when {
-                    suggestions == null -> Loading()
+                    suggestions == null -> NotificationsSkeletonList(count = 5)
                     suggestions.isEmpty() -> Text(
                         "No suggestions yet. You will find people in the communities and on Discover.",
                         Modifier.padding(20.dp),

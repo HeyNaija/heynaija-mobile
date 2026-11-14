@@ -621,6 +621,22 @@ class GistRoom internal constructor(
         }
     }
 
+    fun postReply(text: String, onDone: () -> Unit) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        scope.launch {
+            try {
+                api.createGistReply(id, t)
+                onDone()
+                loadReplies()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say(reasonOf(e) ?: "Could not post your reply. Try again.")
+            }
+        }
+    }
+
     fun setReplyAudience(audience: String) {
         val before = _state.value.replies.audience
         updateReplies { it.copy(audience = audience) }

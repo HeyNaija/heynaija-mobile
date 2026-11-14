@@ -181,7 +181,7 @@ fun Field(
 
 @Composable
 fun Loading(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+    PostListSkeleton(modifier)
 }
 
 /** Something that would not load, with a way to try again. Scrollable, so pulling down retries too. */
