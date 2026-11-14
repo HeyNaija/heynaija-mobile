@@ -8,11 +8,17 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Push notifications (Android 13 and later ask); asked for only when a member turns them on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- A Gist keeps playing with the app off screen or the phone locked: a foreground
+         service (GistService), of the media playback type while the member listens and
+         the microphone type too while theirs is on. Play Console asks what each type is
+         for (docs/release.md). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- LiveKit's SDK brings the camera and its screen-sharing service, which Gists do
          not use. Taken out, so that nobody is asked for the camera and Play does not
          ask for a media-projection service to be justified. -->
     <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
 
     <application
@@ -25,20 +31,47 @@
         <!-- No push token until a member turns push on (FcmPushDevice), and nothing measured. -->
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
         <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
-        <!-- singleTop: a tapped notification reaches the open app (onNewIntent) instead of a second copy. -->
+        <!-- singleTask: a tapped notification or a heynaija.ng link opened from another app
+             reaches the open app (onNewIntent) instead of starting a second copy. -->
         <activity
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- heynaija.ng links to the pages the app has a screen for (App Links): routeOf
+                 in nav/Links.kt, and the same pages as the site's apple-app-site-association
+                 (apps/web/lib/app-links.ts in the web repository). The site's
+                 /.well-known/assetlinks.json names this app's signing certificates, so Android
+                 opens them here without asking. Every other page stays in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:host="heynaija.ng" />
+                <!-- A post or a Gist: exactly an ID, so a post's quote and votes pages are left out. -->
+                <data android:pathPattern="/p/........-....-....-....-............" />
+                <data android:pathPattern="/gists/........-....-....-....-............" />
+                <data android:pathPrefix="/u/" />
+                <data android:pathPrefix="/c/" />
+                <data android:pathPrefix="/hashtag/" />
+                <data android:path="/notifications" />
+                <data android:path="/bookmarks" />
+            </intent-filter>
         </activity>
         <service
             android:name="io.livekit.android.room.track.screencapture.ScreenCaptureService"
             tools:node="remove" />
+        <service
+            android:name=".gists.GistService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback|microphone" />
         <service
             android:name=".push.PushService"
             android:exported="false">

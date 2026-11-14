@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,12 +44,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,7 +64,9 @@ import kotlinx.coroutines.launch
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.Notification
+import ng.heynaija.app.api.NotificationPage
 import ng.heynaija.app.nav.Route
+import ng.heynaija.app.platform.PushEvents
 import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
@@ -81,52 +88,88 @@ data class NotificationsState(
     val items: List<Notification> = emptyList(),
     val cursor: String? = null,
     val loaded: Boolean = false,
-    val loading: Boolean = false,
+    /** The next, older page is on its way. */
+    val loadingMore: Boolean = false,
     val refreshing: Boolean = false,
     val failed: Boolean = false,
 )
+
+/**
+ * [newest], the first page, put above the notifications already shown, so the list
+ * keeps its place and what was loaded below it. The server marks read everything
+ * up to a time, so when the oldest on the new page is read, so is everything below.
+ * With nothing in common (more new ones than a page holds), the list starts again.
+ */
+internal fun withNewest(shown: NotificationsState, newest: NotificationPage): NotificationsState {
+    val fresh = newest.notifications
+    val ids = fresh.mapTo(HashSet()) { it.id }
+    val below = shown.items.drop(shown.items.indexOfLast { it.id in ids } + 1)
+    if (below.isEmpty() || below.size == shown.items.size) return shown.copy(items = fresh, cursor = newest.cursor)
+    val read = fresh.last().read
+    return shown.copy(items = fresh + below.map { if (read) it.copy(read = true) else it })
+}
 
 class NotificationsViewModel(private val app: AppState) : ViewModel() {
     private val _state = MutableStateFlow(NotificationsState())
     val state: StateFlow<NotificationsState> = _state.asStateFlow()
 
-    init { load(fresh = true) }
+    private var fetching: Job? = null
 
-    fun refresh() = load(fresh = true, pulled = true)
+    /**
+     * Fetches the newest while the list is on screen, and marks them read. A later
+     * call starts again, so one made as a push arrives brings that notification.
+     * [pulled]: the member pulled the list down.
+     */
+    fun refresh(pulled: Boolean = false) {
+        fetching?.cancel()
+        _state.update { it.copy(refreshing = pulled || it.refreshing, failed = false) }
+        fetching = viewModelScope.launch {
+            if (pulled) {
+                delay(3800)
+            }
+            val page = try {
+                app.api.notifications()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(refreshing = false, failed = true) }
+                return@launch
+            }
+            _state.update { withNewest(it, page).copy(loaded = true, refreshing = false) }
+            // Seen: everything up to the newest is read, and the tab's count goes. The
+            // list keeps showing which were new until the member comes back to it.
+            val newest = page.notifications.firstOrNull()
+            if (newest != null && page.notifications.any { !it.read }) {
+                try {
+                    app.api.markRead(newest.id)
+                    app.updateMe { it.copy(unreadNotifications = 0) }
+                    // Any that came in meanwhile, and no older answer bringing the old count back.
+                    app.refreshMe()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Marked next time the list is shown.
+                }
+            }
+        }
+    }
 
     fun loadMore() {
         val s = _state.value
-        if (s.loading || s.cursor == null || s.failed) return
-        load(fresh = false)
-    }
-
-    fun load(fresh: Boolean, pulled: Boolean = false) {
-        val cursor = if (fresh) null else _state.value.cursor
-        _state.update { it.copy(loading = !pulled, refreshing = pulled, failed = false) }
+        if (!s.loaded || s.loadingMore || s.cursor == null || s.failed) return
+        _state.update { it.copy(loadingMore = true) }
         viewModelScope.launch {
             try {
-                val page = app.api.notifications(cursor)
-                if (pulled) {
-                    delay(3800)
-                }
+                val page = app.api.notifications(s.cursor)
                 _state.update {
-                    NotificationsState(
-                        items = if (fresh) page.notifications else (it.items + page.notifications).distinctBy(Notification::id),
-                        cursor = page.cursor,
-                        loaded = true,
-                    )
-                }
-                // Seen: everything up to the newest is read, and the tab's count goes.
-                if (fresh) page.notifications.firstOrNull()?.let { newest ->
-                    if (!newest.read || page.notifications.any { !it.read }) {
-                        app.api.markRead(newest.id)
-                        app.updateMe { it.copy(unreadNotifications = 0) }
-                    }
+                    // The list started again from the newest meanwhile: this page no longer follows it.
+                    if (it.cursor != s.cursor) it.copy(loadingMore = false)
+                    else it.copy(items = (it.items + page.notifications).distinctBy(Notification::id), cursor = page.cursor, loadingMore = false)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, refreshing = false, failed = true) }
+                _state.update { it.copy(loadingMore = false, failed = true) }
             }
         }
     }
@@ -152,6 +195,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
         "mention" -> Icons.Mention to if (gist) "mentioned you in a Gist" else "mentioned you"
         "follow" -> Icons.Follow to "followed you"
         "story_update" -> Icons.Story to "added to their story"
+        "community_announcement" -> Icons.Megaphone to "posted an announcement in ${n.community?.name ?: "a community"}"
         "post_removed" -> Icons.Shield to "A moderator removed your post for ${REASONS[n.detail] ?: "breaking the community rules"}."
         "post_restored" -> Icons.Shield to "A moderator restored your post."
         "post_labelled" -> Icons.Shield to "A moderator marked your post as sensitive. People under 18 won’t see it, and its pictures and video show behind a warning."
@@ -177,7 +221,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
 
 /** Where pressing it goes (apps/web/lib/notification-target.ts): a reply in a Gist opens in its Gist. */
 private fun target(n: Notification): Route? = when (n.kind) {
-    "reply", "like", "repost", "quote", "mention", "post_restored", "post_labelled", "story_update" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
+    "reply", "like", "repost", "quote", "mention", "post_restored", "post_labelled", "story_update", "community_announcement" -> n.post?.let { Route.Thread(it.id, gist = it.gistId) }
     "follow" -> n.actor?.let { Route.Profile(it.handle) }
     "avatar_removed", "profile_cleared" -> Route.EditProfile
     "moderator_revoked" -> n.community?.let { Route.Community(it.slug) }
@@ -197,12 +241,28 @@ fun NotificationsScreen() {
     val push by app.push.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     val now = rememberNow()
+    // While the list is on screen with the app in front: the newest on arriving and on
+    // coming back to the app, then again as each push comes in.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(viewModel, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.refresh()
+            PushEvents.arrived.collect { viewModel.refresh() }
+        }
+    }
+    // New ones come in above the first shown. At the top the list shows them, rather
+    // than keeping its place below them as it does further down.
+    val newest = state.items.firstOrNull()?.id
+    remember(newest) { Snapshot.withoutReadObservation { if (list.firstVisibleItemIndex == 0) list.requestScrollToItem(0) } }
     LaunchedEffect(list) {
         snapshotFlow { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= list.layoutInfo.totalItemsCount - 5 }
             .distinctUntilChanged()
             .collect { if (it) viewModel.loadMore() }
     }
-    LaunchedEffect(app.navigator.reselected) { if (app.navigator.reselected > 0) list.animateScrollToItem(0) }
+    // Pressing the tab again scrolls back to the newest. A press made before the list was
+    // shown (on another tab, say) does not, so coming back keeps the place.
+    val seen = remember { app.navigator.reselected }
+    LaunchedEffect(app.navigator.reselected) { if (app.navigator.reselected > seen) list.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Notifications", actions = {
@@ -211,13 +271,13 @@ fun NotificationsScreen() {
             }
         })
         when {
-            !state.loaded && state.failed -> Problem("Notifications could not be loaded. Check your connection and try again.", { viewModel.load(true) })
+            !state.loaded && state.failed -> Problem("Notifications could not be loaded. Check your connection and try again.", { viewModel.refresh(pulled = true) })
             !state.loaded -> NotificationsSkeletonList()
             else -> {
                 val pullState = rememberPullToRefreshState()
                 PullToRefreshBox(
                     isRefreshing = state.refreshing,
-                    onRefresh = viewModel::refresh,
+                    onRefresh = { viewModel.refresh(pulled = true) },
                     state = pullState,
                     modifier = Modifier.fillMaxSize(),
                     indicator = {},
@@ -241,7 +301,7 @@ fun NotificationsScreen() {
                         } else {
                             if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
                             items(state.items, key = { it.id }) { NotificationRow(it, now) }
-                            if (state.loading && state.items.isNotEmpty()) item {
+                            if (state.loadingMore && state.items.isNotEmpty()) item {
                                 Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
                             }
                         }
@@ -311,7 +371,7 @@ private fun NotificationRow(n: Notification, now: Instant) {
                 Box(Modifier.padding(start = 8.dp, top = 8.dp).size(8.dp).clip(CircleShape).background(colors.accent))
             }
         }
-        n.post?.excerpt?.takeIf { it.isNotBlank() && n.kind in setOf("reply", "like", "repost", "quote", "mention", "story_update") }?.let {
+        n.post?.excerpt?.takeIf { it.isNotBlank() && n.kind in setOf("reply", "like", "repost", "quote", "mention", "story_update", "community_announcement") }?.let {
             Text(
                 it,
                 style = MaterialTheme.typography.bodySmall,
@@ -338,5 +398,6 @@ private fun destination(n: Notification): String = when (n.kind) {
     "mention" -> "View mention"
     "follow" -> "View profile"
     "story_update" -> "View update"
+    "community_announcement" -> "View announcement"
     else -> if (n.post != null) "View post" else "View details"
 }

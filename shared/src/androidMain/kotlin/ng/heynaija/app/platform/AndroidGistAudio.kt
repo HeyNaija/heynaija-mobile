@@ -23,7 +23,11 @@ import io.livekit.android.room.participant.AudioTrackPublishOptions
 import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.track.LocalAudioTrack
+import io.livekit.android.room.track.RemoteAudioTrack
+import io.livekit.android.room.track.RemoteTrackPublication
 import io.livekit.android.room.track.Track
+import io.livekit.android.room.track.TrackPublication
+import io.livekit.android.util.flow
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +60,8 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
     )
     private var mic: LocalAudioTrack? = null
     private var closing = false
+    /** False while the member has paused the sound (GistAudio.setHearing). */
+    private var hearing = true
 
     private val Participant.id get() = identity?.value
     private val everyone get() = listOf<Participant>(room.localParticipant) + room.remoteParticipants.values
@@ -91,10 +97,22 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
                     is RoomEvent.ConnectionQualityChanged -> emitWeak()
                     is RoomEvent.TrackSubscribed -> {
                         if (debug) println("HeyNaija: hearing ${event.participant.id}")
+                        // Someone who starts speaking while the member has paused stays quiet too.
+                        if (!hearing) quiet(event.publication, event.track, on = false)
                         emitMics()
                     }
                     else -> Unit
                 }
+            }
+        }
+        scope.launch {
+            // Every token is a listener's; the server lets a speaker publish a moment after they connect, or when a host
+            // lets them speak. Read from the participant's own state, which holds the answer whenever it came: the
+            // room's event for it is dropped when the answer arrives while the connection is still being made.
+            room.localParticipant::permissions.flow.collect { permissions ->
+                val allowed = permissions?.canPublish == true
+                if (debug) println("HeyNaija: the room ${if (allowed) "lets" else "does not let"} this member publish")
+                on.onMayPublish(allowed)
             }
         }
         scope.launch {
@@ -151,38 +169,61 @@ private class LiveKitGistAudio(context: Context, private val on: GistAudioEvents
                     return@launch
                 }
                 if (mic != null) return@launch done(null)
-                // Throws SecurityException without RECORD_AUDIO.
                 val track = room.localParticipant.createAudioTrack("microphone")
-                mic = track
-                val published = room.localParticipant.publishAudioTrack(
-                    track,
-                    AudioTrackPublishOptions(name = "microphone", audioBitrate = VOICE_BITRATE, source = Track.Source.MICROPHONE),
-                )
+                val published = try {
+                    // Throws when the server has not let this member publish (GistAudio.setMicrophone).
+                    room.localParticipant.publishAudioTrack(
+                        track,
+                        AudioTrackPublishOptions(name = "microphone", audioBitrate = VOICE_BITRATE, source = Track.Source.MICROPHONE),
+                    )
+                } catch (e: Throwable) {
+                    // Not published, so the room will not let it go: do it here, or the track is left behind.
+                    track.dispose()
+                    throw e
+                }
                 if (!published) {
-                    mic = null
                     track.dispose()
                     return@launch done("The microphone could not be published.")
                 }
+                mic = track
                 emitMics()
                 done(null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SecurityException) {
-                mic = null
                 done("denied")
             } catch (e: Exception) {
-                mic = null
                 done(e.message ?: e.toString())
             }
         }
     }
 
+    override fun setHearing(on: Boolean) {
+        hearing = on
+        for (participant in room.remoteParticipants.values) {
+            for ((publication, track) in participant.audioTrackPublications) quiet(publication, track, on)
+        }
+    }
+
+    /** Silences one speaker here at once, and asks the server to stop sending their sound, which saves data while paused. */
+    private fun quiet(publication: TrackPublication, track: Track?, on: Boolean) {
+        (track as? RemoteAudioTrack)?.setVolume(if (on) 1.0 else 0.0)
+        (publication as? RemoteTrackPublication)?.setEnabled(on)
+    }
+
     override fun disconnect() {
         closing = true
-        mic?.dispose()
+        // The room unpublishes the microphone and lets it go as it closes. Disposing it here first crashed the app
+        // when leaving with the microphone on: the room then asked the disposed track for its id, on the main thread
+        // ("MediaStreamTrack has been disposed").
         mic = null
-        room.disconnect()
-        room.release()
+        try {
+            room.disconnect()
+            room.release()
+        } catch (e: Exception) {
+            // Leaving must never take the app down with it.
+            if (debug) println("HeyNaija: the Gist's room did not close cleanly: $e")
+        }
         scope.cancel()
     }
 }

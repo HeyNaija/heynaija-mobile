@@ -24,6 +24,8 @@ import ng.heynaija.app.api.Me
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
+import ng.heynaija.app.gists.GistRoom
+import ng.heynaija.app.gists.GistRooms
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.routeOf
@@ -49,6 +51,20 @@ sealed interface PostChange {
     data class Deleted(val id: String) : PostChange
     /** The member posted: feeds that would show it start again from the top. [replyTo]: the post it answers. */
     data class Created(val id: String, val replyTo: String? = null) : PostChange
+    /** A member changed their name or photo: their posts on every screen show the new ones. */
+    data class Author(val id: String, val handle: String, val name: String?, val avatar: String?) : PostChange
+}
+
+/** This post with [change]'s name and photo wherever its author appears on it. */
+fun Post.withAuthor(change: PostChange.Author): Post {
+    val mine = authorId == change.id
+    return copy(
+        authorName = if (mine) change.name else authorName,
+        authorAvatar = if (mine) change.avatar else authorAvatar,
+        quote = quote?.let { if (it.authorHandle == change.handle) it.copy(authorName = change.name, authorAvatar = change.avatar) else it },
+        replyTo = replyTo?.let { if (it.authorHandle == change.handle) it.copy(authorName = change.name, authorAvatar = change.avatar) else it },
+        repostedBy = repostedBy?.let { if (it.id == change.id) it.copy(displayName = change.name) else it },
+    )
 }
 
 private const val TOKEN = "session_token"
@@ -131,6 +147,11 @@ class AppState(val platform: Platform) {
         _changes.tryEmit(change)
     }
 
+    /** The Gists that are open, and the one the member is in: it plays on over the rest of the app. */
+    val gists = GistRooms(platform.gistKeeper, scope) { id, onPresence, foreground ->
+        GistRoom(id, api, platform.gistAudio, changes, ::say, scope, platform.debug, onPresence, foreground)
+    }
+
     /** Reads the saved session: shown at once from the last copy of `/v1/me`, then checked. */
     fun start() {
         val saved = token
@@ -147,13 +168,19 @@ class AppState(val platform: Platform) {
         }
     }
 
+    // How many times `/v1/me` was asked, so that an answer overtaken by a later ask is
+    // dropped: one sent before notifications were marked read would bring the old count back.
+    private var meAsked = 0
+
     /** Asks `/v1/me` again: for the unread count, a changed profile, or a finished welcome. */
     suspend fun refreshMe(firstLoad: Boolean = false) {
         if (token == null) return
+        val ask = ++meAsked
         try {
             val me = api.me()
+            if (ask != meAsked && this.me != null) return
             platform.settings.set(ME, HeyNaijaApi.json.encodeToString(Me.serializer(), me))
-            _account.value = Account.SignedIn(me)
+            show(me)
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiException) {
@@ -169,7 +196,16 @@ class AppState(val platform: Platform) {
     }
 
     fun updateMe(change: (Me) -> Me) {
-        _account.update { if (it is Account.SignedIn) Account.SignedIn(change(it.me)) else it }
+        show(change(me ?: return))
+    }
+
+    /** Signs [me] in, and puts a new name or photo on their posts already on screen. */
+    private fun show(me: Me) {
+        val before = this.me
+        _account.value = Account.SignedIn(me)
+        if (before != null && before.id == me.id && (before.displayName != me.displayName || before.avatar != me.avatar)) {
+            emit(PostChange.Author(me.id, before.handle, me.displayName, me.avatar))
+        }
     }
 
     // What the app store said about the person's age while the app is open, once it let them in.
@@ -195,10 +231,13 @@ class AppState(val platform: Platform) {
      * repository). If that fails, the next Apple sign-in sends another.
      */
     suspend fun signedIn(newToken: String, via: IdToken? = null) {
+        // A Gist, or a reply in one, that asked to sign in first (GistSignIn) opens again, as on the web.
+        val back = navigator.beforeSignIn?.takeIf { it is Route.Gist || (it is Route.Thread && it.gist != null) }
         token = newToken
         platform.secure.set(TOKEN, newToken)
         refreshMe(firstLoad = true)
         navigator.reset()
+        back?.let(navigator::openFromLink)
         via?.appleCode?.let { code ->
             scope.launch {
                 try {
@@ -216,6 +255,8 @@ class AppState(val platform: Platform) {
     /** Ends the session here and in Kratos. */
     suspend fun signOut() {
         val ending = token ?: return
+        // Out of any Gist while the session can still tell the API.
+        gists.leave()
         platform.push?.let { stopPush(it) }
         runCatching { api.logout() }
         kratos.logout(ending)
@@ -223,6 +264,8 @@ class AppState(val platform: Platform) {
     }
 
     private fun forget() {
+        // The session ended some other way (the API said so): still out of any Gist here.
+        gists.leave()
         token = null
         platform.secure.set(TOKEN, null)
         platform.settings.set(ME, null)
@@ -313,6 +356,15 @@ class AppState(val platform: Platform) {
         navigator.openFromNotification(routeOf(link, Servers.current.web) ?: Route.Notifications)
     }
 
+    /**
+     * A link to the site the system opened the app with ([WebLinks]). One the app
+     * has no screen for, or to another server than the one in use (a debug build on
+     * staging given a heynaija.ng link), leaves the app where it was.
+     */
+    fun openWebLink(link: String) {
+        routeOf(link, Servers.current.web)?.let(navigator::openFromLink)
+    }
+
     val currentToken: String? get() = token
 
     fun switchServer(server: Server) {
@@ -339,6 +391,17 @@ class AppState(val platform: Platform) {
         val story = post.storyDraft()
         if ((navigator.stack.lastOrNull()?.route as? Route.Thread)?.id != story.id) navigator.push(Route.Thread(story.id))
         replying = Route.Compose(story = story)
+    }
+
+    /**
+     * The app was opened afresh over a state that was already running (Android: its
+     * activity had finished, the process had not): every tab at its top and no reply
+     * half-open, as the app has always opened. The Gist the member is in is not a
+     * screen, so it stays, with its bar.
+     */
+    fun freshStart() {
+        navigator.reset()
+        replying = null
     }
 
     /** Runs [block] for a member, or sends a visitor to sign in. */
@@ -419,6 +482,12 @@ class AppState(val platform: Platform) {
 
     /** The address of a post on the web, to share. */
     fun postLink(post: Post) = "${Servers.current.web}/p/${post.id}"
+
+    /** The address of a Gist on the web, to share: the page the web app has for it, which opens the app where it is installed. */
+    fun gistLink(id: String) = gistLink(Servers.current.web, id)
 }
+
+/** A Gist's page on the site at [web] (`/gists/:id`, as `routeOf` reads it back). */
+fun gistLink(web: String, id: String) = "$web/gists/$id"
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("AppState is provided by App()") }

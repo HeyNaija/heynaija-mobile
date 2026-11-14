@@ -22,12 +22,22 @@ data class Me(
     val birthDateNeeded: Boolean = false,
     /** What is switched on for this member; a missing key is off. */
     val features: Map<String, Boolean> = emptyMap(),
+    /**
+     * Whether they may start a Gist and speak in one, or only listen: under 18, and
+     * no age on record, listen (ADR 0020 in the web repository). A server from before
+     * that rule does not say, and let everyone with Gists on stage, so missing is true;
+     * the API checks every one of these again whatever the app shows.
+     */
+    val gistStage: Boolean = true,
     /** The limits a video is checked against before sending; null while video is closed to this member. */
     val videoLimits: VideoLimits? = null,
     /** Posts marked sensitive (ADR 0020): whether they count as an adult for them, and their choices. */
     val sensitive: SensitiveSettings = SensitiveSettings(),
 ) {
     fun has(feature: String) = features[feature] == true
+
+    /** May host a Gist, ask to speak and use the microphone; a member who may not only listens. */
+    val mayTakeStage get() = has("gists") && gistStage
 
     /** May mark posts sensitive: the adultLabels flag is on for them, and they count as an adult. */
     val canMarkSensitive get() = has("adultLabels") && sensitive.adult
@@ -303,6 +313,12 @@ data class Community(
     /** Photo path without the size suffix; null for the subject icon. */
     val photo: String? = null,
     val viewerIsMember: Boolean = false,
+    /** Announcements: the viewer may notify its members of a new post, as one of its moderators. */
+    val viewerCanAnnounce: Boolean = false,
+    /** For someone who may: when its next announcement can go; null if one can go now. */
+    val nextAnnouncementAt: String? = null,
+    /** Whether the viewer is told of its announcements; null if they are not a member, or there are none to be told of. */
+    val viewerGetsAnnouncements: Boolean? = null,
     // Only on a community's own page.
     val rules: String = "",
     val moderators: List<String> = emptyList(),
@@ -512,7 +528,20 @@ val NOTIFICATION_KINDS = listOf(
     "repost" to "Reposts",
     "follow" to "New followers",
     "story_update" to "Stories you follow",
+    "community_announcement" to "Community announcements",
 )
+
+/**
+ * Weekly highlights (ADR 0027 in the web repository): a few conversations a member
+ * missed, at most once a week, as a push notification or an email. Its key in the
+ * notification preferences. The API sends it only while highlights are offered to
+ * the member, so a server without them shows no switch; and it is not a kind of
+ * notification ([NOTIFICATION_KINDS]), so it is not listed with those.
+ */
+const val HIGHLIGHTS_PREFERENCE = "highlights"
+
+/** Whether these preferences offer weekly highlights, to be switched on or off. */
+fun offersHighlights(preferences: Map<String, Boolean>) = HIGHLIGHTS_PREFERENCE in preferences
 
 /** The reasons a report can give, as the web lists them (apps/web/lib/report-reasons.ts). */
 val REPORT_REASONS = listOf(

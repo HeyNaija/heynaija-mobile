@@ -1,5 +1,30 @@
 package ng.heynaija.app.nav
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/**
+ * Links to the site that the system opens the app with instead of the browser
+ * (App Links on Android, Universal Links on iOS). The site's own files say which
+ * (apps/web/lib/app-links.ts in the web repository), and the Android manifest
+ * lists the same pages: those [routeOf] has a screen for.
+ */
+object WebLinks {
+    private val _opened = MutableStateFlow<String?>(null)
+    /** The link the app was opened with, until it has been opened. */
+    val opened: StateFlow<String?> = _opened.asStateFlow()
+
+    fun open(link: String) {
+        _opened.value = link
+    }
+
+    /** The app opened [link]; the same link again opens it again. */
+    fun handled(link: String) {
+        _opened.compareAndSet(link, null)
+    }
+}
+
 /**
  * The screen for a link to the site: a path such as `/p/…`, as push
  * notifications carry, or a full address on [web]. Null for a link the app has no

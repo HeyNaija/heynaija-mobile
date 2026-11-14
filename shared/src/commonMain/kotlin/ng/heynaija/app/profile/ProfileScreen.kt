@@ -40,8 +40,13 @@ import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ng.heynaija.app.Account
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
@@ -72,7 +77,21 @@ class ProfileViewModel(private val app: AppState, private val handle: String) : 
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state.asStateFlow()
 
-    init { load() }
+    init {
+        load()
+        // The member's own name, bio and photo, as soon as they change them.
+        viewModelScope.launch {
+            app.account
+                .map { (it as? Account.SignedIn)?.me }
+                .filterNotNull()
+                .map { Triple(it.displayName, it.bio, it.avatar) }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { (name, bio, avatar) ->
+                    _state.update { s -> s.copy(profile = s.profile?.let { if (it.isSelf) it.copy(displayName = name, bio = bio, avatar = avatar) else it }) }
+                }
+        }
+    }
 
     fun load() {
         _state.update { it.copy(failed = false) }

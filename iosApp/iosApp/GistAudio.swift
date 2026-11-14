@@ -28,6 +28,15 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
     /** Set while we change the microphone ourselves, so our own unpublish is not taken for the server's. */
     private var changingMic = false
     private var closing = false
+    /**
+     * Held from joining to leaving, so the audio session stays active between speakers. Muting unpublishes
+     * the microphone here, so while nobody on stage has theirs on the room has no sound at all, and LiveKit
+     * would switch the session off. With the app in the background iOS does not let a session be switched
+     * back on, so the next speaker would not be heard until the app was opened again.
+     */
+    private var session: SessionRequirementHandle?
+    /** False while the member has paused the sound: the lock screen's pause, or AirPods taken out. Main thread. */
+    private var hearing = true
 
     init(events: any GistAudioEvents) {
         self.events = events
@@ -42,12 +51,18 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
     // MARK: GistAudio
 
     func connect(url: String, token: String, done: @escaping (String?) -> Void) {
+        // Before LiveKit's audio starts: a listener's session must not mix, or iOS will not show the Gist as Now Playing.
+        UnmixedGistSession.install()
+        // Joining is a tap in the app, so the session may be switched on now.
+        session = try? AudioManager.shared.acquireSessionRequirement(.playbackOnly)
+        UnmixedGistSession.unmix()
         Task {
             do {
                 try await room.connect(url: url, token: token)
                 onMain { [self] in
                     emitMics()
                     emitWeak()
+                    events.onMayPublish(allowed: room.localParticipant.permissions.canPublish)
                     done(nil)
                 }
             } catch {
@@ -77,9 +92,29 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
         }
     }
 
+    func setHearing(on: Bool) {
+        hearing = on
+        for participant in room.remoteParticipants.values {
+            for case let publication as RemoteTrackPublication in participant.audioTracks {
+                quiet(publication, on: on)
+            }
+        }
+    }
+
+    /** Silences one speaker here at once, and asks the server to stop sending their sound, which saves data while paused. */
+    private func quiet(_ publication: RemoteTrackPublication, on: Bool) {
+        (publication.track as? RemoteAudioTrack)?.volume = on ? 1 : 0
+        Task { try? await publication.set(enabled: on) }
+    }
+
     func disconnect() {
         closing = true
-        Task { await room.disconnect() }
+        let held = session
+        session = nil
+        Task {
+            await room.disconnect()
+            try? held?.release()
+        }
     }
 
     // MARK: RoomDelegate (any thread)
@@ -125,6 +160,13 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
         onMain { [self] in emitMics() }
     }
 
+    func room(_: Room, participant: Participant, didUpdatePermissions permissions: ParticipantPermissions) {
+        // Every token is a listener's; the server lets a speaker publish a moment after they connect, or when a host lets them speak.
+        guard participant is LocalParticipant else { return }
+        let allowed = permissions.canPublish
+        onMain { [self] in events.onMayPublish(allowed: allowed) }
+    }
+
     func room(_: Room, participant _: RemoteParticipant, didPublishTrack _: RemoteTrackPublication) {
         onMain { [self] in emitMics() }
     }
@@ -133,10 +175,14 @@ final class LiveKitGistAudio: NSObject, GistAudio, RoomDelegate, @unchecked Send
         onMain { [self] in emitMics() }
     }
 
-    func room(_: Room, participant: RemoteParticipant, didSubscribeTrack _: RemoteTrackPublication) {
+    func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         #if DEBUG
         print("HeyNaija: hearing \(participant.identity?.stringValue ?? "someone")")
         #endif
+        // Someone who starts speaking while the member has paused stays quiet too.
+        onMain { [self] in
+            if !hearing { quiet(publication, on: false) }
+        }
     }
 
     func room(_: Room, participantDidConnect _: RemoteParticipant) {

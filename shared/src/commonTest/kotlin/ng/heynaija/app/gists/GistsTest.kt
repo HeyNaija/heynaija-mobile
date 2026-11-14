@@ -9,7 +9,9 @@ import kotlin.time.Instant
 import ng.heynaija.app.api.GistCommunity
 import ng.heynaija.app.api.GistView
 import ng.heynaija.app.api.GistViewer
+import ng.heynaija.app.api.HeyNaijaApi
 import ng.heynaija.app.api.LiveGist
+import ng.heynaija.app.api.Me
 import ng.heynaija.app.api.Person
 
 private val host = Person("h1", "ada", "Ada")
@@ -38,6 +40,37 @@ class GistsTest {
         assertFalse(cohost.settings)
         val hostControls = controlsFor(view(role = "host"))
         assertTrue(hostControls.settings && hostControls.end && hostControls.appointCohost)
+    }
+
+    @Test
+    fun aMemberWhoMayOnlyListenIsNeverOfferedToSpeak() {
+        // Under 18, or no age on record: `gistStage` is false in /v1/me.
+        val listening = controlsFor(view(), mayTakeStage = false)
+        assertFalse(listening.request)
+        assertFalse(listening.mic)
+        // Nor told the host is not taking requests: that is only for someone who could otherwise ask.
+        val closed = controlsFor(view(requestsOpen = false), mayTakeStage = false)
+        assertFalse(closed.request)
+        assertFalse(closed.requestsClosed)
+        assertTrue(controlsFor(view(requestsOpen = false)).requestsClosed)
+        assertFalse(controlsFor(view()).requestsClosed)
+        // A request made before the rule can still be withdrawn.
+        assertTrue(controlsFor(view(requested = true), mayTakeStage = false).cancelRequest)
+        // A role the server still shows does not bring the microphone back.
+        assertFalse(controlsFor(view(role = "speaker"), mayTakeStage = false).mic)
+        // The host's own room controls do not depend on it; the API decides those.
+        assertTrue(controlsFor(view(role = "host"), mayTakeStage = false).end)
+    }
+
+    @Test
+    fun whetherAMemberMayTakeTheStageComesFromTheApiAndAnOlderServerMeansYes() {
+        fun me(extra: String) = HeyNaijaApi.json.decodeFromString(Me.serializer(), """{ "id": "m1", "handle": "chidi", "features": { "gists": true }$extra }""")
+        assertFalse(me(""", "gistStage": false""").mayTakeStage)
+        assertTrue(me(""", "gistStage": true""").mayTakeStage)
+        // A server from before the rule does not say, and let everyone with Gists on stage.
+        assertTrue(me("").mayTakeStage)
+        // Never without Gists themselves.
+        assertFalse(HeyNaijaApi.json.decodeFromString(Me.serializer(), """{ "id": "m1", "handle": "chidi", "gistStage": true }""").mayTakeStage)
     }
 
     @Test
@@ -129,5 +162,23 @@ class GistsTest {
         assertEquals("People you follow can reply", gistReplyAudienceNote("following", "ada", viewerIsHost = true))
         assertEquals("People @ada follows can reply", gistReplyAudienceNote("following", "ada", viewerIsHost = false))
         assertEquals("Replies off", gistReplyAudienceNote("off", "ada", viewerIsHost = false))
+    }
+
+    @Test
+    fun theBarSaysWhenTheSoundIsPaused() {
+        val live = GistState(phase = Phase.Live)
+        assertEquals("Listening", gistBarStatus(live, mayUseMic = false))
+        assertEquals("Your microphone is off", gistBarStatus(live, mayUseMic = true))
+        assertEquals("Paused. You are still in the Gist.", gistBarStatus(live.copy(hearing = false), mayUseMic = true))
+        // A lost connection is the bigger news.
+        assertEquals("Reconnecting…", gistBarStatus(live.copy(phase = Phase.Reconnecting, hearing = false), mayUseMic = true))
+    }
+
+    @Test
+    fun theGistsButtonSaysWhatIsOn() {
+        assertEquals("Gists", gistsButtonLabel(inGist = false, othersLive = 0))
+        assertEquals("Gists. 2 live now.", gistsButtonLabel(inGist = false, othersLive = 2))
+        assertEquals("Gists. You are in one.", gistsButtonLabel(inGist = true, othersLive = 0))
+        assertEquals("Gists. You are in one, and 1 more is live.", gistsButtonLabel(inGist = true, othersLive = 1))
     }
 }

@@ -149,4 +149,17 @@ class ThreadViewModelTest {
         assertEquals(listOf("r-a", "m-a"), vm.keys())
         assertEquals(1, vm.state.value.replies.single().replyCount)
     }
+
+    @Test
+    fun aReplyInAGistAsksSomeoneSignedOutToSignInWhileGistsAreOn() = runTest {
+        // The API checks the gists flag before the session: 401 while Gists are on for anyone, 404 while off.
+        val on = FakeServer { HttpStatusCode.Unauthorized to """{ "message": "Sign in first" }""" }
+        val asked = ThreadViewModel(on.api, "r1", null, changes, gist = "g1").also { it.until { s -> s.signIn } }
+        assertEquals(false, asked.state.value.failed)
+        assertEquals(0, on.signedOut)
+
+        val off = FakeServer { HttpStatusCode.NotFound to """{ "message": "Not found" }""" }
+        val missing = ThreadViewModel(off.api, "r1", null, changes, gist = "g1").also { it.until { s -> s.missing } }
+        assertEquals(false, missing.state.value.signIn)
+    }
 }

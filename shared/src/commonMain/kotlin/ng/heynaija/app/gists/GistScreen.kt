@@ -43,7 +43,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,11 +80,13 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.TabRise
 import ng.heynaija.app.api.GistView
 import ng.heynaija.app.api.Person
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.KeepScreenOn
 import ng.heynaija.app.platform.rememberMicrophonePermission
+import ng.heynaija.app.platform.rememberShare
 import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
@@ -108,22 +109,34 @@ private const val DATA_HINT = "Listening uses about 43 MB an hour. It is more on
 /**
  * A Gist, after the web's gist-room.tsx: who hosts it and who is on stage, joining
  * to listen, asking to speak, the microphone, the host's controls, and the replies.
+ *
+ * The screen shows the room; it does not own it. Going back keeps the member in
+ * the Gist, with [GistBar] over the rest of the app, until they tap Leave.
  */
 @Composable
 fun GistScreen(id: String) {
     val app = LocalApp.current
-    val viewModel = viewModel(key = "gist-$id") { GistViewModel(app, id) }
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val room = viewModel(key = "gist-$id") { GistRoomHolder(app.gists, id) }.room
+    val state by room.state.collectAsStateWithLifecycle()
     val view = state.view
-    // No polling while the app is in the background; a fresh look on coming back.
-    LifecycleResumeEffect(viewModel) {
-        viewModel.setVisible(true)
-        onPauseOrDispose { viewModel.setVisible(false) }
+    // Replies are looked for only while the room is on screen, and it gets a fresh look on coming back.
+    LifecycleResumeEffect(room) {
+        room.shown(true)
+        onPauseOrDispose { room.shown(false) }
     }
-    if (state.polling || state.phase == Phase.Connecting) KeepScreenOn()
+    // Awake while the room is on screen, to see who is talking. The sound does not need it.
+    if (state.inRoom) KeepScreenOn()
+    val share = rememberShare()
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Gist", onBack = { app.navigator.pop() }, actions = {
+            // The Gist's page on the web, which opens in the app where it is installed. Only a member Gists are open
+            // to gets past that page, so the link shows the room to nobody new.
+            if (view != null) {
+                IconButton(onClick = { share(app.gistLink(id)) }) {
+                    Icon(Icons.Share, "Share this Gist", Modifier.size(22.dp), tint = HeyNaija.colors.muted)
+                }
+            }
             // Anyone in the room may report it, except its host (ADR 0017).
             if (state.polling && view?.viewer?.role != "host") {
                 IconButton(onClick = { app.navigator.push(Route.Report("gistId" to id, "this Gist")) }) {
@@ -132,21 +145,22 @@ fun GistScreen(id: String) {
             }
         })
         when {
+            view == null && state.phase == Phase.SignIn -> GistSignIn()
             view == null && state.phase == Phase.Missing ->
                 Problem("This Gist is not available. It may have been taken down, or it is not open to you.", onRetry = null)
             view == null && state.phase == Phase.LoadFailed ->
-                Problem("This Gist could not be loaded. Check your connection and try again.", viewModel::load)
+                Problem("This Gist could not be loaded. Check your connection and try again.", room::load)
             view == null -> Loading()
             else -> {
-                Room(view, state, viewModel, Modifier.weight(1f))
-                if (state.polling) Controls(view, state, viewModel)
+                Room(view, state, room, Modifier.weight(1f))
+                if (state.polling) Controls(view, state, room)
             }
         }
     }
 }
 
 @Composable
-private fun Room(view: GistView, state: GistState, viewModel: GistViewModel, modifier: Modifier) {
+private fun Room(view: GistView, state: GistState, room: GistRoom, modifier: Modifier) {
     val app = LocalApp.current
     val me = app.me
     val now = rememberNow()
@@ -161,28 +175,28 @@ private fun Room(view: GistView, state: GistState, viewModel: GistViewModel, mod
         item(key = "head") {
             Head(view, state, onListeners = {
                 listenersOpen = true
-                if (moderator) viewModel.loadListeners()
+                if (moderator) room.loadListeners()
             })
         }
-        item(key = "phase") { PhaseCard(view, state, viewModel) }
+        item(key = "phase") { PhaseCard(view, state, room) }
         if (state.polling) {
             state.problem?.let { problem -> item(key = "problem") { Notice(problem, danger = true) } }
             if (state.phase == Phase.Live && me != null && me.id in state.weak) {
                 item(key = "weak") {
-                    Notice("Your connection is weak, so the sound may break up${if (controlsFor(view).mic) " and others may not hear you clearly" else ""}. Move closer to your Wi-Fi, or switch between Wi-Fi and mobile data.")
+                    Notice("Your connection is weak, so the sound may break up${if (controlsFor(view, me.mayTakeStage).mic) " and others may not hear you clearly" else ""}. Move closer to your Wi-Fi, or switch between Wi-Fi and mobile data.")
                 }
             }
             item(key = "stage") { Stage(view, state) }
-            if (moderator) item(key = "host") { HostPanel(view, state, viewModel, onListeners = { listenersOpen = true; viewModel.loadListeners() }) }
+            if (moderator) item(key = "host") { HostPanel(view, state, room, onListeners = { listenersOpen = true; room.loadListeners() }) }
             state.micProblem?.let { problem -> item(key = "mic-problem") { Notice(problem, danger = true) } }
         }
         // The gistReplies flag off stops new replies and leaves the ones there to read; with none, there is nothing to show.
-        if (me?.has("gistReplies") == true || state.replies.count > 0) replies(view, state, viewModel, now)
+        if (me?.has("gistReplies") == true || state.replies.count > 0) replies(view, state, room, now)
     }
 
     if (listenersOpen) {
         if (moderator && state.polling) {
-            ListenersSheet(view, state, viewModel, onDismiss = { listenersOpen = false; viewModel.closeListeners() })
+            ListenersSheet(view, state, room, onDismiss = { listenersOpen = false; room.closeListeners() })
         } else {
             // Everyone else gets the count: only the host and co-hosts see who is listening.
             AlertDialog(
@@ -277,38 +291,47 @@ private fun FlowLine(content: @Composable () -> Unit) {
 
 /** What to do next, for every phase but being in the room. */
 @Composable
-private fun PhaseCard(view: GistView, state: GistState, viewModel: GistViewModel) {
+private fun PhaseCard(view: GistView, state: GistState, room: GistRoom) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     val home: () -> Unit = { app.navigator.pop() }
     when (state.phase) {
         Phase.Prejoin -> Section("Ready to listen?") {
             Text(
-                "Keep this screen open. If your phone locks or you switch to another app, the sound can stop. Audio only: no camera, and no recording.",
+                "The sound keeps playing when you leave this screen, switch to another app or lock your phone, until you tap Leave. Audio only: no camera, and no recording.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.ink,
             )
             Text(DATA_HINT, style = MaterialTheme.typography.bodyMedium, color = colors.muted)
-            Text("The sound starts when you tap Join. You only need your microphone if the host lets you speak.", style = MaterialTheme.typography.bodyMedium, color = colors.muted)
-            GistButton("Join the Gist", viewModel::join, primary = true, modifier = Modifier.fillMaxWidth())
+            // A member who may only listen is not told about a microphone they will not be offered.
+            Text(
+                "The sound starts when you tap Join." + if (app.me?.mayTakeStage == true) " You only need your microphone if the host lets you speak." else "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+            )
+            GistButton("Join the Gist", room::join, primary = true, modifier = Modifier.fillMaxWidth())
         }
         Phase.Connecting -> Card {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
-                Text("Connecting… keep this screen open.", style = MaterialTheme.typography.bodyMedium, color = colors.ink)
+                Text("Connecting…", style = MaterialTheme.typography.bodyMedium, color = colors.ink)
             }
         }
-        Phase.Reconnecting -> Notice("Reconnecting… keep this screen open. The sound comes back on its own.")
-        Phase.Live -> Text(
-            "Keep this screen open. $DATA_HINT",
+        Phase.Reconnecting -> Notice("Reconnecting… The sound comes back on its own.")
+        Phase.Live -> if (!state.hearing) Section(null) {
+            // Paused from the lock screen, or by taking headphones out.
+            Notice("The sound is paused. You are still in the Gist.")
+            GistButton("Play", { room.setHearing(true) }, icon = Icons.PlayFilled, primary = true)
+        } else Text(
+            "The sound keeps playing if you leave this screen or lock your phone. $DATA_HINT",
             Modifier.padding(horizontal = 4.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = colors.muted,
         )
         Phase.Failed -> Section(null) {
             Notice(state.problem ?: "Could not join the Gist.", danger = true)
-            GistButton("Try again", viewModel::join, primary = true)
+            GistButton("Try again", room::join, primary = true)
         }
         Phase.Full, Phase.Locked -> Section(if (state.phase == Phase.Full) "This Gist is full" else "This Gist is locked") {
             Text(
@@ -318,7 +341,7 @@ private fun PhaseCard(view: GistView, state: GistState, viewModel: GistViewModel
                 color = colors.muted,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GistButton("Try again", viewModel::join, primary = true)
+                GistButton("Try again", room::join, primary = true)
                 GistButton("Back", home)
             }
         }
@@ -328,7 +351,7 @@ private fun PhaseCard(view: GistView, state: GistState, viewModel: GistViewModel
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.muted,
             )
-            GistButton("Use it here", viewModel::join, primary = true)
+            GistButton("Use it here", room::join, primary = true)
         }
         Phase.Gone, Phase.Missing -> Section("You are no longer in this Gist") {
             GistButton("Back", home, primary = true)
@@ -341,7 +364,7 @@ private fun PhaseCard(view: GistView, state: GistState, viewModel: GistViewModel
             )
             GistButton("Back", home, primary = true)
         }
-        Phase.Loading, Phase.LoadFailed -> Unit
+        Phase.Loading, Phase.LoadFailed, Phase.SignIn -> Unit
     }
 }
 
@@ -402,10 +425,10 @@ private fun Tile(p: OnStage, self: Boolean, state: GistState, modifier: Modifier
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HostPanel(view: GistView, state: GistState, viewModel: GistViewModel, onListeners: () -> Unit) {
+private fun HostPanel(view: GistView, state: GistState, room: GistRoom, onListeners: () -> Unit) {
     val colors = HeyNaija.colors
     val role = view.viewer.role
-    val controls = controlsFor(view)
+    val controls = controlsFor(view, LocalApp.current.me?.mayTakeStage == true)
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     Section(if (role == "host") "Host controls" else "Co-host controls") {
         Subhead("Requests to speak (${state.requests.size})")
@@ -418,7 +441,7 @@ private fun HostPanel(view: GistView, state: GistState, viewModel: GistViewModel
         }
         for (request in state.requests) {
             PersonRow(request.person, detail = request.person.handleIfNamed) {
-                GistButton("Let speak", { viewModel.approve(request.person) }, primary = true, enabled = !state.busy, small = true)
+                GistButton("Let speak", { room.approve(request.person) }, primary = true, enabled = !state.busy, small = true)
             }
         }
         if (view.speakers.isNotEmpty()) {
@@ -428,11 +451,11 @@ private fun HostPanel(view: GistView, state: GistState, viewModel: GistViewModel
                 val isSpeaker = speaker.role == "speaker"
                 PersonRow(p, detail = if (isSpeaker) "Speaker" else "Co-host")
                 FlowRow(Modifier.padding(start = 46.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (isSpeaker) GistButton("Mute", { viewModel.mute(p) }, enabled = !state.busy, small = true)
-                    if (isSpeaker && controls.appointCohost) GistButton("Make co-host", { viewModel.makeCohost(p) }, enabled = !state.busy, small = true)
+                    if (isSpeaker) GistButton("Mute", { room.mute(p) }, enabled = !state.busy, small = true)
+                    if (isSpeaker && controls.appointCohost) GistButton("Make co-host", { room.makeCohost(p) }, enabled = !state.busy, small = true)
                     if (isSpeaker || role == "host") {
-                        GistButton("To listeners", { viewModel.demote(p) }, enabled = !state.busy, small = true)
-                        GistButton("Remove", { confirm = "Remove ${p.name} from this Gist?" to { viewModel.remove(p) } }, enabled = !state.busy, small = true, danger = true)
+                        GistButton("To listeners", { room.demote(p) }, enabled = !state.busy, small = true)
+                        GistButton("Remove", { confirm = "Remove ${p.name} from this Gist?" to { room.remove(p) } }, enabled = !state.busy, small = true, danger = true)
                     }
                 }
             }
@@ -442,9 +465,9 @@ private fun HostPanel(view: GistView, state: GistState, viewModel: GistViewModel
         if (controls.settings) {
             Subhead("Room")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GistButton(if (view.locked) "Unlock the room" else "Lock the room", { viewModel.setLocked(!view.locked) }, icon = Icons.Lock, enabled = !state.busy)
-                GistButton(if (view.requestsOpen) "Turn requests off" else "Turn requests on", { viewModel.setRequestsOpen(!view.requestsOpen) }, enabled = !state.busy)
-                GistButton("End the Gist", { confirm = "End this Gist for everyone?" to viewModel::end }, enabled = !state.busy, danger = true)
+                GistButton(if (view.locked) "Unlock the room" else "Lock the room", { room.setLocked(!view.locked) }, icon = Icons.Lock, enabled = !state.busy)
+                GistButton(if (view.requestsOpen) "Turn requests off" else "Turn requests on", { room.setRequestsOpen(!view.requestsOpen) }, enabled = !state.busy)
+                GistButton("End the Gist", { confirm = "End this Gist for everyone?" to room::end }, enabled = !state.busy, danger = true)
             }
         }
     }
@@ -461,7 +484,7 @@ private fun HostPanel(view: GistView, state: GistState, viewModel: GistViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ListenersSheet(view: GistView, state: GistState, viewModel: GistViewModel, onDismiss: () -> Unit) {
+private fun ListenersSheet(view: GistView, state: GistState, room: GistRoom, onDismiss: () -> Unit) {
     val colors = HeyNaija.colors
     var confirm by remember { mutableStateOf<Person?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surface) {
@@ -477,7 +500,7 @@ private fun ListenersSheet(view: GistView, state: GistState, viewModel: GistView
                 listeners.isEmpty() -> Text("Nobody is listening yet.", style = MaterialTheme.typography.bodyMedium, color = colors.muted)
                 else -> for (p in listeners) {
                     PersonRow(p, detail = p.handleIfNamed) {
-                        GistButton("Invite to speak", { viewModel.approve(p) }, enabled = !state.busy, small = true)
+                        GistButton("Invite to speak", { room.approve(p) }, enabled = !state.busy, small = true)
                     }
                     Row(Modifier.padding(start = 46.dp)) {
                         GistButton("Remove", { confirm = p }, enabled = !state.busy, small = true, danger = true)
@@ -491,7 +514,7 @@ private fun ListenersSheet(view: GistView, state: GistState, viewModel: GistView
             title = "Remove ${p.name} from this Gist?",
             text = "They leave the room and cannot come back to this Gist.",
             action = "Remove",
-            onConfirm = { confirm = null; viewModel.remove(p) },
+            onConfirm = { confirm = null; room.remove(p) },
             onDismiss = { confirm = null },
         )
     }
@@ -516,70 +539,79 @@ private fun PersonRow(p: Person, detail: String?, action: (@Composable () -> Uni
 
 // ---- the member's own controls --------------------------------------------------------
 
-/** The bar under the room: the microphone or a request to speak, and Leave. */
+/**
+ * The bar under the room: the microphone or a request to speak, and Leave. A card
+ * like [GistBar], standing clear of the curve the selected tab raises above the tab
+ * bar: flat on the bar, that curve covered one end of it (Home's, the microphone).
+ */
 @Composable
-private fun Controls(view: GistView, state: GistState, viewModel: GistViewModel) {
+private fun Controls(view: GistView, state: GistState, room: GistRoom) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
-    val controls = controlsFor(view)
-    val askMic = rememberMicrophonePermission { granted -> if (granted) viewModel.setMic(true) else viewModel.micDenied() }
-    Column(Modifier.background(colors.surface)) {
-        HorizontalDivider(color = colors.line)
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            when {
-                controls.mic -> GistButton(
-                    if (state.micOn) "Microphone on" else "Microphone off",
-                    onClick = { if (state.micOn) viewModel.setMic(false) else askMic() },
-                    icon = if (state.micOn) Icons.Mic else Icons.MicOff,
-                    primary = state.micOn,
-                    enabled = !state.micBusy && state.phase == Phase.Live,
-                    modifier = Modifier.weight(1f),
-                )
-                controls.request -> GistButton("Request to speak", { viewModel.requestToSpeak(true) }, icon = Icons.Hand, primary = true, modifier = Modifier.weight(1f))
-                controls.cancelRequest -> GistButton("Cancel request", { viewModel.requestToSpeak(false) }, modifier = Modifier.weight(1f))
-                view.viewer.role == "listener" -> Text(
-                    "The host is not taking requests to speak.",
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.muted,
-                )
-                else -> Spacer(Modifier.weight(1f))
-            }
-            if (controls.mic || view.viewer.role == "host" || view.viewer.role == "cohost") {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(Radii.control)
-                        .border(1.dp, colors.lineStrong, Radii.control)
-                        .clickable { app.say("Audio is playing through device output.") },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Gear, "Audio settings", Modifier.size(20.dp), tint = colors.muted)
-                }
-            }
-            GistButton("Leave", {
-                viewModel.leave()
-                app.navigator.pop()
-            }, icon = Icons.Leave)
+    val controls = controlsFor(view, app.me?.mayTakeStage == true)
+    val askMic = rememberMicrophonePermission { granted -> if (granted) room.setMic(true) else room.micDenied() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = TabRise + 6.dp)
+            .clip(Radii.card)
+            .background(colors.surface)
+            .border(1.dp, colors.lineStrong, Radii.card)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        when {
+            controls.mic -> GistButton(
+                // A tap waits for the room to allow the microphone, which can take a moment just after joining.
+                if (state.micOn) "Microphone on" else if (state.micBusy) "Starting…" else "Microphone off",
+                onClick = { if (state.micOn) room.setMic(false) else askMic() },
+                icon = if (state.micOn) Icons.Mic else Icons.MicOff,
+                primary = state.micOn,
+                enabled = !state.micBusy && state.phase == Phase.Live,
+                modifier = Modifier.weight(1f),
+            )
+            controls.request -> GistButton("Request to speak", { room.requestToSpeak(true) }, icon = Icons.Hand, primary = true, modifier = Modifier.weight(1f))
+            controls.cancelRequest -> GistButton("Cancel request", { room.requestToSpeak(false) }, modifier = Modifier.weight(1f))
+            controls.requestsClosed -> Text(
+                "The host is not taking requests to speak.",
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+            )
+            else -> Spacer(Modifier.weight(1f))
         }
+        if (controls.mic || view.viewer.role == "host" || view.viewer.role == "cohost") {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(Radii.control)
+                    .border(1.dp, colors.lineStrong, Radii.control)
+                    .clickable { app.say("Audio is playing through device output.") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Gear, "Audio settings", Modifier.size(20.dp), tint = colors.muted)
+            }
+        }
+        // Going back keeps the member in the Gist; this is the way out of it.
+        GistButton("Leave", {
+            room.leave()
+            app.navigator.pop()
+        }, icon = Icons.Leave)
     }
 }
 
 // ---- replies ------------------------------------------------------------------------
 
-private fun LazyListScope.replies(view: GistView, state: GistState, viewModel: GistViewModel, now: kotlin.time.Instant) {
+private fun LazyListScope.replies(view: GistView, state: GistState, room: GistRoom, now: kotlin.time.Instant) {
     val replies = state.replies
-    item(key = "replies-head") { RepliesHead(view, state, viewModel) }
+    item(key = "replies-head") { RepliesHead(view, state, room) }
     if (!replies.loaded) {
         if (replies.failed) item(key = "replies-failed") {
             Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Replies could not be loaded.", style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
                 Spacer(Modifier.height(8.dp))
-                SecondaryButton("Try again", viewModel::loadReplies)
+                SecondaryButton("Try again", room::loadReplies)
             }
         }
         return
@@ -593,7 +625,7 @@ private fun LazyListScope.replies(view: GistView, state: GistState, viewModel: G
         item(key = "replies-more") {
             Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
                 if (replies.loadingMore) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                else SecondaryButton("More replies", viewModel::moreReplies)
+                else SecondaryButton("More replies", room::moreReplies)
             }
         }
     }
@@ -601,7 +633,7 @@ private fun LazyListScope.replies(view: GistView, state: GistState, viewModel: G
 
 /** Inline reply composer and "Replies" heading, matching the live web app (Screenshot 5 & 6). */
 @Composable
-private fun RepliesHead(view: GistView, state: GistState, viewModel: GistViewModel) {
+private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
     val app = LocalApp.current
     val me = app.me ?: return
     val colors = HeyNaija.colors
@@ -632,7 +664,7 @@ private fun RepliesHead(view: GistView, state: GistState, viewModel: GistViewMod
                             }) else null,
                             onClick = {
                                 menu = false
-                                viewModel.setReplyAudience(key)
+                                room.setReplyAudience(key)
                             },
                         )
                     }
@@ -675,7 +707,7 @@ private fun RepliesHead(view: GistView, state: GistState, viewModel: GistViewMod
                             keyboardActions = KeyboardActions(onSend = {
                                 if (replyText.isNotBlank() && !posting) {
                                     posting = true
-                                    viewModel.postReply(replyText) {
+                                    room.postReply(replyText) {
                                         replyText = ""
                                         posting = false
                                     }
@@ -687,7 +719,7 @@ private fun RepliesHead(view: GistView, state: GistState, viewModel: GistViewMod
                         onClick = {
                             if (replyText.isNotBlank() && !posting) {
                                 posting = true
-                                viewModel.postReply(replyText) {
+                                room.postReply(replyText) {
                                     replyText = ""
                                     posting = false
                                 }
@@ -811,7 +843,7 @@ private fun Modifier.speakingRing(color: androidx.compose.ui.graphics.Color): Mo
 
 /** The red dot by "Live": breathing slowly in the room ([blink]), still on Home, where it would only cost battery. */
 @Composable
-private fun LiveDot(blink: Boolean = false) {
+internal fun LiveDot(blink: Boolean = false) {
     val dot = Modifier.size(8.dp).clip(CircleShape).background(HeyNaija.colors.danger)
     if (!blink) return Box(dot)
     val alpha = rememberInfiniteTransition(label = "live").animateFloat(

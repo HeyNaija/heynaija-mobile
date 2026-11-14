@@ -26,8 +26,8 @@ Production has to be ready before a reviewer opens the app.
 ## 2. Apple developer account (once)
 
 - [ ] **You:** App ID `ng.heynaija.app` with **Push Notifications**, **Sign In
-      with Apple**, **Declared Age Range** and **App Groups**
-      (`group.ng.heynaija.app`); and
+      with Apple**, **Declared Age Range**, **Associated Domains** (links that
+      open the app) and **App Groups** (`group.ng.heynaija.app`); and
       `ng.heynaija.app.NotificationService` with **App Groups**. Xcode's automatic
       signing makes both, and the group, once the team is set below.
 - [ ] Put the team ID in `iosApp/Configuration/Config.xcconfig` (`TEAM_ID=`). It
@@ -71,6 +71,17 @@ For each version:
   `docs/deployment/store-review.md`. Add: "HeyNaija is invite-only during its
   beta. Members can report posts and accounts, block and mute, and the rules are
   at heynaija.ng/rules. Accounts are deleted from Settings → Delete your account."
+- **Audio in the background.** The app declares the audio background mode
+  (`UIBackgroundModes` in `iosApp/iosApp/Info.plist`), which App Review checks is
+  really used (Guideline 2.5.4). Add to the review note: "HeyNaija plays audio in
+  the background for Gists, its live audio rooms. A member who joins a Gist keeps
+  hearing it, and can keep speaking, with the phone locked or another app open,
+  until they tap Leave, and it shows on the lock screen as Now Playing. To see
+  it: sign in, tap the broadcast icon at the top of Home, then Start a Gist (or
+  open one under Live now), tap Join, then lock the phone or go to the Home
+  Screen." The review account needs Gists switched on
+  and a date of birth that makes it an adult, or it can only listen. Nothing to
+  add to the App ID: background modes are not a capability Apple signs.
 - **Export compliance:** asked for each build. The app uses HTTPS, Apple's own
   AES-GCM (CryptoKit) for push, and WebRTC's DTLS-SRTP for Gists' sound, all
   standard algorithms. Decide the answer once (with advice if unsure), then add
@@ -80,7 +91,9 @@ For each version:
 ## 4. An iOS build
 
 1. Raise `CURRENT_PROJECT_VERSION` in `Config.xcconfig` (every upload needs a new
-   one), and `MARKETING_VERSION` for a new version.
+   one), and `MARKETING_VERSION` for a new version. `MARKETING_VERSION` is the
+   version both stores show: the Android build reads it from there too, so the
+   two apps always match.
 2. Xcode → iosApp scheme → **Any iOS Device (arm64)** → Product → **Archive**.
 3. Organizer → **Distribute App** → App Store Connect → Upload. Automatic signing
    makes the distribution profiles for the app and its extension.
@@ -113,6 +126,11 @@ For each version:
   (`keytool -list -v -keystore heynaija-upload.jks`), each need an Android OAuth
   client in Google Cloud ([plan.md](plan.md#google-sign-in)), or Google sign-in
   fails in the Play build.
+- **Links that open the app:** nothing to do. Play's signing certificate is in
+  the web repository's `apps/web/lib/app-links.ts` (HeyNaija/heynaija#141), and
+  links open in copies installed from Play. A copy not from Play (the Release
+  workflow's `.aab`, a debug build) asks first: `docs/deployment/app-links.md`
+  there.
 - **App content** (Policy → App content):
   - Privacy policy: `https://heynaija.ng/privacy`.
   - App access: the review account (`docs/deployment/store-review.md`).
@@ -127,6 +145,22 @@ For each version:
     which says how, links to Settings → Delete your account, and gives the
     address to write to without signing in.
   - News app, health, financial features, government: no.
+  - **Foreground service permissions.** The app keeps a Gist playing with the app
+    off screen or the phone locked through a foreground service
+    (`GistService`), and Play asks an app that targets Android 14 or later to say
+    what each type is for, with a short video, before a release with it is
+    accepted. Two types:
+    - **Media playback**: "Gists are live audio rooms. After a member joins one,
+      its sound keeps playing when they leave the app or lock the phone, until
+      they tap Leave in the app or on the notification."
+    - **Microphone**: "A member the host has let speak in a Gist can keep
+      speaking with the app off screen. The microphone is used only while they
+      have switched it on in the room; the notification says when it is on."
+    The video for each (a screen recording, as an unlisted YouTube or Drive
+    link): join a Gist, for the microphone turn it on, go to the phone's home
+    screen, show the notification, and tap Leave on it. For "what happens if the
+    task is interrupted": the member stops hearing the room, and speakers are
+    cut off mid-sentence.
 - **Testing first.** A personal developer account made after November 2023 must
   run a closed test with at least 12 testers for 14 days before it can publish to
   production. An organisation account can go straight on.
@@ -134,8 +168,9 @@ For each version:
 ## 6. An Android build
 
 1. Actions → **Release** → Run workflow (or push a `v*` tag). It builds the app
-   bundle signed with the upload key, with the run number as its version code, and
-   fails if a secret is missing.
+   bundle signed with the upload key, with the run number as its version code and
+   `MARKETING_VERSION` from `iosApp/Configuration/Config.xcconfig` as its version
+   name, and fails if a secret is missing.
 2. Download the `heynaija-android-<run>` artifact, and upload the `.aab` in Play
    Console → Test and release → Internal testing (then closed, then production).
 
@@ -169,8 +204,39 @@ Before signing in or joining, the app asks the store:
 Apple's and Google's own words leave whether this is enough to counsel; it is
 what both stores' age APIs offer an 18+ app.
 
-## Not needed for the first release
+## Gists in the background
 
-- Links that open the app (Universal Links, App Links): the web has to serve
-  `/.well-known/apple-app-site-association` and `assetlinks.json` first.
-- Gists with the phone locked.
+What a release with it carries, for the forms above:
+
+- **Android:** `GistService`, a foreground service of the types `mediaPlayback`
+  and, only while the member's microphone is on, `microphone`, with the
+  permissions `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` and
+  `FOREGROUND_SERVICE_MICROPHONE`. None of them asks the member anything, and
+  Data safety does not change. Play Console must be told what the two types are
+  for (section 5, "Foreground service permissions") or the release is refused.
+  The notification ("Gist you are in": the Gist's title, whether the microphone
+  is on, and Leave) shows only to members who have allowed notifications
+  (Android 13 and later); the Gist plays on either way, and is left from the app.
+- **iOS:** the audio background mode. No new capability, entitlement or
+  permission; say why in the review note (section 3). The Gist shows as Now
+  Playing, on the lock screen, in Control Center and in the Dynamic Island
+  (`GistNowPlaying.swift`): its title, who hosts it or that the microphone is
+  on, and pause and play, which silence the Gist on the phone and bring it back
+  without leaving it (taking AirPods out pauses it too). iOS shows only an app
+  whose sound does not mix with other apps', so joining a Gist now pauses music
+  playing in another app, as a speaker's microphone already did.
+- **iOS, to check on a real iPhone before relying on it:** iOS keeps a
+  background app running only while it is playing sound. Muting unpublishes a
+  speaker's microphone here, so while nobody on stage has theirs on the room is
+  silent in the strict sense: no stream at all. The app holds its audio session
+  for the whole visit (`GistAudio.swift`), so the next speaker can be heard
+  without opening the app; whether iOS still pauses the app when that silence
+  is long cannot be seen on the simulator, which never pauses an app with this
+  mode. The test: join as a listener, lock the phone, have the only speaker
+  mute for two or three minutes, then speak again. If the sound does not come
+  back, the room has to keep a stream going between speakers (plan.md).
+- Swiping the app away on Android leaves the Gist.
+- Not tried on real phones yet, only on the emulator and the simulator, which
+  have no real lock screen or microphone: a long Gist with the phone locked, a
+  phone call arriving during one, earphones being plugged in or taken out, and
+  pause and play on the iPhone's lock screen.

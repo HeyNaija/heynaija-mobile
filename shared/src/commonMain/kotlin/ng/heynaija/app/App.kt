@@ -75,6 +75,7 @@ import ng.heynaija.app.communities.CommunityScreen
 import ng.heynaija.app.compose.ComposeScreen
 import ng.heynaija.app.compose.ReplySheet
 import ng.heynaija.app.feed.HomeScreen
+import ng.heynaija.app.gists.GistBar
 import ng.heynaija.app.gists.GistScreen
 import ng.heynaija.app.media.ImageViewer
 import ng.heynaija.app.media.VideoScreen
@@ -82,6 +83,7 @@ import ng.heynaija.app.nav.Entry
 import ng.heynaija.app.nav.Motion
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.Tab
+import ng.heynaija.app.nav.WebLinks
 import ng.heynaija.app.notifications.NotificationsScreen
 import ng.heynaija.app.platform.Platform
 import ng.heynaija.app.platform.PushEvents
@@ -105,14 +107,22 @@ import ng.heynaija.app.ui.Loading
 
 /** The whole app, the same on Android and iOS. */
 @Composable
-fun App(platform: Platform) {
+fun App(platform: Platform) = App(remember { AppState(platform).also { it.start() } })
+
+/**
+ * The app over a state that is already running. Android keeps one for the whole
+ * process (androidApp's AppHolder): its screen is made again when the phone is
+ * turned or the theme changes, and the app, and the Gist playing in it, must not
+ * start again with it.
+ */
+@Composable
+fun App(app: AppState) {
     setSingletonImageLoaderFactory { context ->
         ImageLoader.Builder(context)
             .components { add(KtorNetworkFetcherFactory()) }
             .crossfade(true)
             .build()
     }
-    val app = remember { AppState(platform).also { it.start() } }
     HeyNaijaTheme {
         CompositionLocalProvider(LocalApp provides app) { Root(app) }
     }
@@ -121,11 +131,12 @@ fun App(platform: Platform) {
 @Composable
 private fun Root(app: AppState) {
     val account by app.account.collectAsStateWithLifecycle()
-    // Coming back to the app: the unread count may have moved.
+    // Coming back to the app: the unread count may have moved. A Gist is followed only while the app is on screen.
     LifecycleResumeEffect(Unit) {
         app.scope.launch { app.refreshMe() }
         app.pushMayHaveChanged()
-        onPauseOrDispose {}
+        app.gists.setForeground(true)
+        onPauseOrDispose { app.gists.setForeground(false) }
     }
     Box(Modifier.fillMaxSize().background(HeyNaija.colors.bg)) {
         val me = (account as? Account.SignedIn)?.me
@@ -146,6 +157,7 @@ private fun Shell(app: AppState) {
     val top = navigator.top
     val snackbar = remember { SnackbarHostState() }
     val account by app.account.collectAsStateWithLifecycle()
+    val inGist by app.gists.current.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { app.messages.collect { snackbar.showSnackbar(it) } }
     BackHandler(enabled = navigator.canPop) { navigator.pop() }
     app.replying?.let { ReplySheet(app, it) }
@@ -158,13 +170,30 @@ private fun Shell(app: AppState) {
             PushEvents.handled(link)
         }
     }
+    // A link to the site that opened the app. Signed out too: posts and profiles show to anyone, as on the web.
+    val webLink by WebLinks.opened.collectAsStateWithLifecycle()
+    LaunchedEffect(webLink) {
+        val link = webLink ?: return@LaunchedEffect
+        app.openWebLink(link)
+        WebLinks.handled(link)
+    }
 
     Scaffold(
         containerColor = HeyNaija.colors.bg,
         // Each screen keeps clear of the system bars itself; full-screen ones go edge to edge.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbar) },
-        bottomBar = { if (!top.route.fullScreen) TabBar(app, (account as? Account.SignedIn)?.me?.unreadNotifications ?: 0) },
+        // No count while the list is on screen, which marks them read, as on the web.
+        bottomBar = {
+            if (!top.route.fullScreen) Column {
+                // The Gist the member is in, on every screen but its own. It stands clear of the curve the
+                // selected tab raises above the tab bar.
+                inGist?.takeIf { top.route != Route.Gist(it.id) }?.let { room ->
+                    GistBar(room, Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = TabRise + 6.dp))
+                }
+                TabBar(app, if (top.route == Route.Notifications) 0 else (account as? Account.SignedIn)?.me?.unreadNotifications ?: 0)
+            }
+        },
     ) { padding ->
         val holder = rememberSaveableStateHolder()
         AnimatedContent(
@@ -270,8 +299,12 @@ private fun TabBar(app: AppState, unread: Int) {
 }
 
 private val TabBarHeight = 56.dp
-/** How far the curve under the selected tab rises above the bar. */
-private val TabRise = 27.dp
+/**
+ * How far the curve under the selected tab rises above the bar, over the bottom of
+ * the screen. Anything pinned to a screen's foot stands at least this high (GistBar,
+ * a Gist's controls), or the selected tab covers part of it.
+ */
+internal val TabRise = 27.dp
 private val TabCurveWidth = 120.dp
 private val TabBubble = 48.dp
 /** How far the selected tab's bubble rises: it stops short of the curve's top, leaving a margin above it. */

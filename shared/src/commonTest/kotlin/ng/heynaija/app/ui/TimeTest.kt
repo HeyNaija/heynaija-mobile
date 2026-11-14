@@ -52,4 +52,17 @@ class TimeTest {
         // Just after midnight in Lagos is 12, not 0.
         assertEquals("12:05 am · 8 Nov 2026", postedAt(Instant.parse("2026-11-07T23:05:00Z"), lagos))
     }
+
+    @Test
+    fun theWaitForACommunitysNextAnnouncementIsSaidInWholeHours() {
+        fun wait(iso: String?) = announcementWait(iso, now)
+        assertEquals(null, wait(null))
+        assertEquals(null, wait("2026-11-06T12:00:00Z"))
+        assertEquals(null, wait("2026-11-06T11:00:00Z"))
+        assertEquals(null, wait("soon"))
+        assertEquals("in less than an hour", wait("2026-11-06T12:29:00Z"))
+        assertEquals("in about an hour", wait("2026-11-06T12:45:00.000Z"))
+        assertEquals("in about 5 hours", wait("2026-11-06T17:10:00Z"))
+        assertEquals("in about 24 hours", wait("2026-11-07T12:00:00Z"))
+    }
 }

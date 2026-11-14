@@ -98,6 +98,10 @@ class Navigator {
 
     val canPop: Boolean get() = stack.size > 1 || tab != Tab.Home
 
+    /** With the sign-in or sign-up form on top, the screen it was opened from. */
+    val beforeSignIn: Route?
+        get() = stack.takeIf { it.size > 1 && (top.route == Route.SignIn || top.route == Route.SignUp) }?.let { it[it.lastIndex - 1].route }
+
     fun push(route: Route) {
         motion = Motion.Push
         stacks.getValue(tab).add(Entry(route))
@@ -139,6 +143,42 @@ class Navigator {
             tab = target
         }
         if (root == null) push(route)
+    }
+
+    /**
+     * Opens [route] from a link to the site: a tab's own screen as that tab,
+     * anything else over whatever is open, as a link tapped inside the app would.
+     * Back returns there. The screen already on top is not opened twice.
+     */
+    fun openFromLink(route: Route) {
+        val root = Tab.entries.firstOrNull { it.root == route }
+        if (root != null) {
+            if (root != tab) {
+                motion = Motion.Tab
+                tab = root
+            }
+            val stack = stacks.getValue(tab)
+            if (stack.size > 1) {
+                motion = Motion.Pop
+                while (stack.size > 1) stack.removeAt(stack.lastIndex).viewModelStore.clear()
+            }
+            return
+        }
+        if (top.route != route) push(route)
+    }
+
+    /**
+     * Back to [route] where this tab already has it open, with everything above it
+     * closed; opened on top otherwise. For the bar that leads back to the Gist the
+     * member is in, so that going back and forth does not stack up copies of it.
+     */
+    fun returnTo(route: Route) {
+        val stack = stacks.getValue(tab)
+        val at = stack.indexOfLast { it.route == route }
+        if (at < 0) return push(route)
+        if (at == stack.lastIndex) return
+        motion = Motion.Pop
+        while (stack.lastIndex > at) stack.removeAt(stack.lastIndex).viewModelStore.clear()
     }
 
     fun select(target: Tab) {

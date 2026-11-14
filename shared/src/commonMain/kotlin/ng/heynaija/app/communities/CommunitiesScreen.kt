@@ -1,6 +1,7 @@
 package ng.heynaija.app.communities
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,6 +91,21 @@ private fun AppState.membership(community: Community, update: (Community) -> Uni
         try {
             api.setMembership(community.slug, on)
             say(if (on) "Joined ${community.name}" else "Left ${community.name}")
+        } catch (e: Exception) {
+            update(community)
+            throw e
+        }
+    }
+}
+
+/** Turning a community's announcements on or off for yourself (ADR 0029), at once on screen and put back if the API says no. */
+private fun AppState.announcements(community: Community, update: (Community) -> Unit) = requireMember {
+    val on = community.viewerGetsAnnouncements != true
+    update(community.copy(viewerGetsAnnouncements = on))
+    scope.launchCatching(this, "That did not save. Check your connection and try again.") {
+        try {
+            api.setAnnouncements(community.slug, on)
+            say(if (on) "Announcements from ${community.name} are on" else "Announcements from ${community.name} are off")
         } catch (e: Exception) {
             update(community)
             throw e
@@ -225,6 +241,11 @@ class CommunityViewModel(private val app: AppState, private val slug: String) : 
         val community = _state.value.community ?: return
         app.membership(community) { changed -> _state.update { it.copy(community = changed) } }
     }
+
+    fun toggleAnnouncements() {
+        val community = _state.value.community ?: return
+        app.announcements(community) { changed -> _state.update { it.copy(community = changed) } }
+    }
 }
 
 @Composable
@@ -245,7 +266,7 @@ fun CommunityScreen(slug: String) {
                         PostListViewModel(load = { cursor -> app.api.communityPosts(slug, cursor) }, changes = app.changes, refreshOnPost = true)
                     }
                     PostList(posts, empty = "Nothing has been posted in ${community.name} yet.", bottomPadding = 72.dp) {
-                        item(key = "header") { Header(community, viewModel::toggle) }
+                        item(key = "header") { Header(community, viewModel::toggle, viewModel::toggleAnnouncements) }
                     }
                 }
             }
@@ -263,7 +284,7 @@ fun CommunityScreen(slug: String) {
 }
 
 @Composable
-private fun Header(community: Community, onToggle: () -> Unit) {
+private fun Header(community: Community, onToggle: () -> Unit, onAnnouncements: () -> Unit) {
     val colors = HeyNaija.colors
     var rules by remember { mutableStateOf(false) }
     Card {
@@ -271,6 +292,26 @@ private fun Header(community: Community, onToggle: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CommunityMark(community, 56.dp)
                 Spacer(Modifier.weight(1f))
+                // A member's own choice to be told when a moderator notifies everyone here.
+                val told = community.viewerGetsAnnouncements
+                if (community.viewerIsMember && told != null) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(Radii.control)
+                            .border(1.dp, colors.lineStrong, Radii.control)
+                            .clickable(onClickLabel = if (told) "Turn announcements off" else "Turn announcements on", onClick = onAnnouncements),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (told) Icons.Bell else Icons.BellOff,
+                            if (told) "Announcements from this community are on" else "Announcements from this community are off",
+                            Modifier.size(18.dp),
+                            tint = if (told) colors.ink else colors.muted,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
                 JoinButton(community, onToggle)
             }
             Spacer(Modifier.height(12.dp))

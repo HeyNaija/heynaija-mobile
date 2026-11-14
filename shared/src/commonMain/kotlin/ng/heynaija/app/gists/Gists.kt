@@ -10,25 +10,31 @@ import ng.heynaija.app.api.LiveGist
 
 /**
  * What the member's role lets them do. The API checks every one again; this only
- * decides what to draw, so a listener is never shown a microphone.
+ * decides what to draw, so a listener is never shown a microphone, and a member
+ * who may only listen is never offered to speak.
  */
 data class GistControls(
     val mic: Boolean = false,
     val request: Boolean = false,
     val cancelRequest: Boolean = false,
+    /** Say that the host is not taking requests: only to someone who could otherwise ask. */
+    val requestsClosed: Boolean = false,
     val moderate: Boolean = false,
     val settings: Boolean = false,
     val end: Boolean = false,
     val appointCohost: Boolean = false,
 )
 
-fun controlsFor(status: String, requestsOpen: Boolean, viewer: GistViewer): GistControls {
+/** [mayTakeStage] is `Me.mayTakeStage`: false for a member who may only listen (under 18, or no age on record). */
+fun controlsFor(status: String, requestsOpen: Boolean, viewer: GistViewer, mayTakeStage: Boolean = true): GistControls {
     val role = viewer.role
     if (status != "live" || role == null) return GistControls()
+    val asking = role == "listener" && mayTakeStage && !viewer.requestedToSpeak
     return GistControls(
-        mic = role == "host" || role == "cohost" || role == "speaker",
-        request = role == "listener" && requestsOpen && !viewer.requestedToSpeak,
+        mic = (role == "host" || role == "cohost" || role == "speaker") && mayTakeStage,
+        request = asking && requestsOpen,
         cancelRequest = role == "listener" && viewer.requestedToSpeak,
+        requestsClosed = asking && !requestsOpen,
         moderate = role == "host" || role == "cohost",
         settings = role == "host",
         end = role == "host",
@@ -36,7 +42,7 @@ fun controlsFor(status: String, requestsOpen: Boolean, viewer: GistViewer): Gist
     )
 }
 
-fun controlsFor(view: GistView) = controlsFor(view.status, view.requestsOpen, view.viewer)
+fun controlsFor(view: GistView, mayTakeStage: Boolean = true) = controlsFor(view.status, view.requestsOpen, view.viewer, mayTakeStage)
 
 /**
  * A polled view folded into what the room last knew. [announcement] is set only

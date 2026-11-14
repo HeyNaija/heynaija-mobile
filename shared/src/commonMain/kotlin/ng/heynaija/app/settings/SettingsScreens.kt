@@ -37,7 +37,9 @@ import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.AuthStep
 import ng.heynaija.app.api.Deletion
+import ng.heynaija.app.api.HIGHLIGHTS_PREFERENCE
 import ng.heynaija.app.api.NOTIFICATION_KINDS
+import ng.heynaija.app.api.offersHighlights
 import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Route
@@ -169,13 +171,25 @@ fun NotificationSettingsScreen() {
             current == null -> Loading()
             else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SectionTitle("NOTIFY ME ABOUT")
-                Group(NOTIFICATION_KINDS.map { (key, label) ->
+                // Community announcements have a switch only while they are switched on for this member.
+                Group(NOTIFICATION_KINDS.filter { (key, _) -> key != "community_announcement" || app.me?.has("communityAnnouncements") == true }.map { (key, label) ->
                     { Toggle(label, current[key] ?: true) { set(key, it) } }
                 })
                 SectionTitle("EMAIL")
                 Group(listOf {
                     Toggle("Email me what I missed", current["email"] ?: false, detail = "At most one email every half hour, only for what you have not seen in the app.") { set("email", it) }
                 })
+                // Only while weekly highlights are offered to this member: the API leaves the key out otherwise.
+                if (offersHighlights(current)) {
+                    SectionTitle("WEEKLY HIGHLIGHTS")
+                    Group(listOf {
+                        Toggle(
+                            "Send me weekly highlights",
+                            current[HIGHLIGHTS_PREFERENCE] ?: false,
+                            detail = "A few conversations you missed, at most once a week and only when you have not opened HeyNaija for a few days.",
+                        ) { set(HIGHLIGHTS_PREFERENCE, it) }
+                    })
+                }
                 if (push.available) {
                     SectionTitle("ON THIS PHONE")
                     Group(buildList {
