@@ -60,6 +60,7 @@ import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
 import ng.heynaija.app.ui.PrimaryButton
 import ng.heynaija.app.ui.Problem
+import ng.heynaija.app.ui.ProfileSkeleton
 import ng.heynaija.app.ui.SecondaryButton
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.joined
@@ -180,7 +181,7 @@ fun ProfileScreen(handle: String, root: Boolean = false) {
         when {
             state.missing -> Problem("There is no member called @$handle.", onRetry = null)
             profile == null && state.failed -> Problem("This profile could not be loaded. Check your connection and try again.", viewModel::load)
-            profile == null -> Loading()
+            profile == null -> ProfileSkeleton()
             profile.viewerBlocks -> Column(Modifier.padding(16.dp)) {
                 Header(profile, viewModel)
                 Spacer(Modifier.height(16.dp))

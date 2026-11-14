@@ -515,6 +515,22 @@ class GistViewModel(private val app: AppState, val id: String) : ViewModel() {
         }
     }
 
+    fun postReply(text: String, onDone: () -> Unit) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                api.createGistReply(id, t)
+                onDone()
+                loadReplies()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.say(reasonOf(e) ?: "Could not post your reply. Try again.")
+            }
+        }
+    }
+
     fun setReplyAudience(audience: String) {
         val before = _state.value.replies.audience
         updateReplies { it.copy(audience = audience) }

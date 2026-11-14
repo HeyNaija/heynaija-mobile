@@ -26,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +49,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,9 +64,12 @@ import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
+import ng.heynaija.app.ui.ElasticPullBar
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.FOUNDER_INLINE
 import ng.heynaija.app.ui.Icons
+import ng.heynaija.app.ui.NotificationRowSkeleton
+import ng.heynaija.app.ui.NotificationsSkeletonList
 import ng.heynaija.app.ui.Problem
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.founderInlineContent
@@ -101,6 +106,9 @@ class NotificationsViewModel(private val app: AppState) : ViewModel() {
         viewModelScope.launch {
             try {
                 val page = app.api.notifications(cursor)
+                if (pulled) {
+                    delay(3800)
+                }
                 _state.update {
                     NotificationsState(
                         items = if (fresh) page.notifications else (it.items + page.notifications).distinctBy(Notification::id),
@@ -204,19 +212,39 @@ fun NotificationsScreen() {
         })
         when {
             !state.loaded && state.failed -> Problem("Notifications could not be loaded. Check your connection and try again.", { viewModel.load(true) })
-            !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            else -> PullToRefreshBox(state.refreshing, viewModel::refresh, Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = list,
+            !state.loaded -> NotificationsSkeletonList()
+            else -> {
+                val pullState = rememberPullToRefreshState()
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = viewModel::refresh,
+                    state = pullState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(ListGutter),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    indicator = {},
                 ) {
-                    if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
-                    if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
-                    items(state.items, key = { it.id }) { NotificationRow(it, now) }
-                    if (state.loading && state.items.isNotEmpty()) item {
-                        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
+                    LazyColumn(
+                        state = list,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(ListGutter),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
+                        if (!state.refreshing && pullState.distanceFraction > 0.05f) {
+                            item(key = "elastic-pull-bar") {
+                                ElasticPullBar(pullState.distanceFraction)
+                            }
+                        }
+                        if (state.refreshing) {
+                            items(6, key = { "refreshing-skeleton-$it" }) {
+                                NotificationRowSkeleton()
+                            }
+                        } else {
+                            if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
+                            items(state.items, key = { it.id }) { NotificationRow(it, now) }
+                            if (state.loading && state.items.isNotEmpty()) item {
+                                Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
+                            }
+                        }
                     }
                 }
             }

@@ -59,6 +59,8 @@ import ng.heynaija.app.posts.PostListViewModel
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Card
+import ng.heynaija.app.ui.CommunitiesSkeletonList
+import ng.heynaija.app.ui.CommunityDetailSkeleton
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
 import ng.heynaija.app.ui.PrimaryButton
@@ -130,7 +132,7 @@ fun CommunitiesScreen() {
         TopBar("Communities")
         when {
             !state.loaded && state.failed -> Problem("Communities could not be loaded. Check your connection and try again.", viewModel::load)
-            !state.loaded -> Loading()
+            !state.loaded -> CommunitiesSkeletonList()
             else -> LazyColumn(contentPadding = PaddingValues(ListGutter), verticalArrangement = Arrangement.spacedBy(ListGutter)) {
                 item {
                     Text(
@@ -237,7 +239,7 @@ fun CommunityScreen(slug: String) {
             when {
                 state.missing -> Problem("This community does not exist.", onRetry = null)
                 community == null && state.failed -> Problem("This community could not be loaded. Check your connection and try again.", viewModel::load)
-                community == null -> Loading()
+                community == null -> CommunityDetailSkeleton()
                 else -> {
                     val posts = viewModel(key = "community-$slug-posts") {
                         PostListViewModel(load = { cursor -> app.api.communityPosts(slug, cursor) }, changes = app.changes, refreshOnPost = true)

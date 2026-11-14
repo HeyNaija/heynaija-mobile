@@ -20,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,8 +34,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.theme.HeyNaija
+import ng.heynaija.app.ui.ElasticPullBar
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.PostCard
+import ng.heynaija.app.ui.PostCardSkeleton
 import ng.heynaija.app.ui.SecondaryButton
 import ng.heynaija.app.ui.rememberNow
 
@@ -76,7 +79,14 @@ fun PostList(
     val seen = remember { navigator.reselected }
     LaunchedEffect(navigator.reselected) { if (navigator.reselected > seen) list.animateScrollToItem(0) }
 
-    PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = viewModel::refresh, modifier = modifier.fillMaxSize()) {
+    val pullState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = viewModel::refresh,
+        state = pullState,
+        modifier = modifier.fillMaxSize(),
+        indicator = {},
+    ) {
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize(),
@@ -84,12 +94,17 @@ fun PostList(
             verticalArrangement = Arrangement.spacedBy(ListGutter),
         ) {
             header()
+            if (!state.refreshing && pullState.distanceFraction > 0.05f) {
+                item(key = "elastic-pull-bar") {
+                    ElasticPullBar(pullState.distanceFraction)
+                }
+            }
             when {
                 !state.loaded && state.failed -> item(key = "problem") {
                     Failed("Posts could not be loaded. Check your connection and try again.", viewModel::retry)
                 }
-                !state.loaded -> item(key = "loading") {
-                    Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                !state.loaded || state.refreshing -> items(5, key = { "skeleton-$it" }) {
+                    PostCardSkeleton()
                 }
                 else -> {
                     state.pinned?.let { pinned -> item(key = "pinned-${pinned.id}") { PostCard(pinned, now, pinned = true) } }
