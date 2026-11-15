@@ -161,6 +161,7 @@ fun GameMark(slug: String, size: Int = 44) {
 
 fun iconFor(slug: String): ImageVector = when (slug) {
     "chess" -> Icons.Chess
+    "trivia" -> Icons.Trivia
     else -> Icons.Games
 }
 
@@ -168,6 +169,7 @@ fun iconFor(slug: String): ImageVector = when (slug) {
 fun routeFor(game: GameManifest): Route? = when {
     game.comingSoon -> null
     game.slug == "chess" -> Route.Chess()
+    game.slug == "trivia" -> Route.Trivia()
     else -> null
 }
 
@@ -246,6 +248,10 @@ fun GamesHomeScreen() {
                         Column {
                             MenuRow("Leaderboards", icon = Icons.Trophy, detail = "Game Score and each game, this season or all time") {
                                 app.navigator.push(Route.GamesLeaderboard())
+                            }
+                            HorizontalDivider(color = HeyNaija.colors.line)
+                            MenuRow("Competitions", icon = Icons.Chess, detail = "Live, coming up and recently finished") {
+                                app.navigator.push(Route.Competitions)
                             }
                             HorizontalDivider(color = HeyNaija.colors.line)
                             MenuRow("How games scoring works", icon = Icons.Info, detail = "Seasons, XP and competitions") {
@@ -380,11 +386,15 @@ fun ScoringScreen() {
                         Rule("Each Keno round you have a ticket in", "${x.keno.round} XP")
                         Rule("Keno points in a round", "+1 XP per ${x.keno.pointsPerXp}, at most +${x.keno.pointsXpMax}")
                     }
+                    Rule("Each Trivia round you answer in", "${x.trivia.played} XP")
+                    Rule("Each right Trivia answer", "+${x.trivia.right} XP")
+                    Rule("Each Trivia question you got right first", "+${x.trivia.first} XP")
+                    Rule("Right and first answers together", "at most +${x.trivia.extraMax} XP a round")
                     Rule("Taking part in a competition", "${x.competition.entered} XP")
                     x.competition.places.forEachIndexed { i, xp -> Rule(listOf("1st", "2nd", "3rd").getOrElse(i) { "${i + 1}th" } + " place", "+$xp XP") }
                     Rule("4th to 10th place", "+${x.competition.topTen} XP")
                     Paragraph(
-                        "Chess games count rated or casual alike; Lichess decides who won. XP is added the moment a game ends or a competition finishes.",
+                        "Chess games count rated or casual alike; Lichess decides who won. XP is added the moment a game ends, a Trivia round’s results are published or a competition finishes.",
                         Modifier.padding(top = 8.dp),
                         muted = true,
                     )
@@ -392,6 +402,10 @@ fun ScoringScreen() {
                 item {
                     Heading("Leaderboards")
                     Paragraph("Game Score ranks by XP from every game. Chess ranks by XP from chess; ratings stay on Lichess and on your profile.")
+                    Paragraph(
+                        "Trivia ranks by Trivia points: ${rules.trivia.right} for a right answer, and ${rules.trivia.order.joinToString(", ")} more for the " +
+                            "first three right answers to each question, by the server’s clock.",
+                    )
                     Paragraph("Ties share a place. You can narrow any board to the people you follow, or to a community you joined.")
                     Paragraph(
                         "Members you have blocked or who blocked you, and members you muted, are left out, as they are from your feeds. " +

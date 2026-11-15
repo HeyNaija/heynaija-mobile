@@ -654,6 +654,44 @@ class HeyNaijaApi(
     /** Before both players have moved: ends the game with no result. */
     suspend fun chessAbort(id: String) { send("POST", "/games/chess/games/${seg(id)}/abort") }
 
+    // Trivia (phase 7): every route also answers 404 while the `trivia` flag is off for the member.
+
+    /** Rounds live now, coming up and recently over. */
+    suspend fun triviaList(): TriviaList = get("/games/trivia")
+
+    /**
+     * A round. With [after], the version the screen has: the server answers at once
+     * with anything newer, else when a question appears or closes, waiting at most 25 seconds.
+     */
+    suspend fun triviaRound(id: String, after: Long? = null): TriviaRound = get("/games/trivia/rounds/${seg(id)}") {
+        if (after != null) {
+            parameter("after", after)
+            timeout { requestTimeoutMillis = 45_000 }
+        }
+    }
+
+    /** One final answer: [choice] (a [TriviaChoice.id]) or [text]. The answer's time since the question appeared. */
+    suspend fun triviaAnswer(round: String, question: String, choice: Int? = null, text: String? = null): TriviaAnswered =
+        send("POST", "/games/trivia/rounds/${seg(round)}/questions/${seg(question)}/answer", buildJsonObject {
+            if (choice != null) put("choice", choice)
+            if (text != null) put("text", text)
+        }).body()
+
+    // Competitions
+
+    /** Live and coming up, then recently finished; drafts only for site moderators. */
+    suspend fun competitions(): CompetitionList = get("/games/competitions")
+
+    suspend fun competition(id: String): Competition = get("/games/competitions/${seg(id)}")
+
+    suspend fun enterCompetition(id: String) { send("POST", "/games/competitions/${seg(id)}/entry") }
+
+    /** Points scored in it go too. */
+    suspend fun withdrawFromCompetition(id: String) { send("DELETE", "/games/competitions/${seg(id)}/entry") }
+
+    /** A community's Lichess team and its tournaments; [ApiException] 404 for a community with none to show, or Games off. */
+    suspend fun chessTeam(slug: String): ChessTeam = get("/games/chess/teams/${seg(slug)}")
+
     // Deleting the account (docs/adr/0016)
 
     suspend fun deletion(): Deletion = get("/me/deletion")

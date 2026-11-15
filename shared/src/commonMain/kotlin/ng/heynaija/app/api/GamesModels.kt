@@ -224,16 +224,267 @@ data class ChessXp(val finished: Int = 0, val win: Int = 0, val draw: Int = 0)
 data class KenoXp(val round: Int = 0, val pointsPerXp: Int = 0, val pointsXpMax: Int = 0)
 
 @Serializable
+data class TriviaXp(val played: Int = 0, val right: Int = 0, val first: Int = 0, val extraMax: Int = 0)
+
+@Serializable
 data class CompetitionXp(val entered: Int = 0, val places: List<Int> = emptyList(), val topTen: Int = 0)
 
 @Serializable
-data class XpRules(val chess: ChessXp = ChessXp(), val keno: KenoXp = KenoXp(), val competition: CompetitionXp = CompetitionXp())
+data class XpRules(val chess: ChessXp = ChessXp(), val keno: KenoXp = KenoXp(), val trivia: TriviaXp = TriviaXp(), val competition: CompetitionXp = CompetitionXp())
+
+/** Points in a Trivia round: a right answer, and more for the first three right answers. */
+@Serializable
+data class TriviaPoints(val right: Int = 10, val order: List<Int> = listOf(5, 3, 2))
 
 /** Every scoring rule, as the API scores, so the app shows the numbers the scoring uses. */
 @Serializable
 data class GameScoring(
     val xp: XpRules = XpRules(),
+    val trivia: TriviaPoints = TriviaPoints(),
     /** Each game's competition formats, and what each means. */
     val formats: Map<String, Map<String, String>> = emptyMap(),
     val season: String = "",
 )
+
+// Competitions (ADR 0028, phases 5 and 6): Keno competitions made by site
+// moderators, and chess tournaments on Lichess made by a community's moderators.
+
+/** A competition in a list. [status] is 'draft', 'open', 'live', 'finished' or 'cancelled'; [eligibility] 'open', 'community' or 'invite'. */
+@Serializable
+data class CompetitionCard(
+    val id: String,
+    val name: String,
+    val game: String,
+    val format: String,
+    val status: String,
+    val eligibility: String = "open",
+    val entryOpensAt: String = "",
+    val entryClosesAt: String = "",
+    val startsAt: String = "",
+    val endsAt: String = "",
+    val entrants: Int = 0,
+    val resultPostId: String? = null,
+)
+
+@Serializable
+data class CompetitionList(
+    val current: List<CompetitionCard> = emptyList(),
+    val recent: List<CompetitionCard> = emptyList(),
+    val drafts: List<CompetitionCard> = emptyList(),
+)
+
+/** In a Lichess tournament: the member's rank among everyone there, and their Lichess name. */
+@Serializable
+data class StandingLichess(val rank: Int? = null, val username: String? = null)
+
+@Serializable
+data class CompetitionStanding(
+    val place: Int? = null,
+    val handle: String,
+    val displayName: String? = null,
+    val avatar: String? = null,
+    val score: Int? = null,
+    val you: Boolean = false,
+    val lichess: StandingLichess? = null,
+)
+
+/** A chess competition's Lichess tournament. [kind] is 'arena' or 'swiss'. */
+@Serializable
+data class CompetitionTournament(
+    val kind: String,
+    val url: String,
+    val teamUrl: String = "",
+    val teamName: String? = null,
+    val clock: ChessClock,
+    val minutes: Int? = null,
+    val rounds: Int? = null,
+    val rated: Boolean = true,
+    /** Everyone playing on Lichess, HeyNaija or not, as last read. */
+    val players: Int? = null,
+    val standingsAt: String? = null,
+    /** Finished from the last standings read, because Lichess had not finished it a day after it was due. */
+    val unfinished: Boolean = false,
+)
+
+@Serializable
+data class CompetitionCommunity(val slug: String, val name: String)
+
+/** What the viewer may do: whether they are in, may enter or withdraw now, and why not. */
+@Serializable
+data class CompetitionYou(
+    val entered: Boolean = false,
+    val canEnter: Boolean = false,
+    val canWithdraw: Boolean = false,
+    val reason: String? = null,
+    val moderator: Boolean = false,
+    val canCancel: Boolean = false,
+)
+
+@Serializable
+data class Competition(
+    val id: String,
+    val name: String,
+    val game: String,
+    val format: String,
+    val formatText: String = "",
+    val status: String,
+    val eligibility: String = "open",
+    val community: CompetitionCommunity? = null,
+    val entryOpensAt: String = "",
+    val entryClosesAt: String = "",
+    val startsAt: String = "",
+    val endsAt: String = "",
+    val entrants: Int = 0,
+    val resultPostId: String? = null,
+    val you: CompetitionYou = CompetitionYou(),
+    val standings: List<CompetitionStanding> = emptyList(),
+    val yourStanding: CompetitionStanding? = null,
+    val chess: CompetitionTournament? = null,
+)
+
+@Serializable
+data class ChessTeamInfo(val id: String, val name: String, val nbMembers: Int = 0, val url: String = "")
+
+@Serializable
+data class ChessTeamYou(val communityModerator: Boolean = false, val siteModerator: Boolean = false, val lichess: String? = null)
+
+@Serializable
+data class ChessTeamTournaments(val current: List<CompetitionCard> = emptyList(), val recent: List<CompetitionCard> = emptyList())
+
+/** A community's Lichess team and its tournaments; [team] is null while none is linked. */
+@Serializable
+data class ChessTeam(
+    val community: CompetitionCommunity,
+    val team: ChessTeamInfo? = null,
+    val you: ChessTeamYou = ChessTeamYou(),
+    val tournaments: ChessTeamTournaments = ChessTeamTournaments(),
+)
+
+// Trivia (ADR 0028, phase 7): hosted live rounds. Hosting is on the web; the apps play.
+
+@Serializable
+data class TriviaPerson(val handle: String, val displayName: String? = null, val avatar: String? = null) {
+    val name get() = displayName ?: "@$handle"
+}
+
+/** A round in a list. [status]: 'draft', 'scheduled', 'live', 'reviewing', 'published' or 'cancelled'. */
+@Serializable
+data class TriviaRoundCard(
+    val id: String,
+    val title: String,
+    val status: String,
+    val startsAt: String,
+    val questions: Int = 0,
+    val secondsPerQuestion: Int = 20,
+    val host: TriviaPerson,
+    val community: CommunityName? = null,
+    /** Members who have answered at least once. */
+    val players: Int = 0,
+    /** The viewer's place, once the results are out. */
+    val yourPlace: Int? = null,
+)
+
+@Serializable
+data class CommunityName(val slug: String, val name: String)
+
+@Serializable
+data class TriviaList(
+    val live: List<TriviaRoundCard> = emptyList(),
+    val upcoming: List<TriviaRoundCard> = emptyList(),
+    val recent: List<TriviaRoundCard> = emptyList(),
+    val hosting: List<TriviaRoundCard> = emptyList(),
+    val mayHost: Boolean = false,
+)
+
+@Serializable
+data class TriviaChoice(val id: Int, val text: String)
+
+@Serializable
+data class TriviaYourAnswer(val choice: Int? = null, val text: String? = null, val ms: Int = 0)
+
+/** The question being asked: its text and choices only once it has opened, by the server's clock. */
+@Serializable
+data class TriviaCurrent(
+    val id: String,
+    val position: Int,
+    val opensAt: String,
+    val closesAt: String,
+    /** 'choice' or 'typed'. */
+    val kind: String,
+    val prompt: String? = null,
+    /** In the viewer's own order; [TriviaChoice.id] is what to send back. */
+    val choices: List<TriviaChoice>? = null,
+    val yourAnswer: TriviaYourAnswer? = null,
+)
+
+@Serializable
+data class TriviaRevealChoice(val id: Int, val text: String, val count: Int = 0, val right: Boolean = false)
+
+@Serializable
+data class TriviaFirst(val handle: String, val displayName: String? = null, val avatar: String? = null, val ms: Int = 0) {
+    val name get() = displayName ?: "@$handle"
+}
+
+@Serializable
+data class TriviaYourResult(val choice: Int? = null, val text: String? = null, val correct: Boolean = false, val points: Int = 0, val place: Int? = null, val ms: Int = 0)
+
+/** The last question asked, with its answer, once it has closed. */
+@Serializable
+data class TriviaReveal(
+    val id: String,
+    val position: Int,
+    val prompt: String,
+    val kind: String,
+    val voided: Boolean = false,
+    val answer: String = "",
+    val alsoAccepted: List<String> = emptyList(),
+    val explanation: String? = null,
+    val choices: List<TriviaRevealChoice>? = null,
+    val answered: Int = 0,
+    val rightCount: Int = 0,
+    val firsts: List<TriviaFirst> = emptyList(),
+    val you: TriviaYourResult? = null,
+)
+
+@Serializable
+data class TriviaStanding(
+    val handle: String,
+    val displayName: String? = null,
+    val avatar: String? = null,
+    val rank: Int,
+    val points: Int,
+    val you: Boolean = false,
+) {
+    val name get() = displayName ?: "@$handle"
+}
+
+@Serializable
+data class TriviaYou(val host: Boolean = false, val canAnswer: Boolean = true, val points: Int = 0)
+
+/** A round as a player sees it. [version] goes up with every change; [serverTime] is the API's clock. */
+@Serializable
+data class TriviaRound(
+    val id: String,
+    val title: String,
+    val status: String,
+    val startsAt: String,
+    val secondsPerQuestion: Int = 20,
+    val questions: Int = 0,
+    val host: TriviaPerson,
+    val community: CommunityName? = null,
+    val threadPostId: String? = null,
+    val resultPostId: String? = null,
+    val version: Long = 0,
+    val serverTime: String,
+    val you: TriviaYou = TriviaYou(),
+    val current: TriviaCurrent? = null,
+    val last: TriviaReveal? = null,
+    val standings: List<TriviaStanding> = emptyList(),
+    val yourStanding: TriviaStanding? = null,
+    val final: Boolean = false,
+) {
+    val over get() = status == "published" || status == "cancelled"
+}
+
+@Serializable
+data class TriviaAnswered(val ms: Int = 0)
