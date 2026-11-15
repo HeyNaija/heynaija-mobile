@@ -654,6 +654,21 @@ class HeyNaijaApi(
     /** Before both players have moved: ends the game with no result. */
     suspend fun chessAbort(id: String) { send("POST", "/games/chess/games/${seg(id)}/abort") }
 
+    // Competitions
+
+    /** Live and coming up, then recently finished; drafts only for site moderators. */
+    suspend fun competitions(): CompetitionList = get("/games/competitions")
+
+    suspend fun competition(id: String): Competition = get("/games/competitions/${seg(id)}")
+
+    suspend fun enterCompetition(id: String) { send("POST", "/games/competitions/${seg(id)}/entry") }
+
+    /** Points scored in it go too. */
+    suspend fun withdrawFromCompetition(id: String) { send("DELETE", "/games/competitions/${seg(id)}/entry") }
+
+    /** A community's Lichess team and its tournaments; [ApiException] 404 for a community with none to show, or Games off. */
+    suspend fun chessTeam(slug: String): ChessTeam = get("/games/chess/teams/${seg(slug)}")
+
     // Deleting the account (docs/adr/0016)
 
     suspend fun deletion(): Deletion = get("/me/deletion")

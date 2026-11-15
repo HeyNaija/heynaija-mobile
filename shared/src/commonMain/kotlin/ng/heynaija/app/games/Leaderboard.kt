@@ -133,20 +133,34 @@ class LeaderboardViewModel(private val app: AppState, board: String) : ViewModel
 @Composable
 fun LeaderboardScreen(board: String) {
     val app = LocalApp.current
+    Column(Modifier.fillMaxSize()) {
+        TopBar("Leaderboards", onBack = { app.navigator.pop() })
+        LeaderboardPanel(board, fixed = false)
+    }
+}
+
+/**
+ * A leaderboard with its season and whose choices: [board] to start with, and the
+ * choice of board too unless [fixed] (a game's own Leaderboard tab).
+ */
+@Composable
+fun LeaderboardPanel(board: String, fixed: Boolean) {
+    val app = LocalApp.current
     val boards = app.boardsInApp()
     val start = board.takeIf { b -> boards.any { it.first == b } } ?: "score"
-    val viewModel = viewModel(key = "games-board") { LeaderboardViewModel(app, start) }
+    val viewModel = viewModel(key = if (fixed) "games-board-$start" else "games-board") { LeaderboardViewModel(app, start) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val choice = state.choice
     Column(Modifier.fillMaxSize()) {
-        TopBar("Leaderboards", onBack = { app.navigator.pop() })
         if (state.off) {
             Problem(GAMES_OFF, null)
             return@Column
         }
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChoiceRow {
-                for ((key, name) in boards) Choice(name, choice.board == key, { viewModel.choose(choice.copy(board = key)) })
+            if (!fixed) {
+                ChoiceRow {
+                    for ((key, name) in boards) Choice(name, choice.board == key, { viewModel.choose(choice.copy(board = key)) })
+                }
             }
             ChoiceRow {
                 val current = state.current

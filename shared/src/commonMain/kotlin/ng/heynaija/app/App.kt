@@ -75,7 +75,10 @@ import ng.heynaija.app.communities.CommunityScreen
 import ng.heynaija.app.compose.ComposeScreen
 import ng.heynaija.app.compose.ReplySheet
 import ng.heynaija.app.feed.HomeScreen
+import ng.heynaija.app.games.CompetitionScreen
+import ng.heynaija.app.games.CompetitionsScreen
 import ng.heynaija.app.games.GamesHomeScreen
+import ng.heynaija.app.games.chess.ChessTeamScreen
 import ng.heynaija.app.games.LeaderboardScreen
 import ng.heynaija.app.games.ScoringScreen
 import ng.heynaija.app.games.chess.ChessGameScreen
@@ -255,7 +258,10 @@ private fun Screen(entry: Entry) {
         Route.Games -> GamesHomeScreen()
         is Route.GamesLeaderboard -> LeaderboardScreen(route.board)
         Route.GamesScoring -> ScoringScreen()
-        is Route.Chess -> ChessScreen(route.opponent)
+        is Route.Chess -> ChessScreen(route.opponent, route.tab)
+        Route.Competitions -> CompetitionsScreen()
+        is Route.Competition -> CompetitionScreen(route.id)
+        is Route.ChessTeam -> ChessTeamScreen(route.slug)
         is Route.ChessGame -> ChessGameScreen(route.id)
         is Route.Compose -> ComposeScreen(route)
         is Route.Images -> ImageViewer(route.images, route.start)

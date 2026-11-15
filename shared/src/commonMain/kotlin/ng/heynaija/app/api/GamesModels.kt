@@ -237,3 +237,117 @@ data class GameScoring(
     val formats: Map<String, Map<String, String>> = emptyMap(),
     val season: String = "",
 )
+
+// Competitions (ADR 0028, phases 5 and 6): Keno competitions made by site
+// moderators, and chess tournaments on Lichess made by a community's moderators.
+
+/** A competition in a list. [status] is 'draft', 'open', 'live', 'finished' or 'cancelled'; [eligibility] 'open', 'community' or 'invite'. */
+@Serializable
+data class CompetitionCard(
+    val id: String,
+    val name: String,
+    val game: String,
+    val format: String,
+    val status: String,
+    val eligibility: String = "open",
+    val entryOpensAt: String = "",
+    val entryClosesAt: String = "",
+    val startsAt: String = "",
+    val endsAt: String = "",
+    val entrants: Int = 0,
+    val resultPostId: String? = null,
+)
+
+@Serializable
+data class CompetitionList(
+    val current: List<CompetitionCard> = emptyList(),
+    val recent: List<CompetitionCard> = emptyList(),
+    val drafts: List<CompetitionCard> = emptyList(),
+)
+
+/** In a Lichess tournament: the member's rank among everyone there, and their Lichess name. */
+@Serializable
+data class StandingLichess(val rank: Int? = null, val username: String? = null)
+
+@Serializable
+data class CompetitionStanding(
+    val place: Int? = null,
+    val handle: String,
+    val displayName: String? = null,
+    val avatar: String? = null,
+    val score: Int? = null,
+    val you: Boolean = false,
+    val lichess: StandingLichess? = null,
+)
+
+/** A chess competition's Lichess tournament. [kind] is 'arena' or 'swiss'. */
+@Serializable
+data class CompetitionTournament(
+    val kind: String,
+    val url: String,
+    val teamUrl: String = "",
+    val teamName: String? = null,
+    val clock: ChessClock,
+    val minutes: Int? = null,
+    val rounds: Int? = null,
+    val rated: Boolean = true,
+    /** Everyone playing on Lichess, HeyNaija or not, as last read. */
+    val players: Int? = null,
+    val standingsAt: String? = null,
+    /** Finished from the last standings read, because Lichess had not finished it a day after it was due. */
+    val unfinished: Boolean = false,
+)
+
+@Serializable
+data class CompetitionCommunity(val slug: String, val name: String)
+
+/** What the viewer may do: whether they are in, may enter or withdraw now, and why not. */
+@Serializable
+data class CompetitionYou(
+    val entered: Boolean = false,
+    val canEnter: Boolean = false,
+    val canWithdraw: Boolean = false,
+    val reason: String? = null,
+    val moderator: Boolean = false,
+    val canCancel: Boolean = false,
+)
+
+@Serializable
+data class Competition(
+    val id: String,
+    val name: String,
+    val game: String,
+    val format: String,
+    val formatText: String = "",
+    val status: String,
+    val eligibility: String = "open",
+    val community: CompetitionCommunity? = null,
+    val entryOpensAt: String = "",
+    val entryClosesAt: String = "",
+    val startsAt: String = "",
+    val endsAt: String = "",
+    val entrants: Int = 0,
+    val resultPostId: String? = null,
+    val you: CompetitionYou = CompetitionYou(),
+    val standings: List<CompetitionStanding> = emptyList(),
+    val yourStanding: CompetitionStanding? = null,
+    val chess: CompetitionTournament? = null,
+)
+
+@Serializable
+data class ChessTeamInfo(val id: String, val name: String, val nbMembers: Int = 0, val url: String = "")
+
+@Serializable
+data class ChessTeamYou(val communityModerator: Boolean = false, val siteModerator: Boolean = false, val lichess: String? = null)
+
+@Serializable
+data class ChessTeamTournaments(val current: List<CompetitionCard> = emptyList(), val recent: List<CompetitionCard> = emptyList())
+
+/** A community's Lichess team and its tournaments; [team] is null while none is linked. */
+@Serializable
+data class ChessTeam(
+    val community: CompetitionCommunity,
+    val team: ChessTeamInfo? = null,
+    val you: ChessTeamYou = ChessTeamYou(),
+    val tournaments: ChessTeamTournaments = ChessTeamTournaments(),
+)

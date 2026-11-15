@@ -248,6 +248,10 @@ fun GamesHomeScreen() {
                                 app.navigator.push(Route.GamesLeaderboard())
                             }
                             HorizontalDivider(color = HeyNaija.colors.line)
+                            MenuRow("Competitions", icon = Icons.Chess, detail = "Live, coming up and recently finished") {
+                                app.navigator.push(Route.Competitions)
+                            }
+                            HorizontalDivider(color = HeyNaija.colors.line)
                             MenuRow("How games scoring works", icon = Icons.Info, detail = "Seasons, XP and competitions") {
                                 app.navigator.push(Route.GamesScoring)
                             }
