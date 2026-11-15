@@ -154,6 +154,14 @@ What the apps do now, what comes next, and what the backend
   to a Games page open its screen. **Keno is left out** of both apps until
   Apple's developer account is an organisation's (Apple takes simulated gambling
   only from one), Keno competitions included, by a build setting (`Platform.keno`), never the server flag.
+  **Trivia** (phase 7, also behind the server's `trivia` flag): the rounds live,
+  coming up and recently over; a round's screen, which asks the server for each
+  change (a question appearing or closing, the host moving on), counts down on
+  the server's clock, takes one answer a question (tap a choice, or type), then
+  shows the answer, how many got it, the first three with their times, and the
+  standings or results. Trivia's four tabs as every game's, with its board and
+  Game Night's posts. Hosting (writing rounds, opening questions, accepting
+  spellings) stays on the website. The Arbiter's links to a round open it.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and
   privacy notice. Changing the email or handle is on the web for now. Under
@@ -180,7 +188,7 @@ What the apps do now, what comes next, and what the backend
    if iOS pauses the app while nobody on stage has a microphone on, keep the
    stage's microphones published and muted, or keep the audio engine running
    between speakers.
-2. Games, next: Trivia. Keno waits for the Apple account.
+2. Games: Keno waits for the Apple account. Trivia hosting stays on the website.
 3. The ideas board, and continuing a video upload after the app was closed.
 4. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what

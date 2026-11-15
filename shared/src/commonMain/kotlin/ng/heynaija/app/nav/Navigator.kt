@@ -60,6 +60,10 @@ sealed interface Route {
     data class ChessTeam(val slug: String) : Route
     /** One chess game, to follow or play. */
     data class ChessGame(val id: String) : Route
+    /** Trivia, on one of its tabs ('play', 'leaderboard', 'competitions', 'posts'). */
+    data class Trivia(val tab: String = "play") : Route
+    /** One Trivia round, to play or follow. */
+    data class TriviaRound(val id: String) : Route
 
     // Full screen, without the tab bar.
     /** A new post, reply or quote; with [gist], a reply in that Gist (to [replyTo], or to the Gist itself). */

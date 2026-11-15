@@ -119,6 +119,16 @@ private fun CommunityLinks(community: Pair<String, String>) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     Row(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+        if (community.first == "game-night") {
+            // A game posted in Game Night itself (Trivia) has the one link.
+            Text(
+                "Game Night",
+                Modifier.clickable { app.navigator.push(Route.Community("game-night")) },
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.accentStrong,
+            )
+            return@Row
+        }
         Text(
             community.second,
             Modifier.clickable { app.navigator.push(Route.Community(community.first)) },
