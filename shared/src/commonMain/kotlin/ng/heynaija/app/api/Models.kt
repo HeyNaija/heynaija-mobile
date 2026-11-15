@@ -80,6 +80,8 @@ data class Post(
     /** Avatar path without the size suffix; see [mediaUrl]. */
     val authorAvatar: String? = null,
     val authorFounder: Boolean = false,
+    /** The author is one of HeyNaija's automated accounts (The Arbiter, Keke); nobody signs in to it. Older servers leave it out. */
+    val authorAutomated: Boolean = false,
     val text: String = "",
     /** ISO 8601, in UTC. */
     val createdAt: String,
@@ -301,6 +303,8 @@ data class Profile(
     val viewerMutes: Boolean = false,
     val identityBadge: Boolean = false,
     val founderBadge: Boolean = false,
+    /** One of HeyNaija's automated accounts (The Arbiter, Keke); nobody signs in to it. Older servers leave it out. */
+    val automatedBadge: Boolean = false,
 )
 
 @Serializable

@@ -263,13 +263,16 @@ fun CommunityScreen(slug: String) {
                     val posts = viewModel(key = "community-$slug-posts") {
                         PostListViewModel(load = { cursor -> app.api.communityPosts(slug, cursor) }, changes = app.changes, refreshOnPost = true)
                     }
-                    PostList(posts, empty = "Nothing has been posted in ${community.name} yet.", bottomPadding = 72.dp) {
+                    // Where only an automated account starts posts, a line says so instead of the Post button.
+                    val notice = botOnlyNotice(community.slug)
+                    PostList(posts, empty = "Nothing has been posted in ${community.name} yet.", bottomPadding = if (notice == null) 72.dp else 0.dp) {
                         item(key = "header") { Header(community, viewModel::toggle, viewModel::toggleAnnouncements) }
+                        if (notice != null) item(key = "bot-only") { Notice(notice) }
                     }
                 }
             }
         }
-        if (community?.viewerIsMember == true) {
+        if (community?.viewerIsMember == true && !isBotOnly(community.slug)) {
             FloatingActionButton(
                 onClick = { app.navigator.push(Route.Compose(community = CommunityRef(community.slug, community.name))) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
@@ -279,6 +282,22 @@ fun CommunityScreen(slug: String) {
             ) { Icon(Icons.Pen, "Post in ${community.name}", Modifier.size(22.dp)) }
         }
     }
+}
+
+/** A boxed note in the sage wash, as the web's `.notice`. */
+@Composable
+private fun Notice(text: String) {
+    val colors = HeyNaija.colors
+    Text(
+        text,
+        Modifier
+            .fillMaxWidth()
+            .clip(Radii.control)
+            .background(colors.accentSoft)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = colors.brandDeep,
+    )
 }
 
 @Composable

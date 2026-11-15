@@ -28,6 +28,15 @@ What the apps do now, what comes next, and what the backend
 - **Feeds:** Discover, Latest and Following, as on the web; profiles (posts,
   replies, media, pinned post), communities (join, leave, rules, pinned post),
   hashtags and bookmarks.
+- **Automated accounts** (The Arbiter for HeyNaija Games, ADR 0028 in the web
+  repository, and Keke): an "Automated" label beside the name on their posts
+  and "Automated account" on their profile, as on the web, from the API's
+  `authorAutomated` and `automatedBadge`; tapped, it says nobody signs in to
+  the account. Communities where only such an account starts posts (Chess
+  Arena, Game Night, and Keke's Naija Today; the slugs are kept in
+  `communities/BotOnlyCommunities.kt`) are left out of the composer's
+  communities, and their page says who starts the posts in place of the Post
+  button. Members reply in them as anywhere else.
 - **Posts:** threads with the conversation above and replies below; posting
   (Post sits at the right of the rail on top of the keyboard, with what can be
   attached on its left) with up to four pictures, a video (sent in parts, then waited on until the

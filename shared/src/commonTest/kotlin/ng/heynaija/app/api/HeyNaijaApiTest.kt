@@ -251,4 +251,50 @@ class HeyNaijaApiTest {
         assertEquals("""{"highlights":false}""", (request.body as TextContent).text)
         assertEquals(false, saved[HIGHLIGHTS_PREFERENCE])
     }
+
+    @Test
+    fun postsSayWhenTheirAuthorIsAnAutomatedAccount() = runTest {
+        val arbiter = postJson("p1", handle = "arbiter").replace("\"authorFounder\": false,", "\"authorFounder\": false, \"authorAutomated\": true,")
+        val person = postJson("p2").replace("\"authorFounder\": false,", "\"authorFounder\": false, \"authorAutomated\": false,")
+        // An older server sends no `authorAutomated` at all.
+        val older = postJson("p3")
+        val server = FakeServer { HttpStatusCode.OK to pageJson(arbiter, person, older) }
+
+        val posts = server.api.latest().posts
+
+        assertEquals(listOf(true, false, false), posts.map { it.authorAutomated })
+    }
+
+    @Test
+    fun aThreadSaysWhichRepliesAreFromAnAutomatedAccount() = runTest {
+        val keke = postJson("r1", handle = "keke").replace("\"authorFounder\": false,", "\"authorFounder\": false, \"authorAutomated\": true,")
+        val server = FakeServer { HttpStatusCode.OK to """{ "ancestors": [], "post": ${postJson("p1")}, "replies": [$keke, ${postJson("r2")}], "replyCursor": null, "ancestorsTruncated": false }""" }
+
+        val thread = server.api.thread("p1")
+
+        assertFalse(thread.post.authorAutomated)
+        assertEquals(listOf(true, false), thread.replies.map { it.authorAutomated })
+    }
+
+    @Test
+    fun aProfileSaysWhenItIsAnAutomatedAccount() = runTest {
+        fun profileJson(handle: String, badge: String) = """
+            { "id": "m-$handle", "handle": "$handle", "displayName": null, "bio": "", "avatar": null,
+              "joinedAt": "2026-11-01T09:00:00.000Z", "postCount": 0, "followerCount": 0, "followingCount": 0,
+              "isSelf": false, "viewerFollows": false, "viewerBlocks": false, "viewerMutes": false,
+              "identityBadge": false, "founderBadge": false$badge }
+        """.trimIndent()
+        val server = FakeServer { request ->
+            HttpStatusCode.OK to when (request.url.encodedPath.substringAfterLast('/')) {
+                "arbiter" -> profileJson("arbiter", ", \"automatedBadge\": true")
+                "ada" -> profileJson("ada", ", \"automatedBadge\": false")
+                // An older server sends no `automatedBadge` at all.
+                else -> profileJson("bayo", "")
+            }
+        }
+
+        assertTrue(server.api.profile("arbiter").automatedBadge)
+        assertFalse(server.api.profile("ada").automatedBadge)
+        assertFalse(server.api.profile("bayo").automatedBadge)
+    }
 }

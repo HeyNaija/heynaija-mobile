@@ -250,6 +250,11 @@ private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean,
                     Spacer(Modifier.width(4.dp))
                     FounderBadge()
                 }
+                // HeyNaija's own accounts say so on every post (The Arbiter, Keke).
+                if (post.authorAutomated) {
+                    Spacer(Modifier.width(6.dp))
+                    AutomatedBadge()
+                }
             }
             // A story's place, in the accent: an update's number, or "Story" on its first post in a list.
             val storyLabel = post.story?.let { s -> if (s.number > 0) "Update ${s.number}" else if (!focused) "Story" else null }

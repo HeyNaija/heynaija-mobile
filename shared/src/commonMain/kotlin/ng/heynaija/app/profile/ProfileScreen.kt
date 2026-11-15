@@ -57,6 +57,8 @@ import ng.heynaija.app.posts.PostList
 import ng.heynaija.app.posts.PostListViewModel
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
+import ng.heynaija.app.ui.AUTOMATED_ACCOUNT_LABEL
+import ng.heynaija.app.ui.AutomatedBadge
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.Card
 import ng.heynaija.app.ui.Confirm
@@ -266,6 +268,10 @@ private fun Header(profile: Profile, viewModel: ProfileViewModel) {
                 }
             }
             if (profile.displayName != null) Text("@${profile.handle}", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+            if (profile.automatedBadge) {
+                Spacer(Modifier.height(8.dp))
+                AutomatedBadge(label = AUTOMATED_ACCOUNT_LABEL)
+            }
             if (profile.bio.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
                 Text(profile.bio, style = MaterialTheme.typography.bodyLarge, color = colors.ink)

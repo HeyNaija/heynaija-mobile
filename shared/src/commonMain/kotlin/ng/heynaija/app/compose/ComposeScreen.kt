@@ -79,6 +79,8 @@ import ng.heynaija.app.api.NewPost
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.QuotedPost
 import ng.heynaija.app.api.StoryDraft
+import ng.heynaija.app.communities.isBotOnly
+import ng.heynaija.app.communities.postableCommunities
 import ng.heynaija.app.media.awaitVideo
 import ng.heynaija.app.media.rejectionText
 import ng.heynaija.app.media.sendVideo
@@ -137,7 +139,7 @@ data class ComposeState(
     val video: DraftVideo? = null,
     val poll: PollDraft? = null,
     val community: CommunityRef? = null,
-    /** The communities the member may post in. */
+    /** The communities the member may post in: joined, and not one only an automated account starts posts in. */
     val joined: List<CommunityRef> = emptyList(),
     val audience: String = "everyone",
     /** Marked sensitive (ADR 0020); sent only while pictures or a video are attached. */
@@ -175,7 +177,8 @@ private fun String.codePointCountCompat(): Int {
 }
 
 class ComposeViewModel(private val app: AppState, private val route: Route.Compose) : ViewModel() {
-    private val _state = MutableStateFlow(ComposeState(community = route.community))
+    // A community only an automated account posts in is never chosen, even if a route names it.
+    private val _state = MutableStateFlow(ComposeState(community = route.community?.takeUnless { isBotOnly(it.slug) }))
     val state: StateFlow<ComposeState> = _state.asStateFlow()
     private val uploads = mutableMapOf<Int, Job>()
     private var nextKey = 0
@@ -203,7 +206,7 @@ class ComposeViewModel(private val app: AppState, private val route: Route.Compo
             runCatching { app.api.communities() }.onSuccess { all ->
                 _state.update { s ->
                     s.copy(
-                        joined = all.filter { it.viewerIsMember }.map { CommunityRef(it.slug, it.name) },
+                        joined = postableCommunities(all),
                         announcers = all.filter { it.viewerCanAnnounce }.associate { it.slug to it.nextAnnouncementAt },
                     )
                 }

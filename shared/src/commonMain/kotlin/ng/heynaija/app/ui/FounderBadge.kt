@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
@@ -46,13 +47,36 @@ const val FOUNDER_TOOLTIP = "One of the people who founded HeyNaija. Their posts
  * already one tap (a quoted post, a search result, a notification, a mention): just
  * the award, and a tap goes to the row.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FounderBadge(modifier: Modifier = Modifier, size: Dp = 16.dp, plain: Boolean = false, color: Color = HeyNaija.colors.ink) {
     if (plain) {
         Icon(Icons.Award, FOUNDER_LABEL, modifier.size(size), tint = color)
         return
     }
+    ExplainedBadge(
+        buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append("$FOUNDER_LABEL.") }
+            append(" $FOUNDER_TOOLTIP")
+        },
+    ) { explain ->
+        // A 16dp mark still takes a fingertip: Compose widens a small target's touch area without growing the line.
+        Icon(
+            Icons.Award,
+            FOUNDER_LABEL,
+            modifier.size(size).clickable(onClickLabel = "What this means", role = Role.Button, onClick = explain),
+            tint = color,
+        )
+    }
+}
+
+/**
+ * A badge that says what it means when tapped, until tapped away: the Founder badge
+ * and the Automated label. [badge] draws the badge and calls the function it is given
+ * on a tap.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ExplainedBadge(meaning: AnnotatedString, badge: @Composable (explain: () -> Unit) -> Unit) {
     val colors = HeyNaija.colors
     val state = rememberTooltipState(isPersistent = true)
     val scope = rememberCoroutineScope()
@@ -67,24 +91,12 @@ fun FounderBadge(modifier: Modifier = Modifier, size: Dp = 16.dp, plain: Boolean
                 containerColor = colors.surface,
                 shadowElevation = 6.dp,
             ) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append("$FOUNDER_LABEL.") }
-                        append(" $FOUNDER_TOOLTIP")
-                    },
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp),
-                )
+                Text(meaning, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium, lineHeight = 18.sp))
             }
         },
         state = state,
     ) {
-        // A 16dp mark still takes a fingertip: Compose widens a small target's touch area without growing the line.
-        Icon(
-            Icons.Award,
-            FOUNDER_LABEL,
-            modifier.size(size).clickable(onClickLabel = "What this means", role = Role.Button) { scope.launch { state.show() } },
-            tint = color,
-        )
+        badge { scope.launch { state.show() } }
     }
 }
 
