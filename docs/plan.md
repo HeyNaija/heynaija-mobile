@@ -137,8 +137,12 @@ What the apps do now, what comes next, and what the backend
   `/lichess/return`), ratings, Refresh and Disconnect; games being played;
   challenges to you (Accept, Decline), waiting ones (Cancel) and recent ones;
   challenging a member (search, clock, rated or casual, colour, a thread in Chess
-  Arena); a game's page that follows it live and opens it on lichess.org for the
-  moves; the member's Lichess line on profiles (Challenge, Playing now). Chess
+  Arena); a game's page with the board: the player's moves by tap or drag (only
+  legal ones offered, a chooser for promotion; a move Lichess refuses goes back),
+  draw offers, resign or abort, the clocks, the move list and stepping back
+  through it, and turning the board for spectators. The rules are in shared
+  Kotlin (`games/chess/Rules.kt`, checked against the standard move counts);
+  Lichess still decides every move; the member's Lichess line on profiles (Challenge, Playing now). Chess
   notifications have their own rows and one Settings switch, and links in posts
   to a Games page open its screen. **Keno is left out** of both apps until
   Apple's developer account is an organisation's (Apple takes simulated gambling
@@ -169,9 +173,8 @@ What the apps do now, what comes next, and what the backend
    if iOS pauses the app while nobody on stage has a microphone on, keep the
    stage's microphones published and muted, or keep the audio engine running
    between speakers.
-2. Games, next: the chess board in the app (watching, then playing: chess rules
-   in shared Kotlin, tested against the standard move counts), then
-   competitions and the Posts tab, then Trivia. Keno waits for the Apple account.
+2. Games, next: competitions and the Posts tab, then Trivia. Keno waits for the
+   Apple account.
 3. The ideas board, and continuing a video upload after the app was closed.
 4. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what

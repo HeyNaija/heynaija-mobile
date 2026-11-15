@@ -639,6 +639,21 @@ class HeyNaijaApi(
         }
     }
 
+    /** A move by the player, in UCI ("e2e4", "e7e8q"); Lichess decides whether it is legal. */
+    suspend fun chessMove(id: String, uci: String) {
+        send("POST", "/games/chess/games/${seg(id)}/move", buildJsonObject { put("uci", uci) })
+    }
+
+    /** [answer] is 'offer', 'accept' or 'decline'. */
+    suspend fun chessDraw(id: String, answer: String) {
+        send("POST", "/games/chess/games/${seg(id)}/draw", buildJsonObject { put("answer", answer) })
+    }
+
+    suspend fun chessResign(id: String) { send("POST", "/games/chess/games/${seg(id)}/resign") }
+
+    /** Before both players have moved: ends the game with no result. */
+    suspend fun chessAbort(id: String) { send("POST", "/games/chess/games/${seg(id)}/abort") }
+
     // Deleting the account (docs/adr/0016)
 
     suspend fun deletion(): Deletion = get("/me/deletion")
