@@ -47,6 +47,19 @@ class LinksTest {
     }
 
     @Test
+    fun triviaLinksOpenTheRoundsAndARoundButNotHosting() {
+        assertEquals(Route.Trivia(), routeOf("/games/trivia", web))
+        assertEquals(Route.Trivia(tab = "leaderboard"), routeOf("/games/trivia?tab=leaderboard", web))
+        // The Arbiter's thread links to the round on the website.
+        assertEquals(Route.TriviaRound(post), routeOf("$web/games/trivia/rounds/$post", web))
+        assertNull(routeOf("/games/trivia/rounds/$post/host", web))
+        assertNull(routeOf("/games/trivia/host", web))
+        assertNull(routeOf("/games/trivia/rounds/not-a-round", web))
+        assertTrue(Route.TriviaRound(post).gamesLink)
+        assertTrue(Route.Trivia().gamesLink)
+    }
+
+    @Test
     fun aSharedGistLinkIsTheWebsPageForItAndOpensTheGist() {
         val link = gistLink(web, gist)
         assertEquals("$web/gists/$gist", link)

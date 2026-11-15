@@ -654,6 +654,29 @@ class HeyNaijaApi(
     /** Before both players have moved: ends the game with no result. */
     suspend fun chessAbort(id: String) { send("POST", "/games/chess/games/${seg(id)}/abort") }
 
+    // Trivia (phase 7): every route also answers 404 while the `trivia` flag is off for the member.
+
+    /** Rounds live now, coming up and recently over. */
+    suspend fun triviaList(): TriviaList = get("/games/trivia")
+
+    /**
+     * A round. With [after], the version the screen has: the server answers at once
+     * with anything newer, else when a question appears or closes, waiting at most 25 seconds.
+     */
+    suspend fun triviaRound(id: String, after: Long? = null): TriviaRound = get("/games/trivia/rounds/${seg(id)}") {
+        if (after != null) {
+            parameter("after", after)
+            timeout { requestTimeoutMillis = 45_000 }
+        }
+    }
+
+    /** One final answer: [choice] (a [TriviaChoice.id]) or [text]. The answer's time since the question appeared. */
+    suspend fun triviaAnswer(round: String, question: String, choice: Int? = null, text: String? = null): TriviaAnswered =
+        send("POST", "/games/trivia/rounds/${seg(round)}/questions/${seg(question)}/answer", buildJsonObject {
+            if (choice != null) put("choice", choice)
+            if (text != null) put("text", text)
+        }).body()
+
     // Competitions
 
     /** Live and coming up, then recently finished; drafts only for site moderators. */

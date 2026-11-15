@@ -147,7 +147,8 @@ fun LeaderboardScreen(board: String) {
 fun LeaderboardPanel(board: String, fixed: Boolean) {
     val app = LocalApp.current
     val boards = app.boardsInApp()
-    val start = board.takeIf { b -> boards.any { it.first == b } } ?: "score"
+    // A game's own tab shows its board, whether or not the choice row lists it (Trivia is on its tab only).
+    val start = if (fixed) board else board.takeIf { b -> boards.any { it.first == b } } ?: "score"
     val viewModel = viewModel(key = if (fixed) "games-board-$start" else "games-board") { LeaderboardViewModel(app, start) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val choice = state.choice

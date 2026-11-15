@@ -82,6 +82,8 @@ import ng.heynaija.app.games.chess.ChessTeamScreen
 import ng.heynaija.app.games.LeaderboardScreen
 import ng.heynaija.app.games.ScoringScreen
 import ng.heynaija.app.games.chess.ChessGameScreen
+import ng.heynaija.app.games.trivia.TriviaRoundScreen
+import ng.heynaija.app.games.trivia.TriviaScreen
 import ng.heynaija.app.games.chess.ChessScreen
 import ng.heynaija.app.games.chess.LichessReturn
 import ng.heynaija.app.gists.GistBar
@@ -263,6 +265,8 @@ private fun Screen(entry: Entry) {
         is Route.Competition -> CompetitionScreen(route.id)
         is Route.ChessTeam -> ChessTeamScreen(route.slug)
         is Route.ChessGame -> ChessGameScreen(route.id)
+        is Route.Trivia -> TriviaScreen(route.tab)
+        is Route.TriviaRound -> TriviaRoundScreen(route.id)
         is Route.Compose -> ComposeScreen(route)
         is Route.Images -> ImageViewer(route.images, route.start)
         is Route.Video -> VideoScreen(route.url, route.startMs)

@@ -62,8 +62,8 @@ fun routeOf(link: String, web: String): Route? {
 
 /**
  * Games' pages (ADR 0028 in the web repository): `/games`, its leaderboard and
- * scoring pages, and chess. Keno has no screen in the apps yet, so its links
- * open nothing. Whether the member has Games is checked where the link is opened
+ * scoring pages, chess and Trivia (playing; hosting stays on the website). Keno
+ * has no screen in the apps yet, so its links open nothing. Whether the member has Games is checked where the link is opened
  * ([gamesLink]), not here.
  */
 private fun gamesRoute(parts: List<String>, query: Map<String, String>): Route? = when {
@@ -71,6 +71,8 @@ private fun gamesRoute(parts: List<String>, query: Map<String, String>): Route? 
     parts == listOf("leaderboard") -> Route.GamesLeaderboard()
     parts == listOf("scoring") -> Route.GamesScoring
     parts == listOf("chess") -> Route.Chess(tab = query["tab"]?.takeIf { it in GAME_TABS } ?: "play")
+    parts == listOf("trivia") -> Route.Trivia(tab = query["tab"]?.takeIf { it in GAME_TABS } ?: "play")
+    parts.size == 3 && parts[0] == "trivia" && parts[1] == "rounds" && Regex("^[0-9a-fA-F-]{36}$").matches(parts[2]) -> Route.TriviaRound(parts[2])
     parts == listOf("competitions") -> Route.Competitions
     parts.size == 2 && parts[0] == "competitions" && Regex("^[0-9a-fA-F-]{36}$").matches(parts[1]) -> Route.Competition(parts[1])
     parts.size == 3 && parts[0] == "chess" && parts[1] == "teams" && Regex("^[a-z0-9-]{1,60}$").matches(parts[2]) -> Route.ChessTeam(parts[2])
@@ -85,4 +87,5 @@ val GAME_TABS = listOf("play", "leaderboard", "competitions", "posts")
 /** A Games screen, which only a member with Games may open. */
 val Route.gamesLink: Boolean
     get() = this is Route.Games || this is Route.GamesLeaderboard || this is Route.GamesScoring || this is Route.Chess ||
-        this is Route.ChessGame || this is Route.Competitions || this is Route.Competition || this is Route.ChessTeam
+        this is Route.ChessGame || this is Route.Competitions || this is Route.Competition || this is Route.ChessTeam ||
+        this is Route.Trivia || this is Route.TriviaRound
