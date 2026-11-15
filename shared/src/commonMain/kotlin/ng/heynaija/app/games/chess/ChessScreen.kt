@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,10 @@ import ng.heynaija.app.api.ChessRating
 import ng.heynaija.app.api.LiveChessGame
 import ng.heynaija.app.api.speedName
 import ng.heynaija.app.games.Choice
+import ng.heynaija.app.games.CompetitionsList
+import ng.heynaija.app.games.GamePosts
+import ng.heynaija.app.games.GameTabRow
+import ng.heynaija.app.games.LeaderboardPanel
 import ng.heynaija.app.games.GAMES_OFF
 import ng.heynaija.app.games.GameMark
 import ng.heynaija.app.games.gamesGone
@@ -229,10 +234,11 @@ class ChessViewModel(private val app: AppState) : ViewModel() {
 }
 
 @Composable
-fun ChessScreen(opponent: String?) {
+fun ChessScreen(opponent: String?, startTab: String = "play") {
     val app = LocalApp.current
     val viewModel = viewModel(key = "chess") { ChessViewModel(app) }
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableStateOf(startTab) }
     // Back from lichess.org, or from the browser: challenges may have moved.
     val returns = remember { intArrayOf(0) }
     LifecycleResumeEffect(viewModel) {
@@ -241,12 +247,23 @@ fun ChessScreen(opponent: String?) {
     }
     Column(Modifier.fillMaxSize()) {
         TopBar("Chess", onBack = { app.navigator.pop() })
-        val overview = state.overview
-        when {
-            state.off -> Problem(GAMES_OFF, null)
-            overview == null && state.failed -> Problem("Chess could not be loaded. Check your connection and try again.", viewModel::load)
-            overview == null -> Loading()
-            else -> ChessPage(overview, state, viewModel, opponent)
+        GameTabRow(tab) { tab = it }
+        when (tab) {
+            "leaderboard" -> LeaderboardPanel("chess", fixed = true)
+            "competitions" -> CompetitionsList(
+                game = "chess",
+                none = "No chess competitions coming up. Communities that link a Lichess team run Arena and Swiss tournaments, and they show here.",
+            )
+            "posts" -> GamePosts("chess", "chess", "chess-arena" to "Chess Arena")
+            else -> {
+                val overview = state.overview
+                when {
+                    state.off -> Problem(GAMES_OFF, null)
+                    overview == null && state.failed -> Problem("Chess could not be loaded. Check your connection and try again.", viewModel::load)
+                    overview == null -> Loading()
+                    else -> ChessPage(overview, state, viewModel, opponent)
+                }
+            }
         }
     }
 }

@@ -39,6 +39,12 @@ object Icons {
         "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z",
         "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3",
     )
+    val Trivia = lucide(
+        "badge-question-mark",
+        "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z",
+        "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3",
+        "M12 17h.01",
+    )
     val ExternalLink = lucide(
         "external-link",
         "M15 3h6v6",
@@ -52,6 +58,9 @@ object Icons {
         "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16",
         "M8 16H3v5",
     )
+    // Stepping through a chess game.
+    val First = lucide("chevrons-left", "m11 17-5-5 5-5", "m18 17-5-5 5-5")
+    val Last = lucide("chevrons-right", "m6 17 5-5-5-5", "m13 17 5-5-5-5")
     val Heart = lucide(
         "heart",
         "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5",

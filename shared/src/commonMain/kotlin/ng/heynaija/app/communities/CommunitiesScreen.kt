@@ -53,6 +53,7 @@ import ng.heynaija.app.api.Community
 import ng.heynaija.app.api.CommunityRef
 import ng.heynaija.app.api.mediaUrl
 import ng.heynaija.app.launchCatching
+import ng.heynaija.app.games.chess.CommunityChessLine
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.posts.PostList
@@ -356,6 +357,8 @@ private fun Header(community: Community, onToggle: () -> Unit, onAnnouncements: 
                     color = colors.muted,
                 )
             }
+            // Its Lichess team and next tournament (ADR 0028, phase 6), for a member with Games.
+            CommunityChessLine(community.slug)
         }
     }
 }

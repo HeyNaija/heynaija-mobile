@@ -47,10 +47,23 @@ sealed interface Route {
     data class GamesLeaderboard(val board: String = "score") : Route
     /** How games scoring works. */
     data object GamesScoring : Route
-    /** Chess: the member's Lichess account and challenges; [opponent] starts a challenge to that handle. */
-    data class Chess(val opponent: String? = null) : Route
+    /**
+     * Chess, on one of its tabs ('play', 'leaderboard', 'competitions', 'posts'):
+     * [opponent] starts a challenge to that handle.
+     */
+    data class Chess(val opponent: String? = null, val tab: String = "play") : Route
+    /** Every competition the app can show. */
+    data object Competitions : Route
+    /** One competition: its rules, standings, and entering. */
+    data class Competition(val id: String) : Route
+    /** A community's Lichess team and its tournaments. */
+    data class ChessTeam(val slug: String) : Route
     /** One chess game, to follow or play. */
     data class ChessGame(val id: String) : Route
+    /** Trivia, on one of its tabs ('play', 'leaderboard', 'competitions', 'posts'). */
+    data class Trivia(val tab: String = "play") : Route
+    /** One Trivia round, to play or follow. */
+    data class TriviaRound(val id: String) : Route
 
     // Full screen, without the tab bar.
     /** A new post, reply or quote; with [gist], a reply in that Gist (to [replyTo], or to the Gist itself). */

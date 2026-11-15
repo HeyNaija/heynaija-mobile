@@ -91,4 +91,33 @@ class GamesApiTest {
         server.api.setNotificationPreferences(mapOf("chess_challenge" to false, "chess_game_started" to false))
         assertEquals("""{"chess_challenge":false,"chess_game_started":false}""", (server.requests.single().body as TextContent).text)
     }
+
+    @Test
+    fun readsAChessTournamentCompetition() = runTest {
+        val server = FakeServer {
+            HttpStatusCode.OK to """{ "id": "c1", "name": "Lagos Arena", "game": "chess", "format": "lichess_arena", "formatText": "An Arena on Lichess.",
+                "eligibility": "community", "community": { "slug": "lagos-chess", "name": "Lagos Chess" }, "status": "live",
+                "entryOpensAt": "2026-11-22T18:00:00.000Z", "entryClosesAt": "2026-11-22T19:00:00.000Z", "startsAt": "2026-11-22T19:00:00.000Z", "endsAt": "2026-11-22T20:00:00.000Z",
+                "entrants": 2, "resultPostId": null,
+                "you": { "entered": false, "canEnter": false, "canWithdraw": false, "reason": null, "moderator": false, "canCancel": false },
+                "standings": [ { "place": 1, "handle": "ada", "displayName": "Ada", "avatar": null, "score": 9, "you": false, "lichess": { "rank": 3, "username": "AdaOnBoard" } } ],
+                "yourStanding": null, "invite": [],
+                "chess": { "kind": "arena", "url": "https://lichess.org/tournament/abc", "teamUrl": "https://lichess.org/team/lagos", "teamName": "Lagos", "clock": { "limit": 180, "increment": 2 },
+                           "minutes": 60, "rounds": null, "rated": true, "players": 40, "standingsAt": null, "unfinished": false } }"""
+        }
+        val c = server.api.competition("c1")
+        assertEquals("Lagos Chess", c.community?.name)
+        assertEquals(3, c.standings.single().lichess?.rank)
+        assertEquals(60, c.chess?.minutes)
+        assertEquals("https://test.heynaija.ng/api/v1/games/competitions/c1", server.requests.single().url.toString())
+    }
+
+    @Test
+    fun enteringAndWithdrawingAreAPostAndADelete() = runTest {
+        val server = FakeServer { HttpStatusCode.NoContent to "" }
+        server.api.enterCompetition("c1")
+        server.api.withdrawFromCompetition("c1")
+        assertEquals(listOf("POST", "DELETE"), server.requests.map { it.method.value })
+        assertEquals("https://test.heynaija.ng/api/v1/games/competitions/c1/entry", server.requests.last().url.toString())
+    }
 }

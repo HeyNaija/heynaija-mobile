@@ -86,4 +86,25 @@ class GamesTest {
         assertEquals("That Lichess account is already connected to another HeyNaija member.", chessNotice("already_linked"))
         assertNull(chessNotice("something_new"))
     }
+
+    @Test
+    fun competitionsReadAsTheWebsDo() {
+        assertEquals("Chess · Arena", gameLabel("chess", "lichess_arena"))
+        assertEquals("Chess · Swiss", gameLabel("chess", "lichess_swiss"))
+        assertEquals("Keno", gameLabel("keno", "keno_points"))
+        // Swiss points are kept doubled.
+        assertEquals("4½ pts", competitionScore("lichess_swiss", 9))
+        assertEquals("½ pts", competitionScore("lichess_swiss", 1))
+        assertEquals("3 pts", competitionScore("lichess_swiss", 6))
+        assertEquals("1,250 pts", competitionScore("lichess_arena", 1250))
+        assertEquals("3+2", clockText(180, 2))
+        assertEquals("Coming up", statusText("open"))
+    }
+
+    @Test
+    fun aCompetitionSaysWhenItRuns() {
+        val lagos = kotlinx.datetime.TimeZone.of("Africa/Lagos")
+        assertEquals("22 Nov, 8:00 pm to 10:00 pm", whenText("2026-11-22T19:00:00.000Z", "2026-11-22T21:00:00.000Z", lagos))
+        assertEquals("22 Nov, 8:00 pm to 23 Nov, 2:00 am", whenText("2026-11-22T19:00:00.000Z", "2026-11-23T01:00:00.000Z", lagos))
+    }
 }
