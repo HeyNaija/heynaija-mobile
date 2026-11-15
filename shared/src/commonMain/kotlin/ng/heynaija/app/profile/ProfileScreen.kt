@@ -52,6 +52,7 @@ import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.Profile
 import ng.heynaija.app.launchCatching
+import ng.heynaija.app.games.chess.ChessLine
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.PostList
 import ng.heynaija.app.posts.PostListViewModel
@@ -289,6 +290,7 @@ private fun Header(profile: Profile, viewModel: ProfileViewModel) {
                 Count(profile.followerCount, "follower")
                 Count(profile.followingCount, "following", plural = false)
             }
+            ChessLine(profile.handle, profile.isSelf)
             if (profile.viewerMutes) {
                 Spacer(Modifier.height(10.dp))
                 Text("You muted @${profile.handle}.", style = MaterialTheme.typography.bodyMedium, color = colors.muted)

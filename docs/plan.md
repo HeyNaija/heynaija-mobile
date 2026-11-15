@@ -127,6 +127,22 @@ What the apps do now, what comes next, and what the backend
   they cannot go on. Elsewhere the app's own "I am 18 or older" stands
   ([release.md](release.md#age-checks)).
 - **Search** for people, communities and posts, with trending topics.
+- **Games** (ADR 0028 in the web repository), for members the `games` flag is on
+  for: a Games button on Home's bar; the Game Score (this season's XP and rank,
+  and all time); the games, with their status; leaderboards (Game Score or chess,
+  this season, earlier ones or all time, everyone, people you follow or a
+  community you joined); "How games scoring works", with the numbers from the API.
+  **Chess**: connecting Lichess (iOS's sign-in sheet or the phone's browser, back
+  to the app through `ng.heynaija.app://lichess`, which needs the server's
+  `/lichess/return`), ratings, Refresh and Disconnect; games being played;
+  challenges to you (Accept, Decline), waiting ones (Cancel) and recent ones;
+  challenging a member (search, clock, rated or casual, colour, a thread in Chess
+  Arena); a game's page that follows it live and opens it on lichess.org for the
+  moves; the member's Lichess line on profiles (Challenge, Playing now). Chess
+  notifications have their own rows and one Settings switch, and links in posts
+  to a Games page open its screen. **Keno is left out** of both apps until
+  Apple's developer account is an organisation's (Apple takes simulated gambling
+  only from one), by a build setting (`Platform.keno`), never the server flag.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and
   privacy notice. Changing the email or handle is on the web for now. Under
@@ -153,8 +169,11 @@ What the apps do now, what comes next, and what the backend
    if iOS pauses the app while nobody on stage has a microphone on, keep the
    stage's microphones published and muted, or keep the audio engine running
    between speakers.
-2. The ideas board, and continuing a video upload after the app was closed.
-3. The stores: [release.md](release.md) has every step, what is in the
+2. Games, next: the chess board in the app (watching, then playing: chess rules
+   in shared Kotlin, tested against the standard move counts), then
+   competitions and the Posts tab, then Trivia. Keno waits for the Apple account.
+3. The ideas board, and continuing a video upload after the app was closed.
+4. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what
    only the account holders can do. LiveKit's WebRTC library makes the Android
    debug APK about 75 MB with every processor type in it; the Play Store's app

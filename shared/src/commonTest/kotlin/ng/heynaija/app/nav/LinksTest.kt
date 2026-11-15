@@ -2,7 +2,9 @@ package ng.heynaija.app.nav
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import ng.heynaija.app.gistLink
 
 class LinksTest {
@@ -21,6 +23,21 @@ class LinksTest {
         assertEquals(Route.Community("lagos-tech"), routeOf("/c/lagos-tech", web))
         assertEquals(Route.Hashtag("jollof"), routeOf("/hashtag/Jollof", web))
         assertEquals(Route.Home, routeOf("/", web))
+    }
+
+    @Test
+    fun gamesPagesOpenTheirScreensAndKenoNothingYet() {
+        assertEquals(Route.Games, routeOf("/games", web))
+        assertEquals(Route.Chess(), routeOf("$web/games/chess", web))
+        assertEquals(Route.Chess(), routeOf("/games/chess#challenge-$post", web))
+        assertEquals(Route.ChessGame("aBcD1234"), routeOf("/games/chess/games/aBcD1234", web))
+        assertEquals(Route.GamesLeaderboard(), routeOf("/games/leaderboard", web))
+        assertEquals(Route.GamesScoring, routeOf("/games/scoring", web))
+        assertNull(routeOf("/games/keno", web))
+        assertNull(routeOf("/games/chess/callback?code=x&state=y", web))
+        assertNull(routeOf("/games/chess/games/not-an-id!", web))
+        assertTrue(Route.ChessGame("aBcD1234").gamesLink)
+        assertFalse(Route.Thread(post).gamesLink)
     }
 
     @Test

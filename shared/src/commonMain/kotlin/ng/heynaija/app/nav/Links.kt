@@ -55,6 +55,27 @@ fun routeOf(link: String, web: String): Route? {
             query["reply"]?.takeIf { id.matches(it) }?.let { Route.Thread(it, gist = parts[1]) } ?: Route.Gist(parts[1])
         parts.size == 2 && parts[0] == "u" && Regex("^[A-Za-z0-9_]{1,20}$").matches(parts[1]) -> Route.Profile(parts[1].lowercase())
         parts.size == 2 && parts[0] == "c" && Regex("^[a-z0-9]+(-[a-z0-9]+)*$").matches(parts[1]) -> Route.Community(parts[1])
+        parts.firstOrNull() == "games" -> gamesRoute(parts.drop(1))
         else -> null
     }
 }
+
+/**
+ * Games' pages (ADR 0028 in the web repository): `/games`, its leaderboard and
+ * scoring pages, and chess. Keno has no screen in the apps yet, so its links
+ * open nothing. Whether the member has Games is checked where the link is opened
+ * ([gamesLink]), not here.
+ */
+private fun gamesRoute(parts: List<String>): Route? = when {
+    parts.isEmpty() -> Route.Games
+    parts == listOf("leaderboard") -> Route.GamesLeaderboard()
+    parts == listOf("scoring") -> Route.GamesScoring
+    parts == listOf("chess") -> Route.Chess()
+    // A game's id is Lichess's: eight letters and digits.
+    parts.size == 3 && parts[0] == "chess" && parts[1] == "games" && Regex("^[A-Za-z0-9]{8,12}$").matches(parts[2]) -> Route.ChessGame(parts[2])
+    else -> null
+}
+
+/** A Games screen, which only a member with Games may open. */
+val Route.gamesLink: Boolean
+    get() = this is Route.Games || this is Route.GamesLeaderboard || this is Route.GamesScoring || this is Route.Chess || this is Route.ChessGame

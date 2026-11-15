@@ -101,7 +101,7 @@ fun HomeScreen() {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            WordmarkBar(gists = if (gists) ({ GistsButton(live, mayHost) }) else null)
+            WordmarkBar(gists = if (gists) ({ GistsButton(live, mayHost) }) else null, games = (account as? Account.SignedIn)?.me?.has("games") == true)
             key(member) {
                 // The tab last chosen, else Discover, as on the web.
                 val initialPage = remember {
@@ -170,7 +170,7 @@ fun HomeScreen() {
 
 /** The wordmark on the ground, like the web's top bar; Gists and settings sit on the right for members. */
 @Composable
-private fun WordmarkBar(gists: (@Composable () -> Unit)?) {
+private fun WordmarkBar(gists: (@Composable () -> Unit)?, games: Boolean) {
     val app = LocalApp.current
     val colors = HeyNaija.colors
     Column(Modifier.background(colors.bg).statusBarsPadding()) {
@@ -181,6 +181,12 @@ private fun WordmarkBar(gists: (@Composable () -> Unit)?) {
                 modifier = Modifier.height(30.dp),
             )
             Spacer(Modifier.weight(1f))
+            // Games (ADR 0028), for members the flag is on for: the tab bar is full, so it sits here, as Gists do.
+            if (games) {
+                Box(Modifier.size(44.dp).clickable { app.navigator.push(Route.Games) }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Games, "Games", Modifier.size(22.dp), tint = colors.muted)
+                }
+            }
             gists?.invoke()
             // Visitors on a debug build need it too, to pick the server.
             if (app.me != null || app.platform.debug) {

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.withLink
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.nav.Route
+import ng.heynaija.app.nav.gamesLink
 import ng.heynaija.app.theme.HeyNaija
 
 /** A stretch of a post's text that leads somewhere. */
@@ -63,7 +64,10 @@ fun PostText(
                 when (val target = span.target) {
                     is Target.Member -> withLink(LinkAnnotation.Clickable("member", linkStyle) { app.navigator.push(Route.Profile(target.handle)) }) { append(shown) }
                     is Target.Topic -> withLink(LinkAnnotation.Clickable("topic", linkStyle) { app.navigator.push(Route.Hashtag(target.tag)) }) { append(shown) }
-                    is Target.Web -> withLink(LinkAnnotation.Url(target.url, urlStyle)) { append(shown) }
+                    // A link to a Games page (The Arbiter's game threads) opens its screen, for a member with Games.
+                    is Target.Web -> app.screenFor(target.url)?.takeIf { it.gamesLink }?.let { route ->
+                        withLink(LinkAnnotation.Clickable("games", urlStyle) { app.navigator.push(route) }) { append(shown) }
+                    } ?: withLink(LinkAnnotation.Url(target.url, urlStyle)) { append(shown) }
                 }
                 at = span.end
             }

@@ -40,6 +40,18 @@ sealed interface Route {
     /** A live audio room: who is on stage, joining and speaking, and its replies. */
     data class Gist(val id: String) : Route
 
+    // Games (ADR 0028 in the web repository), for members the `games` flag is on for.
+    /** The member's Game Score and the games. */
+    data object Games : Route
+    /** A leaderboard: [board] is 'score', 'chess' or 'keno'. */
+    data class GamesLeaderboard(val board: String = "score") : Route
+    /** How games scoring works. */
+    data object GamesScoring : Route
+    /** Chess: the member's Lichess account and challenges; [opponent] starts a challenge to that handle. */
+    data class Chess(val opponent: String? = null) : Route
+    /** One chess game, to follow or play. */
+    data class ChessGame(val id: String) : Route
+
     // Full screen, without the tab bar.
     /** A new post, reply or quote; with [gist], a reply in that Gist (to [replyTo], or to the Gist itself). */
     /** [story]: an update to that story. */

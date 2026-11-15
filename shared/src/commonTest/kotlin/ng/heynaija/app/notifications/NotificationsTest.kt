@@ -56,4 +56,11 @@ class NotificationsTest {
         val after = withNewest(before, NotificationPage(listOf(n("a"), n("b", true), n("c", true), n("e", true)), cursor = "after-e"))
         assertEquals(listOf("a", "b", "c", "e", "f"), after.items.map { it.id })
     }
+
+    @Test
+    fun chessNotificationsShowOnlyToAMemberWithGames() {
+        val items = listOf(n("a"), Notification(id = "c", kind = "chess_challenge", createdAt = "2026-11-10T12:00:00Z"), Notification(id = "g", kind = "chess_game_started", createdAt = "2026-11-10T12:00:00Z"))
+        assertEquals(listOf("a", "c", "g"), visibleNotifications(items, games = true).map { it.id })
+        assertEquals(listOf("a"), visibleNotifications(items, games = false).map { it.id })
+    }
 }

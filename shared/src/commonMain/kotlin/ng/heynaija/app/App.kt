@@ -75,6 +75,12 @@ import ng.heynaija.app.communities.CommunityScreen
 import ng.heynaija.app.compose.ComposeScreen
 import ng.heynaija.app.compose.ReplySheet
 import ng.heynaija.app.feed.HomeScreen
+import ng.heynaija.app.games.GamesHomeScreen
+import ng.heynaija.app.games.LeaderboardScreen
+import ng.heynaija.app.games.ScoringScreen
+import ng.heynaija.app.games.chess.ChessGameScreen
+import ng.heynaija.app.games.chess.ChessScreen
+import ng.heynaija.app.games.chess.LichessReturn
 import ng.heynaija.app.gists.GistBar
 import ng.heynaija.app.gists.GistScreen
 import ng.heynaija.app.media.ImageViewer
@@ -177,6 +183,15 @@ private fun Shell(app: AppState) {
         app.openWebLink(link)
         WebLinks.handled(link)
     }
+    // Lichess's answer after connecting an account, from the browser or iOS's sheet.
+    val lichess by LichessReturn.received.collectAsStateWithLifecycle()
+    LaunchedEffect(lichess, account) {
+        val link = lichess ?: return@LaunchedEffect
+        if (account is Account.SignedIn) {
+            LichessReturn.handled(link)
+            app.finishLichessLink(link)
+        }
+    }
 
     Scaffold(
         containerColor = HeyNaija.colors.bg,
@@ -237,6 +252,11 @@ private fun Screen(entry: Entry) {
         Route.SensitiveSettings -> SensitiveSettingsScreen()
         Route.DeleteAccount -> DeleteAccountScreen()
         is Route.Gist -> GistScreen(route.id)
+        Route.Games -> GamesHomeScreen()
+        is Route.GamesLeaderboard -> LeaderboardScreen(route.board)
+        Route.GamesScoring -> ScoringScreen()
+        is Route.Chess -> ChessScreen(route.opponent)
+        is Route.ChessGame -> ChessGameScreen(route.id)
         is Route.Compose -> ComposeScreen(route)
         is Route.Images -> ImageViewer(route.images, route.start)
         is Route.Video -> VideoScreen(route.url, route.startMs)
