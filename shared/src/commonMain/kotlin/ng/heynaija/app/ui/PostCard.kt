@@ -250,10 +250,10 @@ private fun Header(post: Post, now: Instant, focused: Boolean, compact: Boolean,
                     Spacer(Modifier.width(4.dp))
                     FounderBadge()
                 }
-                // HeyNaija's own accounts say so on every post (The Arbiter, Keke).
+                // HeyNaija's own accounts carry the official tick (The Arbiter, Keke); tapped, it says they are automated.
                 if (post.authorAutomated) {
-                    Spacer(Modifier.width(6.dp))
-                    AutomatedBadge()
+                    Spacer(Modifier.width(2.dp))
+                    OfficialBadge(post.authorHandle)
                 }
             }
             // A story's place, in the accent: an update's number, or "Story" on its first post in a list.
