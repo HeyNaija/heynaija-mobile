@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -48,6 +50,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.ceil
 import kotlin.math.max
@@ -65,12 +68,14 @@ import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.TriviaCurrent
+import ng.heynaija.app.api.TriviaPicture
 import ng.heynaija.app.api.TriviaList
 import ng.heynaija.app.api.TriviaReveal
 import ng.heynaija.app.api.TriviaRound
 import ng.heynaija.app.api.TriviaRoundCard
 import ng.heynaija.app.api.TriviaStanding
 import ng.heynaija.app.api.TriviaYourAnswer
+import ng.heynaija.app.api.mediaUrl
 import ng.heynaija.app.games.GAMES_OFF
 import ng.heynaija.app.games.GameMark
 import ng.heynaija.app.games.GamePosts
@@ -547,6 +552,7 @@ private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, 
             Box(Modifier.fillMaxHeight().fillMaxWidth(share).background(colors.accent))
         }
         Text(q.prompt ?: "", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = colors.ink)
+        q.image?.let { QuestionPicture(it) }
         if (q.kind == "choice") {
             for (c in q.choices.orEmpty()) {
                 val picked = mine?.choice == c.id
@@ -604,6 +610,7 @@ private fun RevealCard(reveal: TriviaReveal, total: Int, plays: Boolean) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Question ${reveal.position} of $total", style = MaterialTheme.typography.bodySmall, color = colors.muted)
             Text(reveal.prompt, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = colors.ink)
+            reveal.image?.let { QuestionPicture(it) }
             if (reveal.voided) {
                 Text("The host cancelled this question. Nobody scores from it.", style = MaterialTheme.typography.bodyMedium, color = colors.ink)
                 return@Column
@@ -706,5 +713,28 @@ private fun StandingRow(r: TriviaStanding) {
             overflow = TextOverflow.Ellipsis,
         )
         Text(pointsText(r.points), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.ink)
+    }
+}
+
+/**
+ * A question's picture, whole and in its own shape, no taller than a third of a phone
+ * screen so the choices stay in view (as on the web, `.trivia-picture`). Always the 640
+ * version: while the question is open the clock is running, and a slow connection
+ * should not also be fetching the large one.
+ */
+@Composable
+private fun QuestionPicture(picture: TriviaPicture) {
+    val colors = HeyNaija.colors
+    val w = picture.width ?: 0
+    val h = picture.height ?: 0
+    val ratio = (if (w > 0 && h > 0) w.toFloat() / h else 4f / 3f).coerceIn(0.5f, 3f)
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        AsyncImage(
+            // A GIF moves, as on the web.
+            model = mediaUrl(picture.src, "640"),
+            contentDescription = picture.alt.ifBlank { null },
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.heightIn(max = 280.dp).aspectRatio(ratio).clip(Radii.control).background(colors.panel),
+        )
     }
 }
