@@ -26,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -288,7 +289,10 @@ fun NotificationsScreen() {
                     state = pullState,
                     modifier = Modifier.fillMaxSize(),
                     indicator = {
-                        if (!state.refreshing && pullState.distanceFraction > 0.05f) {
+                        // The bar follows the drag; once let go, the spinner shows the page is loading.
+                        if (state.refreshing) {
+                            PullToRefreshDefaults.Indicator(pullState, isRefreshing = true, modifier = Modifier.align(Alignment.TopCenter))
+                        } else if (pullState.distanceFraction > 0.05f) {
                             ElasticPullBar(pullState.distanceFraction)
                         }
                     },
