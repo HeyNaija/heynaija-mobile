@@ -32,6 +32,9 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -45,6 +48,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,17 +57,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -222,13 +230,13 @@ private fun Head(view: GistView, state: GistState, onListeners: () -> Unit) {
                     LiveDot(blink = true)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (ended) "Ended" else "Live", style = MaterialTheme.typography.labelLarge, color = colors.ink)
+                Text(if (ended) "Ended" else "LIVE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.ink)
                 if (!ended) Elapsed(view.startedAt)
                 Spacer(Modifier.weight(1f))
                 if (view.locked && !ended) Badge("Room locked", icon = Icons.Lock)
             }
             Spacer(Modifier.height(10.dp))
-            Text(view.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = colors.ink)
+            Text(view.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = colors.ink)
             Spacer(Modifier.height(6.dp))
             FlowLine {
                 Text("Hosted by ", style = MaterialTheme.typography.bodyMedium, color = colors.muted)
@@ -584,7 +592,9 @@ private fun LazyListScope.replies(view: GistView, state: GistState, room: GistRo
         }
         return
     }
-    if (replies.posts.isEmpty()) item(key = "replies-none") { Empty(if (replies.canReply) "No replies yet." else "No replies.") }
+    if (replies.posts.isEmpty()) item(key = "replies-none") {
+        Text("No replies yet.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
+    }
     val context = GistReplyContext(view.id, replies.viewerIsHost)
     items(replies.posts, key = { "reply-${it.id}" }) { post -> PostCard(post, now, compact = true, gist = context) }
     if (replies.cursor != null) {
@@ -597,7 +607,9 @@ private fun LazyListScope.replies(view: GistView, state: GistState, room: GistRo
     }
 }
 
-/** "Replies", who may write them (and the host's choice of that), and the way to write one. */
+private const val GIST_REPLY_MAX = 1000
+
+/** Inline reply composer and "Replies" heading, matching the live web app (Screenshot 5 & 6). */
 @Composable
 private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
     val app = LocalApp.current
@@ -606,26 +618,50 @@ private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
     val replies = state.replies
     val writable = me.has("gistReplies")
     var menu by remember { mutableStateOf(false) }
-    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (replies.count > 0) "Replies (${grouped(replies.count)})" else "Replies",
-                Modifier.weight(1f).semantics { heading() },
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.ink,
-            )
-            if (replies.viewerIsHost) {
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Dots, "Who can reply", Modifier.size(20.dp), tint = colors.muted) }
-                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                        Text("Who can reply", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = colors.muted)
-                        for ((key, label) in GIST_REPLY_AUDIENCES) {
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                trailingIcon = if (replies.audience == key) ({ Icon(Icons.Check, null, Modifier.size(18.dp), tint = colors.accentStrong) }) else null,
-                                onClick = { menu = false; room.setReplyAudience(key) },
-                            )
-                        }
+    var replyText by rememberSaveable { mutableStateOf("") }
+    var posting by remember { mutableStateOf(false) }
+
+    val length = replyText.length
+    val overLimit = length > GIST_REPLY_MAX
+    val canSend = replyText.isNotBlank() && !overLimit && !posting
+    val sendReply: () -> Unit = {
+        val trimmed = replyText.trim()
+        if (trimmed.isNotEmpty() && !overLimit && !posting) {
+            posting = true
+            room.postReply(trimmed) { success ->
+                posting = false
+                if (success) {
+                    replyText = ""
+                    app.say("Reply posted.")
+                }
+            }
+        }
+    }
+
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (replies.viewerIsHost) {
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Dots, "Who can reply", Modifier.size(20.dp), tint = colors.muted)
+                }
+                DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                    Text(
+                        "Who can reply",
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.muted
+                    )
+                    for ((key, label) in GIST_REPLY_AUDIENCES) {
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            trailingIcon = if (replies.audience == key) ({
+                                Icon(Icons.Check, null, Modifier.size(18.dp), tint = colors.accentStrong)
+                            }) else null,
+                            onClick = {
+                                menu = false
+                                room.setReplyAudience(key)
+                            },
+                        )
                     }
                 }
             }
@@ -640,21 +676,65 @@ private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
         }
         if (replies.loaded) {
             if (writable && replies.canReply) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(Radii.card)
-                        .background(colors.surface)
-                        .border(1.dp, colors.line, Radii.card)
-                        .clickable { app.navigator.push(Route.Compose(gist = view.id)) }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Avatar(me.handle, me.avatar, 32.dp)
-                    Text("Reply to this Gist", style = MaterialTheme.typography.bodyLarge, color = colors.faint)
+                Card {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Avatar(me.handle, me.avatar, 34.dp)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(Radii.control)
+                                    .background(colors.panel)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                            ) {
+                                if (replyText.isEmpty()) {
+                                    Text("Post your reply", style = MaterialTheme.typography.bodyMedium, color = colors.faint)
+                                }
+                                BasicTextField(
+                                    value = replyText,
+                                    onValueChange = { replyText = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
+                                    cursorBrush = SolidColor(colors.accent),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    keyboardActions = KeyboardActions(onSend = { sendReply() }),
+                                )
+                            }
+                            Button(
+                                onClick = sendReply,
+                                enabled = canSend,
+                                shape = Radii.control,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.accentInk,
+                                    disabledContainerColor = colors.panel,
+                                    disabledContentColor = colors.muted,
+                                ),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                            ) {
+                                if (posting) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.accentInk)
+                                } else {
+                                    Text("Reply", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                        if (length > GIST_REPLY_MAX - 100) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = if (overLimit) "${length - GIST_REPLY_MAX} over limit" else "${GIST_REPLY_MAX - length} characters remaining",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (overLimit) colors.danger else colors.muted,
+                                modifier = Modifier.align(Alignment.End),
+                            )
+                        }
+                    }
                 }
-            } else {
+            } else if (!replies.canReply) {
                 Text(
                     if (writable) "The host has limited who can reply." else "Replies are paused for now.",
                     Modifier.padding(horizontal = 4.dp),
@@ -663,6 +743,14 @@ private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
                 )
             }
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (replies.count > 0) "Replies (${grouped(replies.count)})" else "Replies",
+            Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.ink,
+        )
     }
 }
 
@@ -888,4 +976,107 @@ fun StartGistDialog(onDismiss: () -> Unit) {
         containerColor = colors.surface,
         shape = Radii.card,
     )
+}
+
+/**
+ * "Start a Gist" card displayed inline at the top of the feed, matching the live web app (Screenshots 1-4).
+ */
+@Composable
+fun StartGistCard(modifier: Modifier = Modifier) {
+    val app = LocalApp.current
+    val colors = HeyNaija.colors
+    val viewModel = viewModel(key = "start-gist-inline") { StartGistViewModel(app) }
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Live, "Start a Gist", Modifier.size(20.dp), tint = colors.ink)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Start a Gist",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.ink,
+                )
+            }
+            Text(
+                "A live audio room. You talk, others listen, and you choose who else may speak. Not recorded.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = state.title,
+                    onValueChange = viewModel::setTitle,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("What is it about?", color = colors.faint) },
+                    singleLine = true,
+                    shape = Radii.control,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.lineStrong,
+                        errorBorderColor = colors.danger,
+                        focusedContainerColor = colors.surface,
+                        unfocusedContainerColor = colors.surface,
+                        cursorColor = colors.accent,
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = {
+                        viewModel.start { id -> app.navigator.push(Route.Gist(id)) }
+                    }),
+                )
+                Button(
+                    onClick = {
+                        viewModel.start { id -> app.navigator.push(Route.Gist(id)) }
+                    },
+                    enabled = !state.busy,
+                    shape = Radii.control,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.accent,
+                        contentColor = colors.accentInk,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        if (state.busy) "Starting…" else "Go live",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            if (state.error != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(Radii.control)
+                        .background(colors.dangerSoft)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Text(
+                        state.error ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.danger,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+            if (state.hosting != null) {
+                TextButton(
+                    onClick = { app.navigator.push(Route.Gist(state.hosting!!)) },
+                    modifier = Modifier.align(Alignment.Start),
+                ) {
+                    Text("Return to your live Gist", color = colors.accentStrong)
+                }
+            }
+        }
+    }
 }

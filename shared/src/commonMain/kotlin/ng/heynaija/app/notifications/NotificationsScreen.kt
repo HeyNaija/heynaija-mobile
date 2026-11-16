@@ -26,6 +26,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,9 +71,12 @@ import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
+import ng.heynaija.app.ui.ElasticPullBar
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.FOUNDER_INLINE
 import ng.heynaija.app.ui.Icons
+import ng.heynaija.app.ui.NotificationRowSkeleton
+import ng.heynaija.app.ui.NotificationsSkeletonList
 import ng.heynaija.app.ui.Problem
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.founderInlineContent
@@ -275,20 +280,36 @@ fun NotificationsScreen() {
         })
         when {
             !state.loaded && state.failed -> Problem("Notifications could not be loaded. Check your connection and try again.", { viewModel.refresh() })
-            !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            else -> PullToRefreshBox(state.refreshing, { viewModel.refresh(pulled = true) }, Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = list,
+            !state.loaded -> NotificationsSkeletonList()
+            else -> {
+                val pullState = rememberPullToRefreshState()
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = { viewModel.refresh(pulled = true) },
+                    state = pullState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(ListGutter),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    indicator = {
+                        // The bar follows the drag; once let go, the spinner shows the page is loading.
+                        if (state.refreshing) {
+                            PullToRefreshDefaults.Indicator(pullState, isRefreshing = true, modifier = Modifier.align(Alignment.TopCenter))
+                        } else if (pullState.distanceFraction > 0.05f) {
+                            ElasticPullBar(pullState.distanceFraction)
+                        }
+                    },
                 ) {
-                    if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
-                    val rows = visibleNotifications(state.items, app.me?.has("games") == true)
-                    if (rows.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
-                    items(rows, key = { it.id }) { NotificationRow(it, now) }
-                    if (state.loadingMore && state.items.isNotEmpty()) item {
-                        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
+                    LazyColumn(
+                        state = list,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(ListGutter),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
+                        val rows = visibleNotifications(state.items, app.me?.has("games") == true)
+                        if (rows.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
+                        items(rows, key = { it.id }) { NotificationRow(it, now) }
+                        if (state.loadingMore && state.items.isNotEmpty()) item {
+                            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
+                        }
                     }
                 }
             }
