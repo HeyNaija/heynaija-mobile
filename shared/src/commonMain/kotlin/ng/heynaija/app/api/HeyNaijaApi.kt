@@ -663,9 +663,16 @@ class HeyNaijaApi(
      * A round. With [after], the version the screen has: the server answers at once
      * with anything newer, else when a question appears or closes, waiting at most 25 seconds.
      */
-    suspend fun triviaRound(id: String, after: Long? = null): TriviaRound = get("/games/trivia/rounds/${seg(id)}") {
+    /**
+     * A round now, or with [after] (the version on screen) once something changes. [has] is the
+     * open question whose text is on screen ("" for none): a question opening is not a new
+     * version, so without it a request that reaches the server just after one opened would
+     * wait until it closed.
+     */
+    suspend fun triviaRound(id: String, after: Long? = null, has: String? = null): TriviaRound = get("/games/trivia/rounds/${seg(id)}") {
         if (after != null) {
             parameter("after", after)
+            if (has != null) parameter("has", has)
             timeout { requestTimeoutMillis = 45_000 }
         }
     }
