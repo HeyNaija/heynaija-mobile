@@ -153,7 +153,7 @@ fun HomeScreen() {
                         bottomPadding = 72.dp,
                     ) {
                         if (!member) item(key = "visitor") { VisitorCard() }
-                        if (gists) item(key = "start-gist") { StartGistCard() }
+                        if (gists && mayHost) item(key = "start-gist") { StartGistCard() }
                         if (gists && live.isNotEmpty()) item(key = "live-now") { LiveNow(live) }
                     }
                 }

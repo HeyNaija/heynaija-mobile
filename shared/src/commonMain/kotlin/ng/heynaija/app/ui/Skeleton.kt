@@ -23,10 +23,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
@@ -35,13 +39,15 @@ import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 
+val LocalShimmerProgress = staticCompositionLocalOf<State<Float>?> { null }
+
 /**
- * Creates an animated linear shimmer brush that sweeps diagonally across skeleton blocks.
+ * Creates an animated shimmer progress state that sweeps diagonally across skeleton blocks.
  */
 @Composable
-fun rememberShimmerBrush(): Brush {
+fun rememberShimmerProgress(): State<Float> {
     val transition = rememberInfiniteTransition(label = "shimmerTransition")
-    val translateAnim by transition.animateFloat(
+    return transition.animateFloat(
         initialValue = -400f,
         targetValue = 1800f,
         animationSpec = infiniteRepeatable(
@@ -50,31 +56,70 @@ fun rememberShimmerBrush(): Brush {
         ),
         label = "shimmerTranslate",
     )
+}
+
+/**
+ * Sweeps a shimmer gradient in the draw phase, preventing per-frame recompositions.
+ */
+@Composable
+fun Modifier.shimmer(
+    shape: Shape = Radii.chip,
+    progress: State<Float> = LocalShimmerProgress.current ?: rememberShimmerProgress(),
+): Modifier {
+    val colors = HeyNaija.colors
+    val base = if (colors.dark) colors.panel else colors.line.copy(alpha = 0.65f)
+    val highlight = if (colors.dark) colors.lineStrong else colors.surface
+
+    return clip(shape).drawWithCache {
+        onDrawBehind {
+            val p = progress.value
+            val brush = Brush.linearGradient(
+                colors = listOf(base, highlight, base),
+                start = Offset(p - 400f, p - 400f),
+                end = Offset(p, p),
+            )
+            drawRect(brush)
+        }
+    }
+}
+
+/**
+ * Creates a linear shimmer brush. For optimal performance, prefer [Modifier.shimmer].
+ */
+@Composable
+fun rememberShimmerBrush(): Brush {
+    val progress = LocalShimmerProgress.current ?: rememberShimmerProgress()
     val colors = HeyNaija.colors
     val base = if (colors.dark) colors.panel else colors.line.copy(alpha = 0.65f)
     val highlight = if (colors.dark) colors.lineStrong else colors.surface
 
     return Brush.linearGradient(
         colors = listOf(base, highlight, base),
-        start = Offset(translateAnim - 400f, translateAnim - 400f),
-        end = Offset(translateAnim, translateAnim),
+        start = Offset(progress.value - 400f, progress.value - 400f),
+        end = Offset(progress.value, progress.value),
     )
 }
 
 /**
- * A placeholder block styled with the animated shimmer brush.
+ * A placeholder block styled with the draw-phase shimmer animation.
  */
 @Composable
 fun SkeletonBlock(
     modifier: Modifier = Modifier,
     shape: Shape = Radii.chip,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(brush),
-    )
+    if (brush != null) {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(brush),
+        )
+    } else {
+        Box(
+            modifier = modifier.shimmer(shape),
+        )
+    }
 }
 
 /**
@@ -85,7 +130,7 @@ fun PostCardSkeleton(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     focused: Boolean = false,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
     Card(modifier) {
         Column(Modifier.padding(if (compact) 12.dp else 16.dp)) {
@@ -160,15 +205,18 @@ fun PostListSkeleton(
     modifier: Modifier = Modifier,
     count: Int = 4,
     contentPadding: PaddingValues = PaddingValues(ListGutter),
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(ListGutter),
-    ) {
-        items(count) {
-            PostCardSkeleton(brush = brush)
+    val progress = rememberShimmerProgress()
+    CompositionLocalProvider(LocalShimmerProgress provides progress) {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = contentPadding,
+            verticalArrangement = Arrangement.spacedBy(ListGutter),
+        ) {
+            items(count) {
+                PostCardSkeleton(brush = brush)
+            }
         }
     }
 }
@@ -179,30 +227,33 @@ fun PostListSkeleton(
 @Composable
 fun ThreadSkeleton(
     modifier: Modifier = Modifier,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
     val colors = HeyNaija.colors
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 48.dp),
-    ) {
-        item {
-            PostCardSkeleton(focused = true, brush = brush)
-        }
-        item {
-            Box(Modifier.fillMaxWidth().height(ListGutter)) {
-                Box(
-                    Modifier
-                        .padding(start = 33.dp)
-                        .width(2.dp)
-                        .height(ListGutter)
-                        .background(colors.lineStrong),
-                )
+    val progress = rememberShimmerProgress()
+    CompositionLocalProvider(LocalShimmerProgress provides progress) {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 48.dp),
+        ) {
+            item {
+                PostCardSkeleton(focused = true, brush = brush)
             }
-        }
-        items(3) {
-            Column(Modifier.padding(bottom = ListGutter)) {
-                PostCardSkeleton(compact = true, brush = brush)
+            item {
+                Box(Modifier.fillMaxWidth().height(ListGutter)) {
+                    Box(
+                        Modifier
+                            .padding(start = 33.dp)
+                            .width(2.dp)
+                            .height(ListGutter)
+                            .background(colors.lineStrong),
+                    )
+                }
+            }
+            items(3) {
+                Column(Modifier.padding(bottom = ListGutter)) {
+                    PostCardSkeleton(compact = true, brush = brush)
+                }
             }
         }
     }
@@ -214,7 +265,7 @@ fun ThreadSkeleton(
 @Composable
 fun NotificationRowSkeleton(
     modifier: Modifier = Modifier,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
     Card(modifier) {
         Row(
@@ -251,15 +302,18 @@ fun NotificationRowSkeleton(
 fun NotificationsSkeletonList(
     modifier: Modifier = Modifier,
     count: Int = 6,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(ListGutter),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(count) {
-            NotificationRowSkeleton(brush = brush)
+    val progress = rememberShimmerProgress()
+    CompositionLocalProvider(LocalShimmerProgress provides progress) {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(ListGutter),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(count) {
+                NotificationRowSkeleton(brush = brush)
+            }
         }
     }
 }
@@ -270,7 +324,7 @@ fun NotificationsSkeletonList(
 @Composable
 fun CommunityCardSkeleton(
     modifier: Modifier = Modifier,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
     val colors = HeyNaija.colors
     Card(modifier) {
@@ -336,15 +390,18 @@ fun CommunityCardSkeleton(
 fun CommunitiesSkeletonList(
     modifier: Modifier = Modifier,
     count: Int = 4,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(ListGutter),
-        verticalArrangement = Arrangement.spacedBy(ListGutter),
-    ) {
-        items(count) {
-            CommunityCardSkeleton(brush = brush)
+    val progress = rememberShimmerProgress()
+    CompositionLocalProvider(LocalShimmerProgress provides progress) {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(ListGutter),
+            verticalArrangement = Arrangement.spacedBy(ListGutter),
+        ) {
+            items(count) {
+                CommunityCardSkeleton(brush = brush)
+            }
         }
     }
 }
@@ -355,84 +412,87 @@ fun CommunitiesSkeletonList(
 @Composable
 fun ProfileSkeleton(
     modifier: Modifier = Modifier,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
     val colors = HeyNaija.colors
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(ListGutter),
-    ) {
-        item {
-            Card {
-                Column(Modifier.padding(16.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        SkeletonBlock(
-                            modifier = Modifier.size(72.dp),
-                            shape = CircleShape,
-                            brush = brush,
-                        )
-                        SkeletonBlock(
-                            modifier = Modifier.width(90.dp).height(32.dp),
-                            shape = Radii.control,
-                            brush = brush,
-                        )
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.45f).height(20.dp),
-                        shape = Radii.chip,
-                        brush = brush,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.28f).height(12.dp),
-                        shape = Radii.chip,
-                        brush = brush,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.9f).height(14.dp),
-                        shape = Radii.chip,
-                        brush = brush,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth(0.65f).height(14.dp),
-                        shape = Radii.chip,
-                        brush = brush,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        repeat(3) {
+    val progress = rememberShimmerProgress()
+    CompositionLocalProvider(LocalShimmerProgress provides progress) {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(ListGutter),
+        ) {
+            item {
+                Card {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             SkeletonBlock(
-                                modifier = Modifier.width(60.dp).height(16.dp),
-                                shape = Radii.chip,
+                                modifier = Modifier.size(72.dp),
+                                shape = CircleShape,
                                 brush = brush,
                             )
+                            SkeletonBlock(
+                                modifier = Modifier.width(90.dp).height(32.dp),
+                                shape = Radii.control,
+                                brush = brush,
+                            )
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        SkeletonBlock(
+                            modifier = Modifier.fillMaxWidth(0.45f).height(20.dp),
+                            shape = Radii.chip,
+                            brush = brush,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        SkeletonBlock(
+                            modifier = Modifier.fillMaxWidth(0.28f).height(12.dp),
+                            shape = Radii.chip,
+                            brush = brush,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SkeletonBlock(
+                            modifier = Modifier.fillMaxWidth(0.9f).height(14.dp),
+                            shape = Radii.chip,
+                            brush = brush,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        SkeletonBlock(
+                            modifier = Modifier.fillMaxWidth(0.65f).height(14.dp),
+                            shape = Radii.chip,
+                            brush = brush,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            repeat(3) {
+                                SkeletonBlock(
+                                    modifier = Modifier.width(60.dp).height(16.dp),
+                                    shape = Radii.chip,
+                                    brush = brush,
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
-        item {
-            // Filter tabs skeleton
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(3) {
-                    SkeletonBlock(
-                        modifier = Modifier.width(68.dp).height(32.dp),
-                        shape = Radii.control,
-                        brush = brush,
-                    )
+            item {
+                // Filter tabs skeleton
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(3) {
+                        SkeletonBlock(
+                            modifier = Modifier.width(68.dp).height(32.dp),
+                            shape = Radii.control,
+                            brush = brush,
+                        )
+                    }
                 }
             }
-        }
-        items(2) {
-            PostCardSkeleton(brush = brush)
+            items(2) {
+                PostCardSkeleton(brush = brush)
+            }
         }
     }
 }
@@ -443,39 +503,42 @@ fun ProfileSkeleton(
 @Composable
 fun CommunityDetailSkeleton(
     modifier: Modifier = Modifier,
-    brush: Brush = rememberShimmerBrush(),
+    brush: Brush? = null,
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 72.dp),
-        verticalArrangement = Arrangement.spacedBy(ListGutter),
-    ) {
-        item {
-            Card {
-                Column(Modifier.padding(16.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            SkeletonBlock(Modifier.size(48.dp), shape = Radii.control, brush = brush)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                SkeletonBlock(Modifier.width(120.dp).height(16.dp), shape = Radii.chip, brush = brush)
-                                Spacer(Modifier.height(4.dp))
-                                SkeletonBlock(Modifier.width(60.dp).height(12.dp), shape = Radii.chip, brush = brush)
+    val progress = rememberShimmerProgress()
+    CompositionLocalProvider(LocalShimmerProgress provides progress) {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 72.dp),
+            verticalArrangement = Arrangement.spacedBy(ListGutter),
+        ) {
+            item {
+                Card {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SkeletonBlock(Modifier.size(48.dp), shape = Radii.control, brush = brush)
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    SkeletonBlock(Modifier.width(120.dp).height(16.dp), shape = Radii.chip, brush = brush)
+                                    Spacer(Modifier.height(4.dp))
+                                    SkeletonBlock(Modifier.width(60.dp).height(12.dp), shape = Radii.chip, brush = brush)
+                                }
                             }
+                            SkeletonBlock(Modifier.width(72.dp).height(32.dp), shape = Radii.control, brush = brush)
                         }
-                        SkeletonBlock(Modifier.width(72.dp).height(32.dp), shape = Radii.control, brush = brush)
+                        Spacer(Modifier.height(12.dp))
+                        SkeletonBlock(Modifier.fillMaxWidth().height(14.dp), shape = Radii.chip, brush = brush)
                     }
-                    Spacer(Modifier.height(12.dp))
-                    SkeletonBlock(Modifier.fillMaxWidth().height(14.dp), shape = Radii.chip, brush = brush)
                 }
             }
-        }
-        items(2) {
-            PostCardSkeleton(brush = brush)
+            items(2) {
+                PostCardSkeleton(brush = brush)
+            }
         }
     }
 }

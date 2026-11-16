@@ -57,6 +57,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -258,26 +259,13 @@ private fun Head(view: GistView, state: GistState, onListeners: () -> Unit) {
             }
             if (!ended) {
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    GistButton(
-                        listenerLabel(view.listenerCount),
-                        onClick = onListeners,
-                        icon = Icons.People,
-                        // A host or co-host's list opens from their controls, which appear once they have joined.
-                        enabled = !(view.viewer.role == "host" || view.viewer.role == "cohost") || state.polling,
-                    )
-                    if (state.polling) {
-                        GistButton(
-                            "Connection",
-                            onClick = {},
-                            icon = Icons.Signal,
-                            enabled = false,
-                        )
-                    }
-                }
+                GistButton(
+                    listenerLabel(view.listenerCount),
+                    onClick = onListeners,
+                    icon = Icons.People,
+                    // A host or co-host's list opens from their controls, which appear once they have joined.
+                    enabled = !(view.viewer.role == "host" || view.viewer.role == "cohost") || state.polling,
+                )
             }
         }
     }
@@ -581,18 +569,6 @@ private fun Controls(view: GistView, state: GistState, room: GistRoom) {
             )
             else -> Spacer(Modifier.weight(1f))
         }
-        if (controls.mic || view.viewer.role == "host" || view.viewer.role == "cohost") {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(Radii.control)
-                    .border(1.dp, colors.lineStrong, Radii.control)
-                    .clickable { app.say("Audio is playing through device output.") },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Gear, "Audio settings", Modifier.size(20.dp), tint = colors.muted)
-            }
-        }
         // Going back keeps the member in the Gist; this is the way out of it.
         GistButton("Leave", {
             room.leave()
@@ -631,6 +607,8 @@ private fun LazyListScope.replies(view: GistView, state: GistState, room: GistRo
     }
 }
 
+private const val GIST_REPLY_MAX = 1000
+
 /** Inline reply composer and "Replies" heading, matching the live web app (Screenshot 5 & 6). */
 @Composable
 private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
@@ -640,8 +618,25 @@ private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
     val replies = state.replies
     val writable = me.has("gistReplies")
     var menu by remember { mutableStateOf(false) }
-    var replyText by remember { mutableStateOf("") }
+    var replyText by rememberSaveable { mutableStateOf("") }
     var posting by remember { mutableStateOf(false) }
+
+    val length = replyText.length
+    val overLimit = length > GIST_REPLY_MAX
+    val canSend = replyText.isNotBlank() && !overLimit && !posting
+    val sendReply: () -> Unit = {
+        val trimmed = replyText.trim()
+        if (trimmed.isNotEmpty() && !overLimit && !posting) {
+            posting = true
+            room.postReply(trimmed) { success ->
+                posting = false
+                if (success) {
+                    replyText = ""
+                    app.say("Reply posted.")
+                }
+            }
+        }
+    }
 
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (replies.viewerIsHost) {
@@ -679,77 +674,74 @@ private fun RepliesHead(view: GistView, state: GistState, room: GistRoom) {
                 color = colors.muted,
             )
         }
-        if (writable && replies.canReply) {
-            Card {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Avatar(me.handle, me.avatar, 34.dp)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(Radii.control)
-                            .background(colors.panel)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    ) {
-                        if (replyText.isEmpty()) {
-                            Text("Post your reply", style = MaterialTheme.typography.bodyMedium, color = colors.faint)
-                        }
-                        BasicTextField(
-                            value = replyText,
-                            onValueChange = { replyText = it },
+        if (replies.loaded) {
+            if (writable && replies.canReply) {
+                Card {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
-                            cursorBrush = SolidColor(colors.accent),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = {
-                                if (replyText.isNotBlank() && !posting) {
-                                    posting = true
-                                    room.postReply(replyText) {
-                                        replyText = ""
-                                        posting = false
-                                    }
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Avatar(me.handle, me.avatar, 34.dp)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(Radii.control)
+                                    .background(colors.panel)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                            ) {
+                                if (replyText.isEmpty()) {
+                                    Text("Post your reply", style = MaterialTheme.typography.bodyMedium, color = colors.faint)
                                 }
-                            }),
-                        )
-                    }
-                    Button(
-                        onClick = {
-                            if (replyText.isNotBlank() && !posting) {
-                                posting = true
-                                room.postReply(replyText) {
-                                    replyText = ""
-                                    posting = false
+                                BasicTextField(
+                                    value = replyText,
+                                    onValueChange = { replyText = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
+                                    cursorBrush = SolidColor(colors.accent),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    keyboardActions = KeyboardActions(onSend = { sendReply() }),
+                                )
+                            }
+                            Button(
+                                onClick = sendReply,
+                                enabled = canSend,
+                                shape = Radii.control,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.accentInk,
+                                    disabledContainerColor = colors.panel,
+                                    disabledContentColor = colors.muted,
+                                ),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                            ) {
+                                if (posting) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.accentInk)
+                                } else {
+                                    Text("Reply", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                                 }
                             }
-                        },
-                        enabled = replyText.isNotBlank() && !posting,
-                        shape = Radii.control,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.accent,
-                            contentColor = colors.accentInk,
-                            disabledContainerColor = colors.panel,
-                            disabledContentColor = colors.muted,
-                        ),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    ) {
-                        if (posting) {
-                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.accentInk)
-                        } else {
-                            Text("Reply", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        if (length > GIST_REPLY_MAX - 100) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = if (overLimit) "${length - GIST_REPLY_MAX} over limit" else "${GIST_REPLY_MAX - length} characters remaining",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (overLimit) colors.danger else colors.muted,
+                                modifier = Modifier.align(Alignment.End),
+                            )
                         }
                     }
                 }
+            } else if (!replies.canReply) {
+                Text(
+                    if (writable) "The host has limited who can reply." else "Replies are paused for now.",
+                    Modifier.padding(horizontal = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted,
+                )
             }
-        } else if (!replies.canReply) {
-            Text(
-                if (writable) "The host has limited who can reply." else "Replies are paused for now.",
-                Modifier.padding(horizontal = 4.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.muted,
-            )
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -1012,7 +1004,7 @@ fun StartGistCard(modifier: Modifier = Modifier) {
                 )
             }
             Text(
-                "A live audio room. You talk, others listen, and you choose who else may speak. Not recorded. Needs JavaScript and a browser with a microphone.",
+                "A live audio room. You talk, others listen, and you choose who else may speak. Not recorded.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.muted,
             )

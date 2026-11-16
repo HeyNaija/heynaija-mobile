@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,8 +74,10 @@ import ng.heynaija.app.ui.Card
 import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.Icons
+import ng.heynaija.app.ui.LocalShimmerProgress
 import ng.heynaija.app.ui.PostCard
 import ng.heynaija.app.ui.PostCardSkeleton
+import ng.heynaija.app.ui.rememberShimmerProgress
 import ng.heynaija.app.ui.SectionTitle
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.plural
@@ -169,32 +172,35 @@ fun SearchScreen() {
             HorizontalDivider(color = colors.line)
         }
         val results = state.results
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ListGutter), verticalArrangement = Arrangement.spacedBy(ListGutter)) {
-            when {
-                state.searching && results == null -> items(3) { PostCardSkeleton() }
-                state.failed -> item { Empty("Search is not working right now. Try again in a moment.") }
-                results == null -> {
-                    if (state.topics.isNotEmpty()) {
-                        item { SectionTitle("TRENDING THIS WEEK") }
-                        items(state.topics, key = { "t-${it.tag}" }) { TopicRow(it) }
-                    } else {
-                        item { Empty("Find people by name or handle, communities by subject, and posts by what they say.") }
+        val shimmerProgress = rememberShimmerProgress()
+        CompositionLocalProvider(LocalShimmerProgress provides shimmerProgress) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ListGutter), verticalArrangement = Arrangement.spacedBy(ListGutter)) {
+                when {
+                    state.searching && results == null -> items(3) { PostCardSkeleton() }
+                    state.failed -> item { Empty("Search is not working right now. Try again in a moment.") }
+                    results == null -> {
+                        if (state.topics.isNotEmpty()) {
+                            item { SectionTitle("TRENDING THIS WEEK") }
+                            items(state.topics, key = { "t-${it.tag}" }) { TopicRow(it) }
+                        } else {
+                            item { Empty("Find people by name or handle, communities by subject, and posts by what they say.") }
+                        }
                     }
-                }
-                results.members.isEmpty() && results.communities.isEmpty() && results.posts.isEmpty() ->
-                    item { Empty("Nothing matches \"${state.query.trim()}\".") }
-                else -> {
-                    if (results.members.isNotEmpty()) {
-                        item { SectionTitle("PEOPLE") }
-                        item { Card { Column { results.members.forEachIndexed { i, m -> if (i > 0) HorizontalDivider(color = colors.line); MemberRow(m) } } } }
-                    }
-                    if (results.communities.isNotEmpty()) {
-                        item { SectionTitle("COMMUNITIES") }
-                        item { Card { Column { results.communities.forEachIndexed { i, c -> if (i > 0) HorizontalDivider(color = colors.line); CommunityRow(c) } } } }
-                    }
-                    if (results.posts.isNotEmpty()) {
-                        item { SectionTitle("POSTS") }
-                        items(results.posts, key = { "p-${it.id}" }) { PostCard(it, now) }
+                    results.members.isEmpty() && results.communities.isEmpty() && results.posts.isEmpty() ->
+                        item { Empty("Nothing matches \"${state.query.trim()}\".") }
+                    else -> {
+                        if (results.members.isNotEmpty()) {
+                            item { SectionTitle("PEOPLE") }
+                            item { Card { Column { results.members.forEachIndexed { i, m -> if (i > 0) HorizontalDivider(color = colors.line); MemberRow(m) } } } }
+                        }
+                        if (results.communities.isNotEmpty()) {
+                            item { SectionTitle("COMMUNITIES") }
+                            item { Card { Column { results.communities.forEachIndexed { i, c -> if (i > 0) HorizontalDivider(color = colors.line); CommunityRow(c) } } } }
+                        }
+                        if (results.posts.isNotEmpty()) {
+                            item { SectionTitle("POSTS") }
+                            items(results.posts, key = { "p-${it.id}" }) { PostCard(it, now) }
+                        }
                     }
                 }
             }

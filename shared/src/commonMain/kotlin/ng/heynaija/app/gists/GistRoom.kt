@@ -621,18 +621,22 @@ class GistRoom internal constructor(
         }
     }
 
-    fun postReply(text: String, onDone: () -> Unit) {
+    fun postReply(text: String, onDone: (success: Boolean) -> Unit) {
         val t = text.trim()
-        if (t.isEmpty()) return
+        if (t.isEmpty()) {
+            onDone(false)
+            return
+        }
         scope.launch {
             try {
                 api.createGistReply(id, t)
-                onDone()
+                onDone(true)
                 loadReplies()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 say(reasonOf(e) ?: "Could not post your reply. Try again.")
+                onDone(false)
             }
         }
     }

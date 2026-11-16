@@ -85,7 +85,11 @@ fun PostList(
         onRefresh = viewModel::refresh,
         state = pullState,
         modifier = modifier.fillMaxSize(),
-        indicator = {},
+        indicator = {
+            if (!state.refreshing && pullState.distanceFraction > 0.05f) {
+                ElasticPullBar(pullState.distanceFraction)
+            }
+        },
     ) {
         LazyColumn(
             state = list,
@@ -94,16 +98,11 @@ fun PostList(
             verticalArrangement = Arrangement.spacedBy(ListGutter),
         ) {
             header()
-            if (!state.refreshing && pullState.distanceFraction > 0.05f) {
-                item(key = "elastic-pull-bar") {
-                    ElasticPullBar(pullState.distanceFraction)
-                }
-            }
             when {
                 !state.loaded && state.failed -> item(key = "problem") {
                     Failed("Posts could not be loaded. Check your connection and try again.", viewModel::retry)
                 }
-                !state.loaded || state.refreshing -> items(5, key = { "skeleton-$it" }) {
+                !state.loaded -> items(5, key = { "skeleton-$it" }) {
                     PostCardSkeleton()
                 }
                 else -> {

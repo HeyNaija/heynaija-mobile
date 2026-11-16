@@ -54,7 +54,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -124,9 +123,6 @@ class NotificationsViewModel(private val app: AppState) : ViewModel() {
         fetching?.cancel()
         _state.update { it.copy(refreshing = pulled || it.refreshing, failed = false) }
         fetching = viewModelScope.launch {
-            if (pulled) {
-                delay(3800)
-            }
             val page = try {
                 app.api.notifications()
             } catch (e: CancellationException) {
@@ -271,7 +267,7 @@ fun NotificationsScreen() {
             }
         })
         when {
-            !state.loaded && state.failed -> Problem("Notifications could not be loaded. Check your connection and try again.", { viewModel.refresh(pulled = true) })
+            !state.loaded && state.failed -> Problem("Notifications could not be loaded. Check your connection and try again.", { viewModel.refresh() })
             !state.loaded -> NotificationsSkeletonList()
             else -> {
                 val pullState = rememberPullToRefreshState()
@@ -280,7 +276,11 @@ fun NotificationsScreen() {
                     onRefresh = { viewModel.refresh(pulled = true) },
                     state = pullState,
                     modifier = Modifier.fillMaxSize(),
-                    indicator = {},
+                    indicator = {
+                        if (!state.refreshing && pullState.distanceFraction > 0.05f) {
+                            ElasticPullBar(pullState.distanceFraction)
+                        }
+                    },
                 ) {
                     LazyColumn(
                         state = list,
@@ -289,21 +289,10 @@ fun NotificationsScreen() {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
-                        if (!state.refreshing && pullState.distanceFraction > 0.05f) {
-                            item(key = "elastic-pull-bar") {
-                                ElasticPullBar(pullState.distanceFraction)
-                            }
-                        }
-                        if (state.refreshing) {
-                            items(6, key = { "refreshing-skeleton-$it" }) {
-                                NotificationRowSkeleton()
-                            }
-                        } else {
-                            if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
-                            items(state.items, key = { it.id }) { NotificationRow(it, now) }
-                            if (state.loadingMore && state.items.isNotEmpty()) item {
-                                Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
-                            }
+                        if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
+                        items(state.items, key = { it.id }) { NotificationRow(it, now) }
+                        if (state.loadingMore && state.items.isNotEmpty()) item {
+                            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
                         }
                     }
                 }

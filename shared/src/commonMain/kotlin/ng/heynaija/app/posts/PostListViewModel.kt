@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,9 +93,6 @@ class PostListViewModel(
         job = viewModelScope.launch {
             try {
                 val page = load(cursor)
-                if (pulled) {
-                    delay(2800)
-                }
                 _state.update {
                     // A post can move onto the next page while we read; show it once.
                     val posts = if (fresh) page.posts else (it.posts + page.posts).distinctBy(Post::id)
