@@ -52,17 +52,21 @@ import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.Profile
 import ng.heynaija.app.launchCatching
+import ng.heynaija.app.games.chess.ChessLine
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.PostList
 import ng.heynaija.app.posts.PostListViewModel
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
+import ng.heynaija.app.ui.AUTOMATED_ACCOUNT_LABEL
 import ng.heynaija.app.ui.Avatar
 import ng.heynaija.app.ui.Card
+import ng.heynaija.app.ui.Chip
 import ng.heynaija.app.ui.Confirm
 import ng.heynaija.app.ui.FounderBadge
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
+import ng.heynaija.app.ui.OfficialBadge
 import ng.heynaija.app.ui.PrimaryButton
 import ng.heynaija.app.ui.Problem
 import ng.heynaija.app.ui.ProfileSkeleton
@@ -265,8 +269,16 @@ private fun Header(profile: Profile, viewModel: ProfileViewModel) {
                     Spacer(Modifier.width(6.dp))
                     FounderBadge(size = 18.dp)
                 }
+                if (profile.automatedBadge) {
+                    Spacer(Modifier.width(3.dp))
+                    OfficialBadge(profile.handle, size = 18.dp, onItsProfile = true)
+                }
             }
             if (profile.displayName != null) Text("@${profile.handle}", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+            if (profile.automatedBadge) {
+                Spacer(Modifier.height(8.dp))
+                Chip(AUTOMATED_ACCOUNT_LABEL)
+            }
             if (profile.bio.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
                 Text(profile.bio, style = MaterialTheme.typography.bodyLarge, color = colors.ink)
@@ -279,6 +291,7 @@ private fun Header(profile: Profile, viewModel: ProfileViewModel) {
                 Count(profile.followerCount, "follower")
                 Count(profile.followingCount, "following", plural = false)
             }
+            ChessLine(profile.handle, profile.isSelf)
             if (profile.viewerMutes) {
                 Spacer(Modifier.height(10.dp))
                 Text("You muted @${profile.handle}.", style = MaterialTheme.typography.bodyMedium, color = colors.muted)

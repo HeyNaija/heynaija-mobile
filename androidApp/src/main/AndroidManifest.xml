@@ -64,6 +64,16 @@
                 <data android:path="/notifications" />
                 <data android:path="/bookmarks" />
             </intent-filter>
+            <!-- Lichess's answer after a member connects their account, passed on by the site's
+                 /lichess/return page (games/chess/Lichess.kt). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="ng.heynaija.app" android:host="lichess" />
+            </intent-filter>
         </activity>
         <service
             android:name="io.livekit.android.room.track.screencapture.ScreenCaptureService"

@@ -380,6 +380,9 @@ class HeyNaijaApi(
     suspend fun setNotificationPreference(key: String, on: Boolean): Map<String, Boolean> =
         send("PUT", "/notifications/preferences", buildJsonObject { put(key, on) }).body()
 
+    suspend fun setNotificationPreferences(changes: Map<String, Boolean>): Map<String, Boolean> =
+        send("PUT", "/notifications/preferences", buildJsonObject { for ((key, on) in changes) put(key, on) }).body()
+
     /**
      * The push services this server pushes to the apps through (ADRs 0023 and 0026
      * in the web repository): "fcm", "apns", "apns_sandbox". A server from before
@@ -553,6 +556,141 @@ class HeyNaijaApi(
     suspend fun setGistReplyAudience(id: String, audience: String) {
         send("PUT", "/gists/${seg(id)}/replies/audience", buildJsonObject { put("audience", audience) })
     }
+
+    // Games (ADR 0028): every route answers 404 while the `games` flag is off for the member.
+
+    /** The games in registry order. */
+    suspend fun games(): List<GameManifest> = get<GameList>("/games").games
+
+    /** [board] is 'score', 'chess' or 'keno'; [period] "2026-11" or "all" (the current season when null). */
+    suspend fun gameBoard(board: String, period: String? = null, filter: String = "everyone", community: String? = null, limit: Int = 50): GameBoard =
+        get("/games/leaderboard") {
+            parameter("board", board)
+            parameter("filter", filter)
+            parameter("limit", limit)
+            if (period != null) parameter("period", period)
+            if (community != null) parameter("community", community)
+        }
+
+    /** The season now, and every season with scores, newest first. */
+    suspend fun gameSeasons(): GameSeasons = get("/games/seasons")
+
+    suspend fun gameScoring(): GameScoring = get("/games/scoring")
+
+    // Chess, played on Lichess
+
+    suspend fun chess(): ChessOverview = get("/games/chess")
+
+    /**
+     * Where to send the member to connect Lichess. Asked as the app, a server that
+     * can sends Lichess's answer back to the app ([LichessLinkStart.returnsTo] "app");
+     * an older one sends it to the website.
+     */
+    suspend fun startLichessLink(): LichessLinkStart =
+        check(client.post(url("/games/chess/link")) { parameter("return", "app") }).body()
+
+    /** Finishes connecting, with what Lichess sent back. */
+    suspend fun completeLichessLink(code: String, state: String) {
+        send("POST", "/games/chess/link/complete", buildJsonObject {
+            put("code", code)
+            put("state", state)
+        })
+    }
+
+    suspend fun unlinkLichess() { send("DELETE", "/games/chess/link") }
+
+    suspend fun refreshLichessRatings() { send("POST", "/games/chess/ratings/refresh") }
+
+    /** A member's Lichess account for their profile; [ApiException] 404 if they have none, or cannot be seen. */
+    suspend fun chessMember(handle: String): ChessMember = get("/games/chess/members/${seg(handle)}")
+
+    /** Members who have connected Lichess, matching [query]. */
+    suspend fun chessCandidates(query: String): List<ChessCandidate> =
+        get<ChessCandidates>("/games/chess/opponents") { parameter("q", query) }.members
+
+    /** [timeControl] is a [ChessTimeControl.id]; [color] 'random', 'white' or 'black'. */
+    suspend fun challenge(handle: String, rated: Boolean, timeControl: String, color: String, openThread: Boolean): ChessChallenge =
+        send("POST", "/games/chess/challenges", buildJsonObject {
+            put("handle", handle)
+            put("rated", rated)
+            put("timeControl", timeControl)
+            put("color", color)
+            put("openThread", openThread)
+        }).body()
+
+    /** Makes the game on Lichess; the answer carries it. */
+    suspend fun acceptChallenge(id: String): ChessChallenge = send("POST", "/games/chess/challenges/${seg(id)}/accept").body()
+
+    suspend fun declineChallenge(id: String) { send("POST", "/games/chess/challenges/${seg(id)}/decline") }
+
+    suspend fun cancelChallenge(id: String) { send("POST", "/games/chess/challenges/${seg(id)}/cancel") }
+
+    /** Games being played that the member may watch. */
+    suspend fun liveChessGames(): List<LiveChessGame> = get<LiveChessGames>("/games/chess/games/live").games
+
+    /**
+     * A game. With [after], the version the screen has: the server answers at once
+     * with anything newer, else waits up to 25 seconds for the next change.
+     */
+    suspend fun chessGame(id: String, after: Long? = null): ChessGame = get("/games/chess/games/${seg(id)}") {
+        if (after != null) {
+            parameter("after", after)
+            timeout { requestTimeoutMillis = 45_000 }
+        }
+    }
+
+    /** A move by the player, in UCI ("e2e4", "e7e8q"); Lichess decides whether it is legal. */
+    suspend fun chessMove(id: String, uci: String) {
+        send("POST", "/games/chess/games/${seg(id)}/move", buildJsonObject { put("uci", uci) })
+    }
+
+    /** [answer] is 'offer', 'accept' or 'decline'. */
+    suspend fun chessDraw(id: String, answer: String) {
+        send("POST", "/games/chess/games/${seg(id)}/draw", buildJsonObject { put("answer", answer) })
+    }
+
+    suspend fun chessResign(id: String) { send("POST", "/games/chess/games/${seg(id)}/resign") }
+
+    /** Before both players have moved: ends the game with no result. */
+    suspend fun chessAbort(id: String) { send("POST", "/games/chess/games/${seg(id)}/abort") }
+
+    // Trivia (phase 7): every route also answers 404 while the `trivia` flag is off for the member.
+
+    /** Rounds live now, coming up and recently over. */
+    suspend fun triviaList(): TriviaList = get("/games/trivia")
+
+    /**
+     * A round. With [after], the version the screen has: the server answers at once
+     * with anything newer, else when a question appears or closes, waiting at most 25 seconds.
+     */
+    suspend fun triviaRound(id: String, after: Long? = null): TriviaRound = get("/games/trivia/rounds/${seg(id)}") {
+        if (after != null) {
+            parameter("after", after)
+            timeout { requestTimeoutMillis = 45_000 }
+        }
+    }
+
+    /** One final answer: [choice] (a [TriviaChoice.id]) or [text]. The answer's time since the question appeared. */
+    suspend fun triviaAnswer(round: String, question: String, choice: Int? = null, text: String? = null): TriviaAnswered =
+        send("POST", "/games/trivia/rounds/${seg(round)}/questions/${seg(question)}/answer", buildJsonObject {
+            if (choice != null) put("choice", choice)
+            if (text != null) put("text", text)
+        }).body()
+
+    // Competitions
+
+    /** Live and coming up, then recently finished; drafts only for site moderators. */
+    suspend fun competitions(): CompetitionList = get("/games/competitions")
+
+    suspend fun competition(id: String): Competition = get("/games/competitions/${seg(id)}")
+
+    suspend fun enterCompetition(id: String) { send("POST", "/games/competitions/${seg(id)}/entry") }
+
+    /** Points scored in it go too. */
+    suspend fun withdrawFromCompetition(id: String) { send("DELETE", "/games/competitions/${seg(id)}/entry") }
+
+    /** A community's Lichess team and its tournaments; [ApiException] 404 for a community with none to show, or Games off. */
+    suspend fun chessTeam(slug: String): ChessTeam = get("/games/chess/teams/${seg(slug)}")
 
     // Deleting the account (docs/adr/0016)
 

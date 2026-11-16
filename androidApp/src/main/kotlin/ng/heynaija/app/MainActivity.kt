@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import ng.heynaija.app.games.chess.LichessReturn
+import ng.heynaija.app.games.chess.isLichessReturn
 import ng.heynaija.app.nav.WebLinks
 import ng.heynaija.app.platform.PushEvents
 import ng.heynaija.app.push.PushService
@@ -32,7 +34,12 @@ class MainActivity : ComponentActivity() {
 
     private fun opened(intent: Intent?) {
         intent?.getStringExtra(PushService.EXTRA_LINK)?.let(PushEvents::open)
-        // A heynaija.ng link (the manifest's App Links filter).
-        if (intent?.action == Intent.ACTION_VIEW) intent.dataString?.let(WebLinks::open)
+        if (intent?.action == Intent.ACTION_VIEW) {
+            val link = intent.dataString ?: return
+            // Lichess's answer after connecting an account (the manifest's ng.heynaija.app://lichess filter).
+            if (isLichessReturn(link)) LichessReturn.deliver(link)
+            // A heynaija.ng link (the manifest's App Links filter).
+            else WebLinks.open(link)
+        }
     }
 }

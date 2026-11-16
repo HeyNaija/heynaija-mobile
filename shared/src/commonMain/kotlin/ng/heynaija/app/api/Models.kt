@@ -80,6 +80,8 @@ data class Post(
     /** Avatar path without the size suffix; see [mediaUrl]. */
     val authorAvatar: String? = null,
     val authorFounder: Boolean = false,
+    /** The author is one of HeyNaija's automated accounts (The Arbiter, Keke); nobody signs in to it. Older servers leave it out. */
+    val authorAutomated: Boolean = false,
     val text: String = "",
     /** ISO 8601, in UTC. */
     val createdAt: String,
@@ -301,6 +303,8 @@ data class Profile(
     val viewerMutes: Boolean = false,
     val identityBadge: Boolean = false,
     val founderBadge: Boolean = false,
+    /** One of HeyNaija's automated accounts (The Arbiter, Keke); nobody signs in to it. Older servers leave it out. */
+    val automatedBadge: Boolean = false,
 )
 
 @Serializable
@@ -376,7 +380,17 @@ data class Notification(
     val subjectHandle: String? = null,
     val community: CommunityRef? = null,
     val detail: String? = null,
+    /** chess_challenge: the challenge, and how it reads ("a rated Rapid game (10+5)"). */
+    val challenge: NotificationChallenge? = null,
+    /** chess_game_started: the game. */
+    val game: NotificationGame? = null,
 )
+
+@Serializable
+data class NotificationChallenge(val id: String, val phrase: String = "")
+
+@Serializable
+data class NotificationGame(val id: String)
 
 @Serializable
 data class NotificationPost(val id: String, val excerpt: String = "", val gistId: String? = null)

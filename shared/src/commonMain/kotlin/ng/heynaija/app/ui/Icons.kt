@@ -13,6 +13,54 @@ import androidx.compose.ui.unit.dp
  * same path data at the same stroke weight. Tint them with `Icon(tint = ...)`.
  */
 object Icons {
+    // Games (ADR 0028 in the web repository): the web's GamesIcon, ChessIcon and TrophyIcon.
+    val Games = lucide(
+        "gamepad-2",
+        "M6 11h4",
+        "M8 9v4",
+        "M15 12h.01",
+        "M18 10h.01",
+        "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z",
+    )
+    val Chess = lucide(
+        "chess-knight",
+        "M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z",
+        "M16.5 18c1-2 2.5-5 2.5-9a7 7 0 0 0-7-7H6.635a1 1 0 0 0-.768 1.64L7 5l-2.32 5.802a2 2 0 0 0 .95 2.526l2.87 1.456",
+        "m15 5 1.425-1.425",
+        "m17 8 1.53-1.53",
+        "M9.713 12.185 7 18",
+    )
+    val Trophy = lucide(
+        "trophy",
+        "M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2",
+        "M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2",
+        "M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3",
+        "M4 22h16",
+        "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z",
+        "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3",
+    )
+    val Trivia = lucide(
+        "badge-question-mark",
+        "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z",
+        "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3",
+        "M12 17h.01",
+    )
+    val ExternalLink = lucide(
+        "external-link",
+        "M15 3h6v6",
+        "M10 14 21 3",
+        "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
+    )
+    val Refresh = lucide(
+        "refresh-cw",
+        "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8",
+        "M21 3v5h-5",
+        "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16",
+        "M8 16H3v5",
+    )
+    // Stepping through a chess game.
+    val First = lucide("chevrons-left", "m11 17-5-5 5-5", "m18 17-5-5 5-5")
+    val Last = lucide("chevrons-right", "m6 17 5-5-5-5", "m13 17 5-5-5-5")
     val Heart = lucide(
         "heart",
         "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5",
@@ -257,6 +305,12 @@ object Icons {
     val Shield = lucide(
         "shield",
         "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+    )
+    /** HeyNaija's own (automated) accounts: a shield, so it is never read as the identity tick ([Verified]). */
+    val ShieldCheck = lucide(
+        "shield-check",
+        "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+        "m9 12 2 2 4-4",
     )
     val Info = lucide(
         "info",
