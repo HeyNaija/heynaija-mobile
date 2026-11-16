@@ -145,8 +145,15 @@ data class TriviaListState(val list: TriviaList? = null, val failed: Boolean = f
 class TriviaListViewModel(private val app: AppState) : ViewModel() {
     private val _state = MutableStateFlow(TriviaListState())
     val state: StateFlow<TriviaListState> = _state.asStateFlow()
+    // Counted here, not in the screen: going to a round and back makes the screen anew, the view model stays.
+    private var shown = 0
 
     init { load() }
+
+    /** The screen is showing again (back from a round, or from the background): rounds may have moved on. */
+    fun shownAgain() {
+        if (shown++ > 0) load()
+    }
 
     fun load() {
         _state.update { it.copy(failed = false) }
@@ -174,10 +181,8 @@ fun TriviaScreen(startTab: String = "play") {
     val viewModel = viewModel(key = "trivia") { TriviaListViewModel(app) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(startTab) }
-    // Back from a round, or from the background: rounds may have moved on.
-    val returns = remember { intArrayOf(0) }
     LifecycleResumeEffect(viewModel) {
-        if (returns[0]++ > 0) viewModel.load()
+        viewModel.shownAgain()
         onPauseOrDispose { }
     }
     Column(Modifier.fillMaxSize()) {
