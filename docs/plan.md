@@ -161,7 +161,9 @@ What the apps do now, what comes next, and what the backend
   shows the answer, how many got it, the first three with their times, and the
   standings or results. Trivia's four tabs as every game's, with its board and
   Game Night's posts. Hosting (writing rounds, opening questions, accepting
-  spellings) stays on the website. The Arbiter's links to a round open it.
+  spellings) stays on the website. The Arbiter's links to a round open it. A
+  question's picture, when it has one, shows with the question (the 640 version,
+  never sent before the question opens) and again with its answer.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and
   privacy notice. Changing the email or handle is on the web for now. Under

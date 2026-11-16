@@ -29,5 +29,24 @@ class TriviaTest {
         assertEquals(null, round.current?.choices)
         assertTrue(round.you.canAnswer)
         assertEquals(false, round.over)
+        assertEquals(null, round.current?.image)
+    }
+
+    @Test
+    fun aQuestionsPictureComesWithItOnceItOpens() {
+        val picture = """{"src":"/media/posts/m1","alt":"A green-white-green flag","width":900,"height":450,"animated":false}"""
+        val json = """{"id":"r1","title":"Flags","status":"live","startsAt":"2026-11-15T19:00:00.000Z","questions":2,
+            "host":{"handle":"sam"},"version":5,"serverTime":"2026-11-15T19:00:04.000Z",
+            "you":{"host":false,"canAnswer":true,"points":0},
+            "current":{"id":"q1","position":1,"opensAt":"2026-11-15T19:00:03.000Z","closesAt":"2026-11-15T19:00:23.000Z","kind":"choice",
+              "prompt":"Whose flag is this?","choices":[{"id":1,"text":"Ireland"},{"id":0,"text":"Nigeria"}],"image":$picture,"yourAnswer":null},
+            "last":{"id":"q0","position":0,"prompt":"Warm-up","kind":"typed","answer":"Lagos","image":$picture},
+            "standings":[],"yourStanding":null,"final":false}"""
+        val round = HeyNaijaApi.json.decodeFromString(TriviaRound.serializer(), json)
+        val image = round.current?.image
+        assertEquals("/media/posts/m1", image?.src)
+        assertEquals("A green-white-green flag", image?.alt)
+        assertEquals(900, image?.width)
+        assertEquals("/media/posts/m1", round.last?.image?.src)
     }
 }

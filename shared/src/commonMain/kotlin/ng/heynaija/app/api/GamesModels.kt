@@ -402,7 +402,14 @@ data class TriviaChoice(val id: Int, val text: String)
 @Serializable
 data class TriviaYourAnswer(val choice: Int? = null, val text: String? = null, val ms: Int = 0)
 
-/** The question being asked: its text and choices only once it has opened, by the server's clock. */
+/**
+ * A question's picture, already resized like a post's: [mediaUrl] with "640" or "1600".
+ * Sent only once its question opens, with the question's text.
+ */
+@Serializable
+data class TriviaPicture(val src: String, val alt: String = "", val width: Int? = null, val height: Int? = null, val animated: Boolean = false)
+
+/** The question being asked: its text, choices and picture only once it has opened, by the server's clock. */
 @Serializable
 data class TriviaCurrent(
     val id: String,
@@ -414,6 +421,7 @@ data class TriviaCurrent(
     val prompt: String? = null,
     /** In the viewer's own order; [TriviaChoice.id] is what to send back. */
     val choices: List<TriviaChoice>? = null,
+    val image: TriviaPicture? = null,
     val yourAnswer: TriviaYourAnswer? = null,
 )
 
@@ -440,6 +448,7 @@ data class TriviaReveal(
     val alsoAccepted: List<String> = emptyList(),
     val explanation: String? = null,
     val choices: List<TriviaRevealChoice>? = null,
+    val image: TriviaPicture? = null,
     val answered: Int = 0,
     val rightCount: Int = 0,
     val firsts: List<TriviaFirst> = emptyList(),
