@@ -55,6 +55,37 @@ fun routeOf(link: String, web: String): Route? {
             query["reply"]?.takeIf { id.matches(it) }?.let { Route.Thread(it, gist = parts[1]) } ?: Route.Gist(parts[1])
         parts.size == 2 && parts[0] == "u" && Regex("^[A-Za-z0-9_]{1,20}$").matches(parts[1]) -> Route.Profile(parts[1].lowercase())
         parts.size == 2 && parts[0] == "c" && Regex("^[a-z0-9]+(-[a-z0-9]+)*$").matches(parts[1]) -> Route.Community(parts[1])
+        parts.firstOrNull() == "games" -> gamesRoute(parts.drop(1), query)
         else -> null
     }
 }
+
+/**
+ * Games' pages (ADR 0028 in the web repository): `/games`, its leaderboard and
+ * scoring pages, chess and Trivia (playing; hosting stays on the website). Keno
+ * has no screen in the apps yet, so its links open nothing. Whether the member has Games is checked where the link is opened
+ * ([gamesLink]), not here.
+ */
+private fun gamesRoute(parts: List<String>, query: Map<String, String>): Route? = when {
+    parts.isEmpty() -> Route.Games
+    parts == listOf("leaderboard") -> Route.GamesLeaderboard()
+    parts == listOf("scoring") -> Route.GamesScoring
+    parts == listOf("chess") -> Route.Chess(tab = query["tab"]?.takeIf { it in GAME_TABS } ?: "play")
+    parts == listOf("trivia") -> Route.Trivia(tab = query["tab"]?.takeIf { it in GAME_TABS } ?: "play")
+    parts.size == 3 && parts[0] == "trivia" && parts[1] == "rounds" && Regex("^[0-9a-fA-F-]{36}$").matches(parts[2]) -> Route.TriviaRound(parts[2])
+    parts == listOf("competitions") -> Route.Competitions
+    parts.size == 2 && parts[0] == "competitions" && Regex("^[0-9a-fA-F-]{36}$").matches(parts[1]) -> Route.Competition(parts[1])
+    parts.size == 3 && parts[0] == "chess" && parts[1] == "teams" && Regex("^[a-z0-9-]{1,60}$").matches(parts[2]) -> Route.ChessTeam(parts[2])
+    // A game's id is Lichess's: eight letters and digits.
+    parts.size == 3 && parts[0] == "chess" && parts[1] == "games" && Regex("^[A-Za-z0-9]{8,12}$").matches(parts[2]) -> Route.ChessGame(parts[2])
+    else -> null
+}
+
+/** The tabs every game's page has, in the web's order (docs/games/GAMES.md). */
+val GAME_TABS = listOf("play", "leaderboard", "competitions", "posts")
+
+/** A Games screen, which only a member with Games may open. */
+val Route.gamesLink: Boolean
+    get() = this is Route.Games || this is Route.GamesLeaderboard || this is Route.GamesScoring || this is Route.Chess ||
+        this is Route.ChessGame || this is Route.Competitions || this is Route.Competition || this is Route.ChessTeam ||
+        this is Route.Trivia || this is Route.TriviaRound

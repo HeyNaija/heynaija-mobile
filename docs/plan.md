@@ -127,6 +127,41 @@ What the apps do now, what comes next, and what the backend
   they cannot go on. Elsewhere the app's own "I am 18 or older" stands
   ([release.md](release.md#age-checks)).
 - **Search** for people, communities and posts, with trending topics.
+- **Games** (ADR 0028 in the web repository), for members the `games` flag is on
+  for: a Games button on Home's bar; the Game Score (this season's XP and rank,
+  and all time); the games, with their status; leaderboards (Game Score or chess,
+  this season, earlier ones or all time, everyone, people you follow or a
+  community you joined); "How games scoring works", with the numbers from the API.
+  **Chess**: connecting Lichess (iOS's sign-in sheet or the phone's browser, back
+  to the app through `ng.heynaija.app://lichess`, which needs the server's
+  `/lichess/return`), ratings, Refresh and Disconnect; games being played;
+  challenges to you (Accept, Decline), waiting ones (Cancel) and recent ones;
+  challenging a member (search, clock, rated or casual, colour, a thread in Chess
+  Arena); a game's page with the board: the player's moves by tap or drag (only
+  legal ones offered, a chooser for promotion; a move Lichess refuses goes back),
+  draw offers, resign or abort, the clocks, the move list and stepping back
+  through it, and turning the board for spectators. The rules are in shared
+  Kotlin (`games/chess/Rules.kt`, checked against the standard move counts);
+  Lichess still decides every move. Chess has the web's four tabs: Play,
+  Leaderboard, Competitions and Posts (Chess Arena's threads and The Arbiter's
+  tournament results). Competitions: the list, and a competition's page with
+  its rules, standings and, for a Lichess tournament, Join on Lichess and Join
+  the team; entering and withdrawing where a competition is scored here. A
+  community with a Lichess team says so on its page, with its tournaments on a
+  page of their own. Making, changing or cancelling competitions and linking a
+  team stay on the website, as moderators' tools; the member's Lichess line on profiles (Challenge, Playing now). Chess
+  notifications have their own rows and one Settings switch, and links in posts
+  to a Games page open its screen. **Keno is left out** of both apps until
+  Apple's developer account is an organisation's (Apple takes simulated gambling
+  only from one), Keno competitions included, by a build setting (`Platform.keno`), never the server flag.
+  **Trivia** (phase 7, also behind the server's `trivia` flag): the rounds live,
+  coming up and recently over; a round's screen, which asks the server for each
+  change (a question appearing or closing, the host moving on), counts down on
+  the server's clock, takes one answer a question (tap a choice, or type), then
+  shows the answer, how many got it, the first three with their times, and the
+  standings or results. Trivia's four tabs as every game's, with its board and
+  Game Night's posts. Hosting (writing rounds, opening questions, accepting
+  spellings) stays on the website. The Arbiter's links to a round open it.
 - **Settings:** profile name, bio and photo; deleting the account (with the
   sign-in again the API asks for) or calling it off; links to the rules and
   privacy notice. Changing the email or handle is on the web for now. Under
@@ -153,8 +188,9 @@ What the apps do now, what comes next, and what the backend
    if iOS pauses the app while nobody on stage has a microphone on, keep the
    stage's microphones published and muted, or keep the audio engine running
    between speakers.
-2. The ideas board, and continuing a video upload after the app was closed.
-3. The stores: [release.md](release.md) has every step, what is in the
+2. Games: Keno waits for the Apple account. Trivia hosting stays on the website.
+3. The ideas board, and continuing a video upload after the app was closed.
+4. The stores: [release.md](release.md) has every step, what is in the
    repository (release signing, the Release workflow, privacy manifests) and what
    only the account holders can do. LiveKit's WebRTC library makes the Android
    debug APK about 75 MB with every processor type in it; the Play Store's app

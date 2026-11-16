@@ -24,10 +24,13 @@ import ng.heynaija.app.api.Me
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
+import ng.heynaija.app.games.chess.chessNotice
+import ng.heynaija.app.games.chess.lichessAnswer
 import ng.heynaija.app.gists.GistRoom
 import ng.heynaija.app.gists.GistRooms
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
+import ng.heynaija.app.nav.gamesLink
 import ng.heynaija.app.nav.routeOf
 import ng.heynaija.app.platform.AgeSignals
 import ng.heynaija.app.platform.KeyValueStore
@@ -353,7 +356,7 @@ class AppState(val platform: Platform) {
 
     /** A tapped notification's link: opened on the Notifications tab, where it would have been seen. */
     fun openLink(link: String) {
-        navigator.openFromNotification(routeOf(link, Servers.current.web) ?: Route.Notifications)
+        navigator.openFromNotification(screenFor(link) ?: Route.Notifications)
     }
 
     /**
@@ -362,7 +365,41 @@ class AppState(val platform: Platform) {
      * staging given a heynaija.ng link), leaves the app where it was.
      */
     fun openWebLink(link: String) {
-        routeOf(link, Servers.current.web)?.let(navigator::openFromLink)
+        screenFor(link)?.let(navigator::openFromLink)
+    }
+
+    /** The screen for a link to the site; a Games page only for a member with Games. */
+    fun screenFor(link: String): Route? =
+        routeOf(link, Servers.current.web)?.takeIf { !it.gamesLink || me?.has("games") == true }
+
+    // Games: connecting Lichess comes back to the app (LichessReturn), from the browser or iOS's sign-in sheet.
+
+    private val _chessChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Something on the chess screen changed elsewhere: Lichess was connected. */
+    val chessChanged: SharedFlow<Unit> = _chessChanged.asSharedFlow()
+
+    /**
+     * What Lichess sent back after the member said yes or no to connecting their
+     * account: finishes the link with the API and says how it went.
+     */
+    suspend fun finishLichessLink(link: String) {
+        val answer = lichessAnswer(link) ?: return
+        val failure = when {
+            answer.error == "access_denied" -> "Lichess was not connected: you said no on Lichess."
+            answer.code == null || answer.state == null -> "That link to Lichess ran out or was not yours. Start again."
+            else -> try {
+                api.completeLichessLink(answer.code, answer.state)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                chessNotice(e.code) ?: "Lichess could not be connected. Try again in a moment."
+            } catch (e: Exception) {
+                "Lichess could not be connected. Check your connection and try again."
+            }
+        }
+        say(failure ?: "Your Lichess account is connected.")
+        _chessChanged.tryEmit(Unit)
     }
 
     val currentToken: String? get() = token

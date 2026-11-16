@@ -188,6 +188,9 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
         "follow" -> Icons.Follow to "followed you"
         "story_update" -> Icons.Story to "added to their story"
         "community_announcement" -> Icons.Megaphone to "posted an announcement in ${n.community?.name ?: "a community"}"
+        // Games (ADR 0028): only to members with Games; the list leaves them out for anyone else.
+        "chess_challenge" -> Icons.Chess to "challenged you to ${n.challenge?.phrase?.takeIf { it.isNotBlank() } ?: "a game of chess"}."
+        "chess_game_started" -> Icons.Chess to "accepted your challenge. Your game has started."
         "post_removed" -> Icons.Shield to "A moderator removed your post for ${REASONS[n.detail] ?: "breaking the community rules"}."
         "post_restored" -> Icons.Shield to "A moderator restored your post."
         "post_labelled" -> Icons.Shield to "A moderator marked your post as sensitive. People under 18 won’t see it, and its pictures and video show behind a warning."
@@ -217,8 +220,16 @@ private fun target(n: Notification): Route? = when (n.kind) {
     "follow" -> n.actor?.let { Route.Profile(it.handle) }
     "avatar_removed", "profile_cleared" -> Route.EditProfile
     "moderator_revoked" -> n.community?.let { Route.Community(it.slug) }
+    "chess_challenge" -> Route.Chess()
+    "chess_game_started" -> n.game?.let { Route.ChessGame(it.id) } ?: Route.Chess()
     else -> null
 }
+
+/** Chess's kinds (ADR 0028): shown only to a member with Games. */
+internal val CHESS_KINDS = setOf("chess_challenge", "chess_game_started")
+
+/** The notifications a member sees: chess ones only with Games, so nothing of Games shows to anyone else. */
+internal fun visibleNotifications(items: List<Notification>, games: Boolean) = if (games) items else items.filter { it.kind !in CHESS_KINDS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -273,8 +284,9 @@ fun NotificationsScreen() {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (push.available && !push.on && !push.off && !push.offerDismissed) item(key = "push") { PushOffer(app) }
-                    if (state.items.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
-                    items(state.items, key = { it.id }) { NotificationRow(it, now) }
+                    val rows = visibleNotifications(state.items, app.me?.has("games") == true)
+                    if (rows.isEmpty()) item { Empty("When people reply to you, like your posts or follow you, it shows here.") }
+                    items(rows, key = { it.id }) { NotificationRow(it, now) }
                     if (state.loadingMore && state.items.isNotEmpty()) item {
                         Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) }
                     }
@@ -371,5 +383,7 @@ private fun destination(n: Notification): String = when (n.kind) {
     "follow" -> "View profile"
     "story_update" -> "View update"
     "community_announcement" -> "View announcement"
+    "chess_challenge" -> "View challenge"
+    "chess_game_started" -> "Play"
     else -> if (n.post != null) "View post" else "View details"
 }

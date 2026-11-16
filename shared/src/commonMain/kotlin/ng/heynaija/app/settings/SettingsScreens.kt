@@ -163,6 +163,21 @@ fun NotificationSettingsScreen() {
             }
         }
     }
+    /** Several keys in one request: chess's one switch covers two kinds, as on the web. */
+    fun setAll(keys: List<String>, on: Boolean) {
+        val before = prefs
+        prefs = before?.plus(keys.map { it to on })
+        scope.launch {
+            try {
+                prefs = app.api.setNotificationPreferences(keys.associateWith { on })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                prefs = before
+                app.say(reasonOf(e) ?: "That did not save. Try again.")
+            }
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         TopBar("Notifications", onBack = { app.navigator.pop() })
         val current = prefs
@@ -175,6 +190,15 @@ fun NotificationSettingsScreen() {
                 Group(NOTIFICATION_KINDS.filter { (key, _) -> key != "community_announcement" || app.me?.has("communityAnnouncements") == true }.map { (key, label) ->
                     { Toggle(label, current[key] ?: true) { set(key, it) } }
                 })
+                // Games (ADR 0028), only for a member with Games: a server without it refuses the keys.
+                if (app.me?.has("games") == true) {
+                    SectionTitle("GAMES")
+                    Group(listOf {
+                        Toggle("Chess challenges", current["chess_challenge"] ?: true, detail = "When someone challenges you, or your game starts.") {
+                            setAll(listOf("chess_challenge", "chess_game_started"), it)
+                        }
+                    })
+                }
                 SectionTitle("EMAIL")
                 Group(listOf {
                     Toggle("Email me what I missed", current["email"] ?: false, detail = "At most one email every half hour, only for what you have not seen in the app.") { set("email", it) }

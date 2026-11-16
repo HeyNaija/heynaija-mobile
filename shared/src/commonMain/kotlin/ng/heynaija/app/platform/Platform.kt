@@ -28,6 +28,15 @@ class Platform(
      * Android's needs the activity, so [rememberAgeSignals] makes it there instead.
      */
     val ageSignals: AgeSignals? = null,
+    /**
+     * Keno (ADR 0028 in the web repository), set by the build, never by the server.
+     * Apple takes simulated gambling only from an organisation's developer account,
+     * and HeyNaija's is an individual one for now, so Keno stays out of both apps
+     * until it is an organisation's (owner, 13 and 15 November 2026). While this is
+     * false the apps show no Keno card, board, scoring or link; the Game Score still
+     * counts Keno XP earned on the web.
+     */
+    val keno: Boolean = false,
 )
 
 /** A picture chosen to post or to use as a profile photo, ready to upload. */

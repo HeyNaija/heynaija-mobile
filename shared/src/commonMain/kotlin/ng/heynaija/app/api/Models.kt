@@ -380,7 +380,17 @@ data class Notification(
     val subjectHandle: String? = null,
     val community: CommunityRef? = null,
     val detail: String? = null,
+    /** chess_challenge: the challenge, and how it reads ("a rated Rapid game (10+5)"). */
+    val challenge: NotificationChallenge? = null,
+    /** chess_game_started: the game. */
+    val game: NotificationGame? = null,
 )
+
+@Serializable
+data class NotificationChallenge(val id: String, val phrase: String = "")
+
+@Serializable
+data class NotificationGame(val id: String)
 
 @Serializable
 data class NotificationPost(val id: String, val excerpt: String = "", val gistId: String? = null)
