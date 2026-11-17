@@ -226,7 +226,7 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
 private val KEKE_NEWS = mapOf(
     "waiting" to "Keke’s news for today is ready to check. Nothing is posted unless a site moderator approves it by 08:00.",
     "too_few" to "No news from Keke today: fewer than three stories were carried by three or more outlets.",
-    "failed" to "Keke could not draft today’s news: the model did not answer.",
+    "failed" to "Keke could not draft today’s news: the model gave no usable answer.",
     "over_budget" to "Keke did not draft today’s news: it has reached this month’s spending cap.",
 )
 
