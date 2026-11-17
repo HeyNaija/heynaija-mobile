@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,10 +28,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -67,6 +70,7 @@ import kotlinx.coroutines.launch
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
+import ng.heynaija.app.api.PostImage
 import ng.heynaija.app.api.TriviaCurrent
 import ng.heynaija.app.api.TriviaPicture
 import ng.heynaija.app.api.TriviaList
@@ -141,8 +145,15 @@ data class TriviaListState(val list: TriviaList? = null, val failed: Boolean = f
 class TriviaListViewModel(private val app: AppState) : ViewModel() {
     private val _state = MutableStateFlow(TriviaListState())
     val state: StateFlow<TriviaListState> = _state.asStateFlow()
+    // Counted here, not in the screen: going to a round and back makes the screen anew, the view model stays.
+    private var shown = 0
 
     init { load() }
+
+    /** The screen is showing again (back from a round, or from the background): rounds may have moved on. */
+    fun shownAgain() {
+        if (shown++ > 0) load()
+    }
 
     fun load() {
         _state.update { it.copy(failed = false) }
@@ -170,10 +181,8 @@ fun TriviaScreen(startTab: String = "play") {
     val viewModel = viewModel(key = "trivia") { TriviaListViewModel(app) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(startTab) }
-    // Back from a round, or from the background: rounds may have moved on.
-    val returns = remember { intArrayOf(0) }
     LifecycleResumeEffect(viewModel) {
-        if (returns[0]++ > 0) viewModel.load()
+        viewModel.shownAgain()
         onPauseOrDispose { }
     }
     Column(Modifier.fillMaxSize()) {
@@ -327,6 +336,7 @@ class TriviaRoundViewModel(private val app: AppState, private val id: String) : 
         if (following?.isActive == true) return
         following = viewModelScope.launch {
             var wait = 1_000L
+            var askedAt = 0L
             // The Arbiter's results post is written a moment after the results: once they are out, look again a few times for it.
             var lookedForPost = 0
             while (true) {
@@ -345,7 +355,12 @@ class TriviaRoundViewModel(private val app: AppState, private val id: String) : 
                     continue
                 }
                 try {
-                    take(app.api.triviaRound(id, after = have?.version ?: -1))
+                    val c = have?.current
+                    // A countdown already over by the server's clock (the reply came late, or the server is older): ask at once.
+                    val due = c != null && c.prompt == null && (millisOf(c.opensAt) ?: Long.MAX_VALUE) <= nowMillis() + _state.value.offsetMs
+                    if (due && nowMillis() - askedAt < 500) delay(500)
+                    if (due) askedAt = nowMillis()
+                    take(app.api.triviaRound(id, after = if (due) -1 else have?.version ?: -1, has = c?.takeIf { it.prompt != null }?.id ?: ""))
                     wait = 1_000L
                     if (_state.value.round?.status == "cancelled") return@launch
                 } catch (e: CancellationException) {
@@ -541,16 +556,13 @@ private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, 
     val mine = q.yourAnswer
     val locked = mine != null || !round.you.canAnswer || state.busy
     val left = max(0L, closesIn)
-    val share = min(1f, left / (round.secondsPerQuestion * 1000f))
     var text by rememberSaveable(q.id) { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Question ${q.position} of ${round.questions}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = colors.muted)
             Text("${ceil(left / 1000.0).toInt()} s", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.ink)
         }
-        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.line)) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(share).background(colors.accent))
-        }
+        TimeBar(closesAt = millisOf(q.closesAt) ?: 0L, offsetMs = state.offsetMs, totalMs = round.secondsPerQuestion * 1000L)
         Text(q.prompt ?: "", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = colors.ink)
         q.image?.let { QuestionPicture(it) }
         if (q.kind == "choice") {
@@ -717,24 +729,53 @@ private fun StandingRow(r: TriviaStanding) {
 }
 
 /**
- * A question's picture, whole and in its own shape, no taller than a third of a phone
- * screen so the choices stay in view (as on the web, `.trivia-picture`). Always the 640
- * version: while the question is open the clock is running, and a slow connection
- * should not also be fetching the large one.
+ * The time left, redrawn every frame from the server's clock: smooth however often the
+ * screen around it changes, and nothing but this bar is drawn again.
+ */
+@Composable
+private fun TimeBar(closesAt: Long, offsetMs: Long, totalMs: Long) {
+    val colors = HeyNaija.colors
+    var frame by remember { mutableLongStateOf(nowMillis()) }
+    LaunchedEffect(closesAt, offsetMs) {
+        while (frame + offsetMs < closesAt) withFrameMillis { frame = nowMillis() }
+    }
+    Box(
+        Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.line).drawBehind {
+            val share = ((closesAt - (frame + offsetMs)).toFloat() / totalMs).coerceIn(0f, 1f)
+            drawRect(colors.accent, size = Size(size.width * share, size.height))
+        },
+    )
+}
+
+/**
+ * A question's picture, as wide as the card and up to about half the screen tall, in its
+ * own shape: players answer from it. The 640 version while the clock runs; tap it to see
+ * the large one full screen, to zoom in.
  */
 @Composable
 private fun QuestionPicture(picture: TriviaPicture) {
+    val app = LocalApp.current
     val colors = HeyNaija.colors
+    val window = LocalWindowInfo.current.containerSize
+    val (screenW, screenH) = with(LocalDensity.current) { window.width.toDp() to window.height.toDp() }
     val w = picture.width ?: 0
     val h = picture.height ?: 0
-    val ratio = (if (w > 0 && h > 0) w.toFloat() / h else 4f / 3f).coerceIn(0.5f, 3f)
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        AsyncImage(
-            // A GIF moves, as on the web.
-            model = mediaUrl(picture.src, "640"),
-            contentDescription = picture.alt.ifBlank { null },
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.heightIn(max = 280.dp).aspectRatio(ratio).clip(Radii.control).background(colors.panel),
-        )
-    }
+    val ratio = (if (w > 0 && h > 0) w.toFloat() / h else 4f / 3f).coerceIn(0.4f, 3f)
+    // The card's inside: the screen less the list's gutters and the card's padding.
+    val wide = screenW - ListGutter * 2 - 32.dp
+    val tall = minOf(wide / ratio, screenH * 0.55f)
+    AsyncImage(
+        // A GIF moves, as on the web.
+        model = mediaUrl(picture.src, "640"),
+        contentDescription = picture.alt.ifBlank { null },
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(tall)
+            .clip(Radii.control)
+            .background(colors.panel)
+            .clickable(onClickLabel = "See the picture full screen") {
+                app.navigator.push(Route.Images(listOf(PostImage(picture.src, picture.alt, w.coerceAtLeast(1), h.coerceAtLeast(1), picture.animated)), 0))
+            },
+    )
 }

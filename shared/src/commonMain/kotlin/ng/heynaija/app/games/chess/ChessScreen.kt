@@ -118,6 +118,14 @@ data class ChessState(
 )
 
 class ChessViewModel(private val app: AppState) : ViewModel() {
+    // Counted here, not in the screen: going to a game and back makes the screen anew, the view model stays.
+    private var shown = 0
+
+    /** The screen is showing again (back from a game, lichess.org or the background): challenges may have moved. */
+    fun shownAgain() {
+        if (shown++ > 0) load()
+    }
+
     private val _state = MutableStateFlow(ChessState())
     val state: StateFlow<ChessState> = _state.asStateFlow()
 
@@ -239,10 +247,8 @@ fun ChessScreen(opponent: String?, startTab: String = "play") {
     val viewModel = viewModel(key = "chess") { ChessViewModel(app) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(startTab) }
-    // Back from lichess.org, or from the browser: challenges may have moved.
-    val returns = remember { intArrayOf(0) }
     LifecycleResumeEffect(viewModel) {
-        if (returns[0]++ > 0) viewModel.load()
+        viewModel.shownAgain()
         onPauseOrDispose { }
     }
     Column(Modifier.fillMaxSize()) {
