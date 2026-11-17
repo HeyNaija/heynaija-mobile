@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -65,6 +66,7 @@ import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.Notification
 import ng.heynaija.app.api.NotificationPage
+import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.PushEvents
 import ng.heynaija.app.posts.ListGutter
@@ -215,8 +217,23 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
         "moderator_revoked" -> Icons.Shield to "You are no longer a moderator of ${n.community?.name ?: "a community"}."
         "account_reinstated" -> Icons.Shield to "Your account is active again. A moderator lifted the suspension."
         "idea_status" -> Icons.Lightbulb to "An idea you backed has news."
+        "keke_news" -> Icons.Shield to (n.detail?.let { KEKE_NEWS[it] } ?: "Keke’s news for today.")
         else -> Icons.Bell to "Something happened."
     }
+}
+
+/** keke_news (ADR 0030 in the web repository): how the morning's draft of Keke's news went, to site moderators. */
+private val KEKE_NEWS = mapOf(
+    "waiting" to "Keke’s news for today is ready to check. Nothing is posted unless a site moderator approves it by 08:00.",
+    "too_few" to "No news from Keke today: fewer than three stories were carried by three or more outlets.",
+    "failed" to "Keke could not draft today’s news: the model did not answer.",
+    "over_budget" to "Keke did not draft today’s news: it has reached this month’s spending cap.",
+)
+
+/** Where pressing it goes when the app has no screen for it: a page on the website. Moderation is done there. */
+private fun webTarget(n: Notification): String? = when (n.kind) {
+    "keke_news" -> "/mod#keke-news"
+    else -> null
 }
 
 /** Where pressing it goes (apps/web/lib/notification-target.ts): a reply in a Gist opens in its Gist. */
@@ -323,6 +340,8 @@ private fun NotificationRow(n: Notification, now: Instant) {
     val colors = HeyNaija.colors
     val (icon, words) = remember(n) { describe(n) }
     val go = target(n)
+    val web = webTarget(n)
+    val uri = LocalUriHandler.current
     val ago = remember(n.createdAt, now) { timeAgo(Instant.parse(n.createdAt), now) }
     // As on the web: who and what beside the avatar, then the quoted post and where
     // it leads across the whole card, rather than in a column beside the avatar.
@@ -332,7 +351,13 @@ private fun NotificationRow(n: Notification, now: Instant) {
             .clip(Radii.card)
             .background(if (n.read) colors.surface else colors.accentSoft)
             .border(1.dp, if (n.read) colors.line else colors.accent.copy(alpha = 0.3f), Radii.card)
-            .let { if (go != null) it.clickable { app.navigator.push(go) } else it }
+            .let {
+                when {
+                    go != null -> it.clickable { app.navigator.push(go) }
+                    web != null -> it.clickable { runCatching { uri.openUri("${Servers.current.web}$web") } }
+                    else -> it
+                }
+            }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -385,7 +410,7 @@ private fun NotificationRow(n: Notification, now: Instant) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (go != null) {
+        if (go != null || web != null) {
             Text(
                 "${destination(n)} →",
                 style = MaterialTheme.typography.labelMedium,
@@ -406,5 +431,6 @@ private fun destination(n: Notification): String = when (n.kind) {
     "community_announcement" -> "View announcement"
     "chess_challenge" -> "View challenge"
     "chess_game_started" -> "Play"
+    "keke_news" -> "View the news on the website"
     else -> if (n.post != null) "View post" else "View details"
 }
