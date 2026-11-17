@@ -1,5 +1,7 @@
 package ng.heynaija.app.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -24,14 +26,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
@@ -544,34 +551,46 @@ fun CommunityDetailSkeleton(
 }
 
 /**
- * A subtle elastic bounce bar that animates at the top of a feed while dragging down.
+ * The pull-to-refresh bar: a thin line that grows as a list is pulled down and, once let go,
+ * keeps widening and narrowing until the page has loaded. It is the only loader a pull shows.
+ * The pull and the pulse are read while drawing, so a drag does not recompose anything.
  */
 @Composable
-fun ElasticPullBar(
-    pullFraction: Float,
+fun PullRefreshBar(
+    pull: () -> Float,
+    refreshing: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (pullFraction <= 0.02f) return
-    val clamped = pullFraction.coerceIn(0f, 1.5f)
-    val colors = HeyNaija.colors
-    val width = (36 + (clamped * 48)).dp
-    val height = (4 + (clamped * 2)).dp
-    val alpha = (clamped * 1.4f).coerceIn(0.2f, 1f)
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = (clamped * 6).dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .width(width)
-                .height(height)
-                .clip(Radii.chip)
-                .background(colors.accent.copy(alpha = alpha)),
-        )
+    val color = HeyNaija.colors.accent
+    val pulse = remember { Animatable(0f) }
+    LaunchedEffect(refreshing) {
+        if (refreshing) {
+            pulse.animateTo(1f, infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse))
+        } else {
+            pulse.animateTo(0f, tween(200))
+        }
     }
+    Spacer(
+        modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .height(3.dp)
+            .drawBehind {
+                val pulled = pull().coerceIn(0f, 1f)
+                val p = pulse.value
+                if (pulled <= 0.05f && p <= 0f) return@drawBehind
+                val resting = between(24.dp.toPx(), 72.dp.toPx(), pulled)
+                val width = between(resting, size.width * 0.6f, p)
+                drawRoundRect(
+                    color = color.copy(alpha = (pulled * 1.4f).coerceIn(0.25f, 1f)),
+                    topLeft = Offset((size.width - width) / 2, 0f),
+                    size = Size(width, size.height),
+                    cornerRadius = CornerRadius(size.height / 2),
+                )
+            },
+    )
 }
+
+private fun between(from: Float, to: Float, fraction: Float) = from + (to - from) * fraction
 
 
