@@ -48,8 +48,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -976,107 +974,4 @@ fun StartGistDialog(onDismiss: () -> Unit) {
         containerColor = colors.surface,
         shape = Radii.card,
     )
-}
-
-/**
- * "Start a Gist" card displayed inline at the top of the feed, matching the live web app (Screenshots 1-4).
- */
-@Composable
-fun StartGistCard(modifier: Modifier = Modifier) {
-    val app = LocalApp.current
-    val colors = HeyNaija.colors
-    val viewModel = viewModel(key = "start-gist-inline") { StartGistViewModel(app) }
-    val state by viewModel.state.collectAsStateWithLifecycle()
-
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Live, "Start a Gist", Modifier.size(20.dp), tint = colors.ink)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Start a Gist",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.ink,
-                )
-            }
-            Text(
-                "A live audio room. You talk, others listen, and you choose who else may speak. Not recorded.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.muted,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedTextField(
-                    value = state.title,
-                    onValueChange = viewModel::setTitle,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("What is it about?", color = colors.faint) },
-                    singleLine = true,
-                    shape = Radii.control,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.accent,
-                        unfocusedBorderColor = colors.lineStrong,
-                        errorBorderColor = colors.danger,
-                        focusedContainerColor = colors.surface,
-                        unfocusedContainerColor = colors.surface,
-                        cursorColor = colors.accent,
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = {
-                        viewModel.start { id -> app.navigator.push(Route.Gist(id)) }
-                    }),
-                )
-                Button(
-                    onClick = {
-                        viewModel.start { id -> app.navigator.push(Route.Gist(id)) }
-                    },
-                    enabled = !state.busy,
-                    shape = Radii.control,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.accent,
-                        contentColor = colors.accentInk,
-                    ),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-                ) {
-                    Text(
-                        if (state.busy) "Starting…" else "Go live",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-            if (state.error != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(Radii.control)
-                        .background(colors.dangerSoft)
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                ) {
-                    Text(
-                        state.error ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.danger,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
-            if (state.hosting != null) {
-                TextButton(
-                    onClick = { app.navigator.push(Route.Gist(state.hosting!!)) },
-                    modifier = Modifier.align(Alignment.Start),
-                ) {
-                    Text("Return to your live Gist", color = colors.accentStrong)
-                }
-            }
-        }
-    }
 }
