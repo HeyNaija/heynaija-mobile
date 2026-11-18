@@ -26,7 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -73,13 +72,13 @@ import ng.heynaija.app.posts.ListGutter
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
 import ng.heynaija.app.ui.Avatar
-import ng.heynaija.app.ui.ElasticPullBar
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.FOUNDER_INLINE
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.NotificationRowSkeleton
 import ng.heynaija.app.ui.NotificationsSkeletonList
 import ng.heynaija.app.ui.Problem
+import ng.heynaija.app.ui.PullRefreshBar
 import ng.heynaija.app.ui.TopBar
 import ng.heynaija.app.ui.founderInlineContent
 import ng.heynaija.app.ui.rememberNow
@@ -306,12 +305,7 @@ fun NotificationsScreen() {
                     state = pullState,
                     modifier = Modifier.fillMaxSize(),
                     indicator = {
-                        // The bar follows the drag; once let go, the spinner shows the page is loading.
-                        if (state.refreshing) {
-                            PullToRefreshDefaults.Indicator(pullState, isRefreshing = true, modifier = Modifier.align(Alignment.TopCenter))
-                        } else if (pullState.distanceFraction > 0.05f) {
-                            ElasticPullBar(pullState.distanceFraction)
-                        }
+                        PullRefreshBar({ pullState.distanceFraction }, state.refreshing, Modifier.align(Alignment.TopCenter))
                     },
                 ) {
                     LazyColumn(

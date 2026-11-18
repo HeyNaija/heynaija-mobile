@@ -20,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,10 +34,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.theme.HeyNaija
-import ng.heynaija.app.ui.ElasticPullBar
 import ng.heynaija.app.ui.Empty
 import ng.heynaija.app.ui.PostCard
 import ng.heynaija.app.ui.PostCardSkeleton
+import ng.heynaija.app.ui.PullRefreshBar
 import ng.heynaija.app.ui.SecondaryButton
 import ng.heynaija.app.ui.rememberNow
 
@@ -87,12 +86,7 @@ fun PostList(
         state = pullState,
         modifier = modifier.fillMaxSize(),
         indicator = {
-            // The bar follows the drag; once let go, the spinner shows the page is loading.
-            if (state.refreshing) {
-                PullToRefreshDefaults.Indicator(pullState, isRefreshing = true, modifier = Modifier.align(Alignment.TopCenter))
-            } else if (pullState.distanceFraction > 0.05f) {
-                ElasticPullBar(pullState.distanceFraction)
-            }
+            PullRefreshBar({ pullState.distanceFraction }, state.refreshing, Modifier.align(Alignment.TopCenter))
         },
     ) {
         LazyColumn(
