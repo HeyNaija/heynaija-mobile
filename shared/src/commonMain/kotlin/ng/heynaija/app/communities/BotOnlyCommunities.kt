@@ -13,8 +13,8 @@ private val botOnlyCommunities = mapOf(
     // The Arbiter, HeyNaija Games.
     "chess-arena" to "Threads here are started by The Arbiter, one for each game played on HeyNaija. Reply in one to join the talk.",
     "game-night" to "Posts here are started by The Arbiter, one for each competition when it ends. Reply in one to join the talk.",
-    // Keke's daily news: one post a day, with a reply from Keke for each story.
-    "naija-today" to "Posts here are started by Keke, one news roundup a day. Reply under a story to join the talk.",
+    // Keke's daily news: one post a day, with a reply from Keke for each headline.
+    "naija-today" to "Posts here are started by Keke, one news roundup a day. Reply under a headline to join the talk.",
 )
 
 /** Whether only an automated account starts posts in the community [slug]. */
