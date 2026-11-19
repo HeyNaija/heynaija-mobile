@@ -14,6 +14,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,10 +54,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -115,6 +119,8 @@ import ng.heynaija.app.thread.ThreadScreen
 import ng.heynaija.app.ui.CountBadge
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.Loading
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** The whole app, the same on Android and iOS. */
 @Composable
@@ -325,6 +331,26 @@ private fun TabBar(app: AppState, unread: Int) {
                 TabItem(icon, label, selected = i == selected, badge = if (tab == Tab.Notifications) unread else 0) { navigator.select(tab) }
             }
         }
+        // The curve and the selected tab's bubble rise above the bar's own height, over the screen. A
+        // touch there belongs to the bar, not to whatever the screen has under it: it lands here, and a
+        // tap on the bubble works as a tap on its tab.
+        Box(
+            Modifier
+                .layout { measurable, constraints ->
+                    val width = TabCurveWidth.roundToPx()
+                    val height = TabRise.roundToPx()
+                    val area = measurable.measure(Constraints.fixed(width, height))
+                    layout(width, height) {
+                        val centre = constraints.maxWidth / Tab.entries.size.toFloat() * (at + 0.5f)
+                        area.place((centre - width / 2f).roundToInt(), -height)
+                    }
+                }
+                .pointerInput(navigator) {
+                    detectTapGestures { tap ->
+                        if (abs(tap.x - size.width / 2f) <= TabBubble.toPx() / 2 + 8.dp.toPx()) navigator.select(navigator.tab)
+                    }
+                },
+        )
     }
 }
 
