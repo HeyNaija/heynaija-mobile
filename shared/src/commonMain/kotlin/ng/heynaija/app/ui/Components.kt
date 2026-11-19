@@ -39,6 +39,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
@@ -144,6 +146,8 @@ fun Field(
     onDone: (() -> Unit)? = null,
     enabled: Boolean = true,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    /** For a screen that puts the cursor in this field itself. */
+    focusRequester: FocusRequester? = null,
 ) {
     val colors = HeyNaija.colors
     Column(modifier) {
@@ -152,7 +156,7 @@ fun Field(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             placeholder = placeholder?.let { { Text(it, color = colors.faint) } },
             isError = error != null,
             singleLine = singleLine,

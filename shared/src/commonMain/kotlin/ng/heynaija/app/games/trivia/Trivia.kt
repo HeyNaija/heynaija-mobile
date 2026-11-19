@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -296,7 +297,7 @@ private fun HowPoints() {
             Text("How points work", style = MaterialTheme.typography.titleSmall, color = colors.ink)
             for (line in listOf(
                 "A right answer scores 10 points. The first three right answers score 5, 3 and 2 more, decided by HeyNaija’s server as each answer arrives, not by your phone’s clock.",
-                "You get one answer a question, and it cannot be changed. Answers stay hidden until time is up.",
+                "On a question with choices you can change your choice until time is up: the last one counts, at the time you made it. A typed answer cannot be changed. Answers stay hidden until time is up.",
                 "Typed answers ignore capitals, accents and punctuation, and forgive a small typo in a longer answer.",
                 "Points count for the Trivia leaderboard and your Game Score, and nothing else. No prizes.",
             )) Text(line, style = MaterialTheme.typography.bodyMedium, color = colors.muted)
@@ -314,12 +315,19 @@ data class TriviaRoundState(
     val gone: Boolean = false,
     val busy: Boolean = false,
     val error: String? = null,
+    /** A choice on its way to the server, shown as picked until the server has it. */
+    val pending: PendingChoice? = null,
 )
+
+data class PendingChoice(val question: String, val choice: Int)
 
 class TriviaRoundViewModel(private val app: AppState, private val id: String) : ViewModel() {
     private val _state = MutableStateFlow(TriviaRoundState())
     val state: StateFlow<TriviaRoundState> = _state.asStateFlow()
     private var following: Job? = null
+    // The newest choice tapped and not yet sent, and whether one is on its way (main thread only).
+    private var wanted: PendingChoice? = null
+    private var sending = false
 
     private fun take(next: TriviaRound) {
         val offset = (millisOf(next.serverTime) ?: nowMillis()) - nowMillis()
@@ -395,32 +403,65 @@ class TriviaRoundViewModel(private val app: AppState, private val id: String) : 
         start()
     }
 
-    fun answer(question: TriviaCurrent, choice: Int? = null, text: String? = null) {
+    /** A typed answer, once: it cannot be changed. */
+    fun answer(question: TriviaCurrent, text: String) {
         val s = _state.value
         if (s.busy || question.yourAnswer != null) return
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                val sent = app.api.triviaAnswer(id, question.id, choice = choice, text = text)
-                _state.update {
-                    val r = it.round
-                    val current = r?.current?.takeIf { c -> c.id == question.id }
-                    it.copy(
-                        busy = false,
-                        round = if (r != null && current != null) r.copy(current = current.copy(yourAnswer = TriviaYourAnswer(choice, text, sent.ms))) else r,
-                    )
-                }
+                val sent = app.api.triviaAnswer(id, question.id, text = text)
+                _state.update { it.copy(busy = false, round = withAnswer(it.round, question.id, TriviaYourAnswer(null, text, sent.ms))) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val message = when {
-                    e is ApiException && e.status == 429 -> "That was a lot at once. Wait a moment and try again."
-                    e is ApiException && e.status in 400..499 -> e.message ?: "That answer did not count."
-                    else -> "That did not go through. Check your connection and try again."
-                }
-                _state.update { it.copy(busy = false, error = message) }
+                _state.update { it.copy(busy = false, error = problem(e)) }
             }
         }
+    }
+
+    /**
+     * A choice, which can be changed until time is up: the last one counts, at the time it
+     * reached the server. A tap while one is on its way is sent after it.
+     */
+    fun choose(question: TriviaCurrent, choice: Int) {
+        val shown = _state.value.pending?.takeIf { it.question == question.id }?.choice ?: question.yourAnswer?.choice
+        if (!sending && shown == choice) return
+        wanted = PendingChoice(question.id, choice)
+        _state.update { it.copy(pending = wanted, error = null) }
+        if (sending) return
+        sending = true
+        viewModelScope.launch {
+            try {
+                while (true) {
+                    val next = wanted ?: break
+                    wanted = null
+                    try {
+                        val sent = app.api.triviaAnswer(id, next.question, choice = next.choice)
+                        _state.update { it.copy(round = withAnswer(it.round, next.question, TriviaYourAnswer(next.choice, null, sent.ms))) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        wanted = null
+                        _state.update { it.copy(error = problem(e)) }
+                    }
+                }
+            } finally {
+                sending = false
+                _state.update { it.copy(pending = null) }
+            }
+        }
+    }
+
+    private fun withAnswer(round: TriviaRound?, question: String, answer: TriviaYourAnswer): TriviaRound? {
+        val current = round?.current?.takeIf { it.id == question } ?: return round
+        return round.copy(current = current.copy(yourAnswer = answer))
+    }
+
+    private fun problem(e: Exception) = when {
+        e is ApiException && e.status == 429 -> "That was a lot at once. Wait a moment and try again."
+        e is ApiException && e.status in 400..499 -> e.message ?: "That answer did not count."
+        else -> "That did not go through. Check your connection and try again."
     }
 }
 
@@ -549,12 +590,14 @@ private fun Line(text: String, muted: Boolean = false, center: Boolean = false) 
     )
 }
 
-/** The question while it is open: tap a choice, or type, once. */
+/** The question while it is open: tap a choice (and tap another to change it), or type once. */
 @Composable
 private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, state: TriviaRoundState, viewModel: TriviaRoundViewModel) {
     val colors = HeyNaija.colors
     val mine = q.yourAnswer
-    val locked = mine != null || !round.you.canAnswer || state.busy
+    val plays = round.you.canAnswer
+    val locked = mine != null || !plays || state.busy
+    val chosen = state.pending?.takeIf { it.question == q.id }?.choice ?: mine?.choice
     val left = max(0L, closesIn)
     var text by rememberSaveable(q.id) { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -567,7 +610,7 @@ private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, 
         q.image?.let { QuestionPicture(it) }
         if (q.kind == "choice") {
             for (c in q.choices.orEmpty()) {
-                val picked = mine?.choice == c.id
+                val picked = chosen == c.id
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -575,7 +618,7 @@ private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, 
                         .clip(Radii.control)
                         .background(if (picked) colors.accent else colors.surface)
                         .border(1.dp, if (picked) colors.accent else colors.lineStrong, Radii.control)
-                        .clickable(enabled = !locked) { viewModel.answer(q, choice = c.id) }
+                        .clickable(enabled = plays) { viewModel.choose(q, c.id) }
                         .semantics {
                             role = Role.Button
                             selected = picked
@@ -589,7 +632,7 @@ private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, 
                         fontWeight = FontWeight.SemiBold,
                         color = when {
                             picked -> colors.accentInk
-                            locked -> colors.muted
+                            !plays -> colors.muted
                             else -> colors.ink
                         },
                     )
@@ -599,14 +642,25 @@ private fun QuestionPanel(round: TriviaRound, q: TriviaCurrent, closesIn: Long, 
             Box(Modifier.fillMaxWidth().clip(Radii.control).border(1.dp, colors.accent, Radii.control).padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Text(mine.text ?: "", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = colors.ink)
             }
-        } else if (round.you.canAnswer) {
-            val send = { if (text.isNotBlank()) viewModel.answer(q, text = text.trim()) }
-            Field(text, { if (it.length <= 80) text = it }, "Your answer", placeholder = "Type your answer", onDone = send, enabled = !locked)
+        } else if (plays) {
+            val send = { if (text.isNotBlank()) viewModel.answer(q, text.trim()) }
+            // The cursor is in the field as the question appears, as on the web: every second counts.
+            val field = remember(q.id) { FocusRequester() }
+            LaunchedEffect(q.id) {
+                withFrameMillis { }
+                runCatching { field.requestFocus() }
+            }
+            Field(text, { if (it.length <= 80) text = it }, "Your answer", placeholder = "Type your answer", onDone = send, enabled = !locked, focusRequester = field)
             PrimaryButton("Answer", send, enabled = text.isNotBlank() && !locked, busy = state.busy)
         }
         when {
-            mine != null -> Text("Answered in ${seconds(mine.ms)}. You see whether it was right when time is up.", style = MaterialTheme.typography.bodySmall, color = colors.muted)
-            !round.you.canAnswer -> Text("You watch without answering.", style = MaterialTheme.typography.bodySmall, color = colors.muted)
+            mine != null -> Text(
+                "Answered in ${seconds(mine.ms)}. " +
+                    if (q.kind == "choice") "You can change it until time is up, and your last choice counts." else "You see whether it was right when time is up.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+            )
+            !plays -> Text("You watch without answering.", style = MaterialTheme.typography.bodySmall, color = colors.muted)
         }
         state.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.danger) }
     }
