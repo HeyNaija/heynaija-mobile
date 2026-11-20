@@ -271,7 +271,7 @@ private fun VisitorCard() {
             )
             Spacer(Modifier.height(14.dp))
             Row {
-                PrimaryButton("Join with an invite", { app.navigator.push(Route.SignUp) }, Modifier.weight(1f))
+                PrimaryButton("Join with an invite", { app.navigator.push(Route.SignUp()) }, Modifier.weight(1f))
                 Spacer(Modifier.width(10.dp))
                 SecondaryButton("Sign in", { app.navigator.push(Route.SignIn) }, Modifier.weight(1f))
             }

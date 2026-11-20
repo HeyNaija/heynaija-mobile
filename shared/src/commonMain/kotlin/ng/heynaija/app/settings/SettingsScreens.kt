@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -76,11 +75,10 @@ private fun Group(rows: List<@Composable () -> Unit>) {
 @Composable
 fun SettingsScreen() {
     val app = LocalApp.current
-    val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     var signingOut by remember { mutableStateOf(false) }
     val web = Servers.current.web
-    val open = { path: String -> { runCatching { uri.openUri("$web$path") }; Unit } }
+    val open = { path: String -> { app.openLink(path) } }
 
     Column(Modifier.fillMaxSize()) {
         TopBar("Settings", onBack = { app.navigator.pop() })
@@ -93,7 +91,7 @@ fun SettingsScreen() {
                     add { MenuRow("Notifications", Icons.Bell) { app.navigator.push(Route.NotificationSettings) } }
                     // Only adults are ever shown posts marked sensitive, or may mark one (ADR 0020).
                     if (app.me?.sensitive?.adult == true) add { MenuRow("Sensitive content", Icons.Sensitive) { app.navigator.push(Route.SensitiveSettings) } }
-                    add { MenuRow("Email, handle and sign-in", Icons.Mail, detail = "On the web, for now") { open("/settings")() } }
+                    add { MenuRow("Email, handle and sign-in", Icons.Mail, detail = "On the web, for now") { app.openInBrowser("$web/settings") } }
                 })
             }
             // Google Play's Child Safety Standards ask for a way to report from inside the app, about anything.

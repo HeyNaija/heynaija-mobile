@@ -64,10 +64,12 @@ fun PostText(
                 when (val target = span.target) {
                     is Target.Member -> withLink(LinkAnnotation.Clickable("member", linkStyle) { app.navigator.push(Route.Profile(target.handle)) }) { append(shown) }
                     is Target.Topic -> withLink(LinkAnnotation.Clickable("topic", linkStyle) { app.navigator.push(Route.Hashtag(target.tag)) }) { append(shown) }
-                    // A link to a Games page (The Arbiter's game threads) opens its screen, for a member with Games.
-                    is Target.Web -> app.screenFor(target.url)?.takeIf { it.gamesLink }?.let { route ->
-                        withLink(LinkAnnotation.Clickable("games", urlStyle) { app.navigator.push(route) }) { append(shown) }
-                    } ?: withLink(LinkAnnotation.Url(target.url, urlStyle)) { append(shown) }
+                    // A link to the site goes where any link to it goes (AppState.openLink); any other opens as usual.
+                    is Target.Web -> if (app.isSiteLink(target.url)) {
+                        withLink(LinkAnnotation.Clickable("site", urlStyle) { app.openLink(target.url) }) { append(shown) }
+                    } else {
+                        withLink(LinkAnnotation.Url(target.url, urlStyle)) { append(shown) }
+                    }
                 }
                 at = span.end
             }

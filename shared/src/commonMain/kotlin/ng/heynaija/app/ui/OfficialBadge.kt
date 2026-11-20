@@ -22,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -65,7 +64,6 @@ fun officialAboutPage(handle: String, web: String): String? =
 @Composable
 fun OfficialBadge(handle: String, modifier: Modifier = Modifier, size: Dp = 16.dp, onItsProfile: Boolean = false) {
     val app = LocalApp.current
-    val uri = LocalUriHandler.current
     val colors = HeyNaija.colors
     var open by remember { mutableStateOf(false) }
     // The tap target is 24dp square however small the shield is drawn.
@@ -104,7 +102,7 @@ fun OfficialBadge(handle: String, modifier: Modifier = Modifier, size: Dp = 16.d
                                     .padding(top = 2.dp)
                                     .clickable(role = Role.Button) {
                                         open = false
-                                        if (page != null) runCatching { uri.openUri(page) } else app.navigator.push(Route.Profile(handle))
+                                        if (page != null) app.openLink(page) else app.navigator.push(Route.Profile(handle))
                                     }
                                     .padding(vertical = 4.dp),
                                 style = text.copy(fontWeight = FontWeight.SemiBold),

@@ -581,6 +581,7 @@ fun QuotedPostCard(quote: QuotedPost, modifier: Modifier = Modifier) {
 /** The page the post's first address leads to. */
 @Composable
 private fun LinkCard(preview: LinkPreview, modifier: Modifier) {
+    val app = LocalApp.current
     val uri = LocalUriHandler.current
     val colors = HeyNaija.colors
     val host = remember(preview.url) { preview.url.substringAfter("://").substringBefore('/').removePrefix("www.") }
@@ -590,7 +591,7 @@ private fun LinkCard(preview: LinkPreview, modifier: Modifier) {
             .clip(Radii.control)
             .background(colors.panel)
             .border(1.dp, colors.lineStrong, Radii.control)
-            .clickable { runCatching { uri.openUri(preview.url) } },
+            .clickable { if (app.isSiteLink(preview.url)) app.openLink(preview.url) else runCatching { uri.openUri(preview.url) } },
     ) {
         preview.image?.let { image ->
             AsyncImage(

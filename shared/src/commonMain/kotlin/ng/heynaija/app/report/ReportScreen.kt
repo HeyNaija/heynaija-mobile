@@ -23,7 +23,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
@@ -31,7 +30,6 @@ import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.CONCERN_REASONS
 import ng.heynaija.app.api.NEEDS_LABEL_REASON
 import ng.heynaija.app.api.REPORT_REASONS
-import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
@@ -105,7 +103,6 @@ fun ReportConcernScreen() {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val colors = HeyNaija.colors
-    val uri = LocalUriHandler.current
     var reason by remember { mutableStateOf<String?>(null) }
     var details by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -130,7 +127,7 @@ fun ReportConcernScreen() {
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             PrimaryButton("Sign in", { app.navigator.push(Route.SignIn) }, Modifier.weight(1f))
-                            SecondaryButton("Join with an invite", { app.navigator.push(Route.SignUp) }, Modifier.weight(1f))
+                            SecondaryButton("Join with an invite", { app.navigator.push(Route.SignUp()) }, Modifier.weight(1f))
                         }
                     }
                 }
@@ -176,7 +173,7 @@ fun ReportConcernScreen() {
             }
             Text(
                 "Something not working, or an idea? Tell us on the ideas board",
-                Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/ideas") } }.padding(vertical = 4.dp),
+                Modifier.clickable { app.openLink("/ideas") }.padding(vertical = 4.dp),
                 style = MaterialTheme.typography.labelLarge,
                 color = colors.accentStrong,
             )
@@ -187,7 +184,7 @@ fun ReportConcernScreen() {
             )
             Text(
                 "Our child safety standards",
-                Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/child-safety") } }.padding(vertical = 4.dp),
+                Modifier.clickable { app.openLink("/child-safety") }.padding(vertical = 4.dp),
                 style = MaterialTheme.typography.labelLarge,
                 color = colors.accentStrong,
             )
