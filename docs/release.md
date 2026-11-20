@@ -144,6 +144,16 @@ For each version:
     account) and on the web. **Delete account URL:** `https://heynaija.ng/privacy#rights`,
     which says how, links to Settings → Delete your account, and gives the
     address to write to without signing in.
+  - **Child safety standards** (Google Play asks every Social app, whatever its
+    age rating): safety standards URL `https://heynaija.ng/child-safety`;
+    contact `contact@heynaija.ng`; tick both terms. The in-app mechanism it
+    certifies is **Settings → Report a safety concern** (about anything, child safety
+    first, without leaving the app) and **Report** in the menu of every post and
+    profile and on a Gist. A release was refused on 19 November 2026 for having
+    no in-app feedback mechanism, with this declaration already filled in:
+    reporting was then only in those menus, and only signed in. So say where it
+    is in App access too:
+    "To report: Settings → Report a safety concern, or ⋯ on any post → Report post."
   - News app, health, financial features, government: no.
   - **Foreground service permissions.** The app keeps a Gist playing with the app
     off screen or the phone locked through a foreground service

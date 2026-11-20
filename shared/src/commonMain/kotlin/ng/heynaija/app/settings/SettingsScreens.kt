@@ -96,6 +96,12 @@ fun SettingsScreen() {
                     add { MenuRow("Email, handle and sign-in", Icons.Mail, detail = "On the web, for now") { open("/settings")() } }
                 })
             }
+            // Google Play's Child Safety Standards ask for a way to report from inside the app, about anything.
+            SectionTitle("HELP AND SAFETY")
+            Group(listOf(
+                { MenuRow("Report a safety concern", Icons.Flag) { app.navigator.push(Route.ReportConcern) } },
+                { MenuRow("Child safety standards", Icons.Shield, onClick = open("/child-safety")) },
+            ))
             SectionTitle("HEYNAIJA")
             Group(listOf(
                 { MenuRow("Terms of use", Icons.Pen, onClick = open("/terms")) },

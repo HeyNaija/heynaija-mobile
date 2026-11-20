@@ -105,6 +105,7 @@ import ng.heynaija.app.platform.PushEvents
 import ng.heynaija.app.profile.EditProfileScreen
 import ng.heynaija.app.profile.MeScreen
 import ng.heynaija.app.profile.ProfileScreen
+import ng.heynaija.app.report.ReportConcernScreen
 import ng.heynaija.app.report.ReportScreen
 import ng.heynaija.app.search.HashtagScreen
 import ng.heynaija.app.search.SearchScreen
@@ -277,6 +278,7 @@ private fun Screen(entry: Entry) {
         is Route.Images -> ImageViewer(route.images, route.start)
         is Route.Video -> VideoScreen(route.url, route.startMs)
         is Route.Report -> ReportScreen(route.target, route.what)
+        Route.ReportConcern -> ReportConcernScreen()
         Route.SignIn -> SignInScreen()
         Route.SignUp -> SignUpScreen()
     }

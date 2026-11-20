@@ -23,17 +23,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.api.CONCERN_REASONS
 import ng.heynaija.app.api.NEEDS_LABEL_REASON
 import ng.heynaija.app.api.REPORT_REASONS
+import ng.heynaija.app.api.Servers
+import ng.heynaija.app.nav.Route
 import ng.heynaija.app.reasonOf
 import ng.heynaija.app.theme.HeyNaija
+import ng.heynaija.app.ui.Card
 import ng.heynaija.app.ui.Field
 import ng.heynaija.app.ui.Icons
 import ng.heynaija.app.ui.PrimaryButton
+import ng.heynaija.app.ui.SecondaryButton
 import ng.heynaija.app.ui.TopBar
 
 /** Reporting a post or a member to the moderators, with the web's reasons. */
@@ -85,6 +91,106 @@ fun ReportScreen(target: Pair<String, String>, what: String) {
                     }
                 }
             }, Modifier.fillMaxWidth(), enabled = reason != null, busy = busy)
+        }
+    }
+}
+
+/**
+ * Report a safety concern, from Settings: what a member saw or what happened to
+ * them, about no one post or account (the web's /report). It stays in the app, as
+ * Google Play's Child Safety Standards ask; only the people who handle safety read it.
+ */
+@Composable
+fun ReportConcernScreen() {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val colors = HeyNaija.colors
+    val uri = LocalUriHandler.current
+    var reason by remember { mutableStateOf<String?>(null) }
+    var details by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxSize().imePadding()) {
+        TopBar("Report a safety concern", onBack = { app.navigator.pop() }, backIcon = Icons.Close)
+        Column(Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                "Tell the people who handle safety about something you saw on HeyNaija or something that happened to you or someone you know, above all anything that puts a child at risk. Only they read it, and the people you name are not told who sent it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+            )
+            if (app.me == null) {
+                // Signing in comes straight back here.
+                Card {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Sign in to send a report", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                        Text(
+                            "Not a member? Write to contact@heynaija.ng with a link to what you saw. Never send a picture or video of a child.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.muted,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PrimaryButton("Sign in", { app.navigator.push(Route.SignIn) }, Modifier.weight(1f))
+                            SecondaryButton("Join with an invite", { app.navigator.push(Route.SignUp) }, Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                Text("What is it about?", style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                Column {
+                    for ((key, label) in CONCERN_REASONS) {
+                        Row(Modifier.fillMaxWidth().clickable { reason = key }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(reason == key, { reason = key }, colors = RadioButtonDefaults.colors(selectedColor = colors.accent))
+                            Text(label, style = MaterialTheme.typography.bodyLarge, color = colors.ink)
+                        }
+                    }
+                }
+                Field(details, { if (it.length <= 1000) details = it }, "What happened?", singleLine = false, minLines = 5)
+                Text(
+                    "Say where you saw it and who was involved, with links to any posts or accounts. Never send a picture or video of a child: a link is enough for us to find it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+                error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.danger) }
+                PrimaryButton("Send report", {
+                    val chosen = reason ?: return@PrimaryButton
+                    if (details.trim().length < 10) {
+                        error = "Tell us what happened (at least 10 characters)."
+                        return@PrimaryButton
+                    }
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            app.api.reportConcern(chosen, details.trim())
+                            app.say("Thanks. The people who handle safety will look at it.")
+                            app.navigator.pop()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            error = reasonOf(e) ?: "Your report did not go through. Try again."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }, Modifier.fillMaxWidth(), enabled = reason != null && details.isNotBlank(), busy = busy)
+            }
+            Text(
+                "Something not working, or an idea? Tell us on the ideas board",
+                Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/ideas") } }.padding(vertical = 4.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.accentStrong,
+            )
+            Text(
+                "If a child is in danger now, call the police first: in Nigeria, 112.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+            )
+            Text(
+                "Our child safety standards",
+                Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/child-safety") } }.padding(vertical = 4.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.accentStrong,
+            )
         }
     }
 }
