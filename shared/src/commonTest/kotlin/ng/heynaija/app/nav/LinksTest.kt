@@ -164,6 +164,19 @@ class LinksTest {
     }
 
     @Test
+    fun reportASafetyConcernOpensAgainAfterSigningIn() {
+        // A visitor goes Settings → Report a safety concern → Sign in; once signed in, the report form is back.
+        val navigator = Navigator()
+        navigator.push(Route.Settings)
+        navigator.push(Route.ReportConcern)
+        navigator.push(Route.SignIn)
+        assertEquals(Route.ReportConcern, navigator.beforeSignIn)
+        assertTrue(Route.ReportConcern.opensAgainAfterSignIn)
+        assertTrue(Route.Gist(gist).opensAgainAfterSignIn)
+        assertFalse(Route.Settings.opensAgainAfterSignIn)
+    }
+
+    @Test
     fun aWeeklyHighlightsPushOpensItsConversation() {
         // It arrives like any other push, with the tag "highlights" and the path of a post (ADR 0027 in the web repository).
         val navigator = Navigator()
