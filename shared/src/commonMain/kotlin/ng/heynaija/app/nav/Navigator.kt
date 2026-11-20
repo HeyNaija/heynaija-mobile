@@ -73,11 +73,13 @@ sealed interface Route {
     data class Video(val url: String, val startMs: Long = 0) : Route
     /** [target] is `"postId" to id` or `"handle" to handle`. */
     data class Report(val target: Pair<String, String>, val what: String) : Route
+    /** Report a safety concern, from Settings: about no one post or account. */
+    data object ReportConcern : Route
     data object SignIn : Route
     data object SignUp : Route
 
     val fullScreen: Boolean
-        get() = this is Compose || this is Images || this is Video || this is Report || this is SignIn || this is SignUp
+        get() = this is Compose || this is Images || this is Video || this is Report || this is ReportConcern || this is SignIn || this is SignUp
 }
 
 enum class Motion { Push, Pop, Tab }

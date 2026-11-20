@@ -563,7 +563,22 @@ val REPORT_REASONS = listOf(
     "harassment" to "Harassment or bullying",
     "hate" to "Hate speech",
     "scam" to "Scam or fraud",
+    "child_safety" to "Child sexual abuse or exploitation",
     "illegal" to "Illegal content",
+    "other" to "Something else",
+)
+
+/**
+ * Report a safety concern (Settings), about no one post or account, as the web
+ * lists them (apps/web/lib/report-reasons.ts, CONCERN_REASONS): child safety first.
+ */
+val CONCERN_REASONS = listOf(
+    "child_safety" to "Child sexual abuse or exploitation",
+    "harassment" to "Harassment, threats or bullying",
+    "hate" to "Hate speech",
+    "scam" to "Scam or fraud",
+    "spam" to "Spam",
+    "illegal" to "Other illegal content",
     "other" to "Something else",
 )
 

@@ -178,6 +178,7 @@ private val REASONS = mapOf(
     "harassment" to "harassment",
     "hate" to "hate speech",
     "scam" to "being a scam",
+    "child_safety" to "child sexual abuse or exploitation",
     "illegal" to "illegal content",
     "needs_label" to "sensitive content that was not marked",
 )
@@ -200,7 +201,11 @@ private fun describe(n: Notification): Pair<ImageVector, String> {
         "post_removed" -> Icons.Shield to "A moderator removed your post for ${REASONS[n.detail] ?: "breaking the community rules"}."
         "post_restored" -> Icons.Shield to "A moderator restored your post."
         "post_labelled" -> Icons.Shield to "A moderator marked your post as sensitive. People under 18 won’t see it, and its pictures and video show behind a warning."
-        "report_resolved" -> {
+        // Report a safety concern names no post or account.
+        "report_resolved" -> if (n.detail?.startsWith("concern_") == true) {
+            Icons.Flag to if (n.detail == "concern_actioned") "Thanks for reporting a safety concern. The people who handle safety looked into it and took action."
+            else "Thanks for reporting a safety concern. The people who handle safety looked into it and found nothing more to do."
+        } else {
             val about = when {
                 n.detail?.startsWith("gist_") == true -> "a Gist"
                 n.subjectHandle != null -> "@${n.subjectHandle}"

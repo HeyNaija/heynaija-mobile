@@ -433,6 +433,14 @@ class HeyNaijaApi(
         })
     }
 
+    /** Report a safety concern (Settings): what a member saw or what happened to them, not tied to one post or account. */
+    suspend fun reportConcern(reason: String, details: String) {
+        send("POST", "/reports/concern", buildJsonObject {
+            put("reason", reason)
+            put("details", details)
+        })
+    }
+
     // The welcome steps and the date of birth
 
     suspend fun suggestions(communities: List<String>): List<Suggestion> =
