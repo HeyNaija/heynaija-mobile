@@ -136,6 +136,14 @@ fun SearchScreen() {
     val focus = LocalFocusManager.current
     val field = remember { FocusRequester() }
     val colors = HeyNaija.colors
+    // A search link (/search?q=…) puts its words in the box and searches them.
+    val linked by app.searchWords.collectAsStateWithLifecycle()
+    LaunchedEffect(linked) {
+        val words = linked ?: return@LaunchedEffect
+        query = words
+        viewModel.search(words)
+        app.searchWordsTaken(words)
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.background(colors.bg).statusBarsPadding()) {

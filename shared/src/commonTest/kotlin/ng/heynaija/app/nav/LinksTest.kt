@@ -26,7 +26,7 @@ class LinksTest {
     }
 
     @Test
-    fun gamesPagesOpenTheirScreensAndKenoNothingYet() {
+    fun gamesPagesOpenTheirScreensAndKenoInTheBrowser() {
         assertEquals(Route.Games, routeOf("/games", web))
         assertEquals(Route.Chess(), routeOf("$web/games/chess", web))
         assertEquals(Route.Chess(), routeOf("/games/chess#challenge-$post", web))
@@ -34,6 +34,7 @@ class LinksTest {
         assertEquals(Route.GamesLeaderboard(), routeOf("/games/leaderboard", web))
         assertEquals(Route.GamesScoring, routeOf("/games/scoring", web))
         assertNull(routeOf("/games/keno", web))
+        assertEquals(LinkTarget.Browser, linkTarget("/games/keno/rounds/42"))
         assertEquals(Route.Chess(tab = "competitions"), routeOf("/games/chess?tab=competitions", web))
         assertEquals(Route.Chess(), routeOf("/games/chess?tab=nonsense", web))
         assertEquals(Route.Competitions, routeOf("/games/competitions", web))
@@ -107,8 +108,7 @@ class LinksTest {
     }
 
     @Test
-    fun everyPageTheSiteSendsToTheAppHasAScreen() {
-        // The pages apps/web/lib/app-links.ts claims (web repository) and the Android manifest lists.
+    fun thePagesTheAppHadBeforeStillOpenTheirScreens() {
         assertEquals(Route.Thread(post), routeOf("$web/p/$post", web))
         assertEquals(Route.Thread(post, gist = gist), routeOf("$web/gists/$gist?reply=$post", web))
         assertEquals(Route.Gist(gist), routeOf("$web/gists/$gist", web))
@@ -117,8 +117,185 @@ class LinksTest {
         assertEquals(Route.Hashtag("jollof"), routeOf("$web/hashtag/jollof", web))
         assertEquals(Route.Notifications, routeOf("$web/notifications", web))
         assertEquals(Route.Bookmarks, routeOf("$web/bookmarks", web))
-        // Another server's link: a debug build on staging given one to heynaija.ng.
+        // Another server's link: a release build on staging is never given one, and a debug build reads it as its own (sitePath).
         assertNull(routeOf("https://heynaija.ng/p/$post", web))
+    }
+
+    /**
+     * A copy of PAGES in apps/web/lib/app-links.ts (web repository): every page of
+     * the site, and where it opens. When the site adds a page it says there; when
+     * the app gets a screen for one, both lists change.
+     */
+    private val pages = mapOf(
+        "/" to "app",
+        "/about" to "browser",
+        "/about/discover" to "browser",
+        "/about/highlights" to "browser",
+        "/about/keke" to "browser",
+        "/auth-error" to "website",
+        "/birth-date" to "website",
+        "/bookmarks" to "app",
+        "/c" to "app",
+        "/c/[slug]" to "app",
+        "/charter" to "browser",
+        "/child-safety" to "browser",
+        "/email-off" to "website",
+        "/games" to "app",
+        "/games/chess" to "app",
+        "/games/chess/callback" to "website",
+        "/games/chess/games/[id]" to "app",
+        "/games/chess/teams/[slug]" to "app",
+        "/games/competitions" to "app",
+        "/games/competitions/[id]" to "app",
+        "/games/competitions/[id]/edit" to "browser",
+        "/games/competitions/new" to "browser",
+        "/games/keno" to "website",
+        "/games/keno/leaderboard" to "website",
+        "/games/keno/rounds" to "website",
+        "/games/keno/rounds/[number]" to "website",
+        "/games/keno/tickets" to "website",
+        "/games/leaderboard" to "app",
+        "/games/scoring" to "app",
+        "/games/trivia" to "app",
+        "/games/trivia/host" to "browser",
+        "/games/trivia/rounds/[id]" to "app",
+        "/games/trivia/rounds/[id]/edit" to "browser",
+        "/games/trivia/rounds/[id]/host" to "browser",
+        "/games-not-open" to "website",
+        "/games-sign-in" to "website",
+        "/gist-sign-in" to "website",
+        "/gists/[id]" to "app",
+        "/gists/new" to "browser",
+        "/governance" to "browser",
+        "/governance/constitution" to "browser",
+        "/governance/membership" to "browser",
+        "/governance/verification" to "browser",
+        "/hashtag/[tag]" to "app",
+        "/ideas" to "browser",
+        "/ideas/new" to "browser",
+        "/join" to "app",
+        "/licence" to "browser",
+        "/lichess/return" to "website",
+        "/login" to "website",
+        "/logout" to "website",
+        "/mod" to "browser",
+        "/notifications" to "app",
+        "/p/[id]" to "app",
+        "/p/[id]/quote" to "app",
+        "/p/[id]/votes" to "browser",
+        "/privacy" to "browser",
+        "/progress" to "browser",
+        "/report" to "browser",
+        "/rules" to "browser",
+        "/search" to "app",
+        "/settings" to "app",
+        "/settings/delete" to "app",
+        "/settings/delete/refused/[reason]" to "browser",
+        "/settings/delete/scheduled" to "browser",
+        "/settings/export" to "website",
+        "/signup" to "website",
+        "/terms" to "browser",
+        "/topics" to "browser",
+        "/u/[handle]" to "app",
+        "/verification" to "website",
+        "/welcome" to "website",
+        "/.well-known/apple-app-site-association" to "website",
+        "/.well-known/assetlinks.json" to "website",
+    )
+
+    /** A real address for a page's folder path. */
+    private fun example(page: String): String = page
+        .replace("/games/chess/games/[id]", "/games/chess/games/aBcD1234")
+        .replace("[id]", post).replace("[slug]", "lagos-tech").replace("[handle]", "ada")
+        .replace("[tag]", "jollof").replace("[number]", "42").replace("[reason]", "owner")
+
+    @Test
+    fun everyPageOfTheSiteOpensItsScreenOrTheBrowser() {
+        for ((page, opens) in pages) {
+            val target = linkTarget(example(page))
+            when (opens) {
+                "app" -> assertTrue(target != LinkTarget.Browser, "$page has a screen in the app")
+                // The phone gives the app these only on Android 14 and older: the browser opens them, or Lichess's answer is read.
+                "website" -> assertTrue(target == LinkTarget.Browser || target is LinkTarget.LichessAnswer, "$page stays on the website")
+                else -> assertEquals(LinkTarget.Browser, target, "$page has no screen in the app yet")
+            }
+        }
+    }
+
+    @Test
+    fun theSitesOtherPagesWithAScreenOpenIt() {
+        assertEquals(Route.Communities, routeOf("$web/c", web))
+        assertEquals(Route.DeleteAccount, routeOf("/settings/delete", web))
+        assertEquals(LinkTarget.Screen(Route.Search), linkTarget("/search"))
+        assertEquals(LinkTarget.Search("jollof rice"), linkTarget("/search?q=jollof+rice"))
+        assertEquals(LinkTarget.Search("ọ̀rọ̀ & more"), linkTarget("/search?q=%E1%BB%8D%CC%80r%E1%BB%8D%CC%80%20%26%20more"))
+        assertEquals(LinkTarget.Screen(Route.Search), linkTarget("/search?q=%20"))
+        assertEquals(Route.SignUp(invite = "HN-NJ2F-XC26-VJJ9"), routeOf("$web/join?code=hn-nj2f-xc26-vjj9", web))
+        assertEquals(Route.SignUp(), routeOf("/join", web))
+        assertEquals(LinkTarget.Quote(post), linkTarget("/p/$post/quote"))
+        assertEquals(LinkTarget.Browser, linkTarget("/p/$post/votes"))
+        assertEquals(Route.Home, routeOf("$web/?feed=discover", web))
+        assertEquals(Route.Home, routeOf(web, web))
+    }
+
+    @Test
+    fun lichessAnswersThroughTheSiteAreReadAsTheAppsOwn() {
+        val answer = linkTarget("/lichess/return?code=abc%2Fdef&state=xyz") as LinkTarget.LichessAnswer
+        assertEquals("ng.heynaija.app://lichess/return?code=abc%2Fdef&state=xyz", answer.answer)
+        assertEquals("abc/def", ng.heynaija.app.games.chess.lichessAnswer(answer.answer)?.code)
+        assertEquals(LinkTarget.LichessAnswer("ng.heynaija.app://lichess/return?error=access_denied"), linkTarget("/lichess/return?error=access_denied"))
+        assertEquals(LinkTarget.LichessAnswer("ng.heynaija.app://lichess/return?error=invalid_request"), linkTarget("/lichess/return"))
+    }
+
+    @Test
+    fun aLinkIsToTheSiteOnlyWhenItIsOnItsAddress() {
+        assertEquals("/p/$post", sitePath("/p/$post", web))
+        assertEquals("/p/$post?x=1#y", sitePath("$web/p/$post?x=1#y", web))
+        assertEquals("/", sitePath(web, web))
+        assertEquals("/?feed=discover", sitePath("$web?feed=discover", web))
+        assertNull(sitePath("//evil.example/p/$post", web))
+        assertNull(sitePath("https://staging.heynaija.ng.evil.example/p/$post", web))
+        assertNull(sitePath("https://staging.heynaija.ngx/p/$post", web))
+        assertNull(sitePath("https://heynaija.ng/p/$post", web))
+        // A debug build on staging or the dev stack is given heynaija.ng links: they are its own.
+        assertEquals("/p/$post", sitePath("https://heynaija.ng/p/$post", web, orSite = true))
+        assertEquals("/rules", sitePath("https://heynaija.ng/rules", "https://heynaija.ng"))
+        assertEquals("/rules", sitePath("http://heynaija.ng/rules", "https://heynaija.ng"))
+    }
+
+    @Test
+    fun theScreensOnlyAMemberCanUseAskToSignInFirst() {
+        assertTrue(Route.Notifications.needsAccount)
+        assertTrue(Route.Bookmarks.needsAccount)
+        assertTrue(Route.DeleteAccount.needsAccount)
+        assertTrue(Route.TriviaRound(post).needsAccount)
+        assertFalse(Route.Thread(post).needsAccount)
+        assertFalse(Route.Profile("ada").needsAccount)
+        assertFalse(Route.Gist(gist).needsAccount)
+        assertFalse(Route.Settings.needsAccount)
+        assertFalse(Route.Search.needsAccount)
+    }
+
+    @Test
+    fun aLinkThatAskedToSignInFirstIsKeptUntilTheFormCloses() {
+        val navigator = Navigator()
+        val round = "$web/games/trivia/rounds/$post"
+        navigator.signInFirst(round)
+        assertEquals(Route.SignIn, navigator.top.route)
+        assertEquals(round, navigator.afterSignIn)
+        // "Join with an invite" swaps the form; the link is still waiting.
+        navigator.replace(Route.SignUp())
+        assertEquals(round, navigator.afterSignIn)
+        // A second link while the form is open takes over, without a second form.
+        navigator.signInFirst("$web/notifications")
+        assertEquals(listOf(Route.Home, Route.SignUp()), navigator.stack.map { it.route })
+        assertEquals("$web/notifications", navigator.afterSignIn)
+        // Closing the form forgets it.
+        navigator.pop()
+        assertNull(navigator.afterSignIn)
+        navigator.signInFirst(round)
+        navigator.reset()
+        assertNull(navigator.afterSignIn)
     }
 
     @Test
@@ -159,7 +336,7 @@ class LinksTest {
         navigator.push(Route.SignIn)
         assertEquals(Route.Gist(gist), navigator.beforeSignIn)
         // "Join with an invite" on the sign-in form swaps it for the sign-up one.
-        navigator.replace(Route.SignUp)
+        navigator.replace(Route.SignUp())
         assertEquals(Route.Gist(gist), navigator.beforeSignIn)
     }
 

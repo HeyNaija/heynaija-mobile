@@ -76,7 +76,8 @@ sealed interface Route {
     /** Report a safety concern, from Settings: about no one post or account. */
     data object ReportConcern : Route
     data object SignIn : Route
-    data object SignUp : Route
+    /** Joining; [invite] is the code from an invite link (`/join?code=…`), filled in. */
+    data class SignUp(val invite: String = "") : Route
 
     val fullScreen: Boolean
         get() = this is Compose || this is Images || this is Video || this is Report || this is ReportConcern || this is SignIn || this is SignUp
@@ -125,9 +126,24 @@ class Navigator {
 
     val canPop: Boolean get() = stack.size > 1 || tab != Tab.Home
 
+    private val signingIn: Boolean get() = top.route == Route.SignIn || top.route is Route.SignUp
+
     /** With the sign-in or sign-up form on top, the screen it was opened from. */
     val beforeSignIn: Route?
-        get() = stack.takeIf { it.size > 1 && (top.route == Route.SignIn || top.route == Route.SignUp) }?.let { it[it.lastIndex - 1].route }
+        get() = stack.takeIf { it.size > 1 && signingIn }?.let { it[it.lastIndex - 1].route }
+
+    /**
+     * The link that asked to sign in first ([signInFirst]), while the form is open:
+     * it opens once the person has signed in. Closing the form forgets it.
+     */
+    var afterSignIn: String? by mutableStateOf(null)
+        private set
+
+    /** The sign-in form, over whatever is open; [link] opens after signing in. */
+    fun signInFirst(link: String) {
+        if (!signingIn) push(Route.SignIn)
+        afterSignIn = link
+    }
 
     fun push(route: Route) {
         motion = Motion.Push
@@ -144,6 +160,7 @@ class Navigator {
 
     fun pop(): Boolean {
         val stack = stacks.getValue(tab)
+        if (signingIn) afterSignIn = null
         if (stack.size > 1) {
             motion = Motion.Pop
             stack.removeAt(stack.lastIndex).viewModelStore.clear()
@@ -225,6 +242,7 @@ class Navigator {
 
     /** Every tab back at its root: after signing in or out. */
     fun reset() {
+        afterSignIn = null
         for ((t, stack) in stacks) {
             stack.forEach { it.viewModelStore.clear() }
             stack.clear()

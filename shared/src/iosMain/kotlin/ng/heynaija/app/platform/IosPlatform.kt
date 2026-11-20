@@ -57,6 +57,7 @@ fun iosPlatform(debug: Boolean, gistAudio: GistAudioFactory?, gistKeeper: GistKe
     gistKeeper = gistKeeper,
     push = ApnsPushDevice(KeychainStore("ng.heynaija.app.shared", accessGroup = APP_GROUP)),
     ageSignals = ageRange?.let(::DeclaredAgeSignals),
+    browser = SafariBrowser,
 )
 
 /**

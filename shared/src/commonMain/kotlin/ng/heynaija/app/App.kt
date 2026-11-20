@@ -184,15 +184,17 @@ private fun Shell(app: AppState) {
     LaunchedEffect(opened, account) {
         val link = opened ?: return@LaunchedEffect
         if (account is Account.SignedIn) {
-            app.openLink(link)
+            app.openLink(link, fromNotification = true)
             PushEvents.handled(link)
         }
     }
-    // A link to the site that opened the app. Signed out too: posts and profiles show to anyone, as on the web.
+    // A link to the site that opened the app, once the app knows who is signed in:
+    // signed out too, since posts and profiles show to anyone, as on the web (AppState.openLink).
     val webLink by WebLinks.opened.collectAsStateWithLifecycle()
-    LaunchedEffect(webLink) {
+    LaunchedEffect(webLink, account) {
         val link = webLink ?: return@LaunchedEffect
-        app.openWebLink(link)
+        if (account is Account.Unknown) return@LaunchedEffect
+        app.openLink(link)
         WebLinks.handled(link)
     }
     // Lichess's answer after connecting an account, from the browser or iOS's sheet.
@@ -280,7 +282,7 @@ private fun Screen(entry: Entry) {
         is Route.Report -> ReportScreen(route.target, route.what)
         Route.ReportConcern -> ReportConcernScreen()
         Route.SignIn -> SignInScreen()
-        Route.SignUp -> SignUpScreen()
+        is Route.SignUp -> SignUpScreen(route.invite)
     }
 }
 
@@ -409,3 +411,4 @@ private fun RowScope.TabItem(icon: ImageVector, label: String, selected: Boolean
         }
     }
 }
+

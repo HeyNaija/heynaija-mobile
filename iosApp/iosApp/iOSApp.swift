@@ -9,9 +9,10 @@ struct iOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                // A heynaija.ng link to a page the app has a screen for (Universal Links): the
-                // site's apple-app-site-association (apps/web/lib/app-links.ts in the web
-                // repository) says which, and the entitlement names the site.
+                // A heynaija.ng link (Universal Links): the site's apple-app-site-association
+                // (apps/web/lib/app-links.ts in the web repository) gives the app every page but
+                // the website-only ones, and the entitlement names the site. AppState.openLink
+                // opens the app's screen for it, or hands it to the browser.
                 .onOpenURL { url in
                     if url.scheme == "https" { WebLinks.shared.open(link: url.absoluteString) }
                 }

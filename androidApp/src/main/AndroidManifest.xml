@@ -21,6 +21,15 @@
     <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
 
+    <!-- The browsers, to open the pages the app has no screen for in one (AndroidBrowser). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -42,11 +51,11 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- heynaija.ng links to the pages the app has a screen for (App Links): routeOf
-                 in nav/Links.kt, and the same pages as the site's apple-app-site-association
-                 (apps/web/lib/app-links.ts in the web repository). The site's
-                 /.well-known/assetlinks.json names this app's signing certificates, so Android
-                 opens them here without asking. Every other page stays in the browser. -->
+            <!-- Every heynaija.ng link (App Links). The site's /.well-known/assetlinks.json
+                 names this app's signing certificates, so Android opens them here without
+                 asking. The app opens the pages it has a screen for and passes the rest to the
+                 browser (nav/Links.kt). On Android 15 and later the same file also says which
+                 pages never come here (apps/web/lib/app-links.ts in the web repository). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
@@ -55,14 +64,6 @@
 
                 <data android:scheme="https" />
                 <data android:host="heynaija.ng" />
-                <!-- A post or a Gist: exactly an ID, so a post's quote and votes pages are left out. -->
-                <data android:pathPattern="/p/........-....-....-....-............" />
-                <data android:pathPattern="/gists/........-....-....-....-............" />
-                <data android:pathPrefix="/u/" />
-                <data android:pathPrefix="/c/" />
-                <data android:pathPrefix="/hashtag/" />
-                <data android:path="/notifications" />
-                <data android:path="/bookmarks" />
             </intent-filter>
             <!-- Lichess's answer after a member connects their account, passed on by the site's
                  /lichess/return page (games/chess/Lichess.kt). -->

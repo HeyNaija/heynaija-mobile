@@ -42,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
@@ -258,7 +257,7 @@ fun SignInScreen() {
                 Text("New here? ", style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
                 Text(
                     "Join with an invite",
-                    Modifier.clickable { app.navigator.replace(Route.SignUp) },
+                    Modifier.clickable { app.navigator.replace(Route.SignUp()) },
                     style = MaterialTheme.typography.labelLarge,
                     color = HeyNaija.colors.accentStrong,
                 )
@@ -340,14 +339,14 @@ private enum class JoinStep { Invite, Age, Account, Code, Link }
  * account signs in to it instead, after an emailed code, and spends no invite.
  */
 @Composable
-fun SignUpScreen() {
+fun SignUpScreen(initialInvite: String = "") {
     val app = LocalApp.current
-    val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val providers = rememberProviders()
     val ageSignals = rememberAgeSignals()
     var step by rememberSaveable { mutableStateOf(JoinStep.Invite) }
-    var invite by rememberSaveable { mutableStateOf("") }
+    // An invite link (/join?code=…) fills in its code.
+    var invite by rememberSaveable { mutableStateOf(initialInvite) }
     var birth by rememberSaveable(stateSaver = BirthDate.Saver) { mutableStateOf(BirthDate()) }
     var confirmed by rememberSaveable { mutableStateOf(false) }
     // Whether this server asks for a date of birth or the "I am 18 or older" box; null until it says.
@@ -505,9 +504,9 @@ fun SignUpScreen() {
                 color = HeyNaija.colors.muted,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Terms", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/terms") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
-                Text("Rules", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/rules") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
-                Text("Privacy policy", Modifier.clickable { runCatching { uri.openUri("${Servers.current.web}/privacy") } }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+                Text("Terms", Modifier.clickable { app.openLink("/terms") }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+                Text("Rules", Modifier.clickable { app.openLink("/rules") }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
+                Text("Privacy policy", Modifier.clickable { app.openLink("/privacy") }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
             }
             PrimaryButton("Email me a code", ::sendCode, Modifier.fillMaxWidth(), enabled = email.contains('@') && handle.length >= 3 && !busy, busy = busy && providerBusy == null)
             if (providers.isNotEmpty()) Or()

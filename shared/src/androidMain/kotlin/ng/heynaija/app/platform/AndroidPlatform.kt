@@ -25,6 +25,7 @@ fun androidPlatform(
         gistAudio = LiveKitGistAudioFactory(context, debug),
         gistKeeper = gistKeeper,
         push = push(secure),
+        browser = AndroidBrowser(context),
     )
 }
 

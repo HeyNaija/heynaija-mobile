@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
             val link = intent.dataString ?: return
             // Lichess's answer after connecting an account (the manifest's ng.heynaija.app://lichess filter).
             if (isLichessReturn(link)) LichessReturn.deliver(link)
-            // A heynaija.ng link (the manifest's App Links filter).
+            // A heynaija.ng link (the manifest's App Links filter): AppState.openLink decides what it opens.
             else WebLinks.open(link)
         }
     }
