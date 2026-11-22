@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -399,28 +400,54 @@ fun Chip(label: String, onClick: (() -> Unit)? = null) {
     )
 }
 
-/** One picture at its own shape (within limits); two to four in a grid of squares. */
+/**
+ * The most height a post's pictures or video take, as on Threads and X: a tall one is
+ * narrower instead of taller, and a tap shows it large. The web uses the same
+ * (--media-max-h in globals.css).
+ */
+val MediaMaxHeight = 320.dp
+
+/** One picture or video at its own shape: as wide as the post allows, never taller than [MediaMaxHeight]. */
+fun Modifier.mediaFrame(ratio: Float): Modifier = widthIn(max = MediaMaxHeight * ratio).fillMaxWidth().aspectRatio(ratio)
+
+/**
+ * One picture at its own shape (only beyond 9:16 or 2:1 is it cropped); two to four
+ * share a 16:9 frame, as on the web: side by side, the first tall beside two, or two by two.
+ */
 @Composable
 fun PostImages(images: List<PostImage>, modifier: Modifier = Modifier, onOpen: (Int) -> Unit) {
     if (images.size == 1) {
         val image = images.first()
-        Picture(
-            image,
-            modifier.fillMaxWidth().aspectRatio((image.width.toFloat() / image.height).coerceIn(0.8f, 2f)).clickable { onOpen(0) },
-        )
+        Picture(image, modifier.mediaFrame((image.width.toFloat() / image.height).coerceIn(9f / 16f, 2f)).clickable { onOpen(0) })
         return
     }
-    Column(
-        modifier.clip(Radii.control).border(1.dp, HeyNaija.colors.line, Radii.control),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    @Composable
+    fun Tile(index: Int, tile: Modifier) = Picture(images[index], tile.clickable { onOpen(index) }, rounded = false)
+    val gap = Arrangement.spacedBy(2.dp)
+    Row(
+        modifier
+            .mediaFrame(16f / 9f)
+            .clip(Radii.control)
+            .border(1.dp, HeyNaija.colors.line, Radii.control),
+        horizontalArrangement = gap,
     ) {
-        images.chunked(2).forEachIndexed { row, pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                pair.forEachIndexed { column, image ->
-                    val index = row * 2 + column
-                    // Three pictures: the last one spans the row, as wide as two.
-                    val ratio = if (images.size == 3 && index == 2) 2f else 1f
-                    Picture(image, Modifier.weight(1f).aspectRatio(ratio).clickable { onOpen(index) }, rounded = false)
+        val half = Modifier.weight(1f).fillMaxHeight()
+        when (images.size) {
+            2 -> {
+                Tile(0, half)
+                Tile(1, half)
+            }
+            3 -> {
+                Tile(0, half)
+                Column(half, verticalArrangement = gap) {
+                    Tile(1, Modifier.weight(1f).fillMaxWidth())
+                    Tile(2, Modifier.weight(1f).fillMaxWidth())
+                }
+            }
+            else -> for (column in 0..1) {
+                Column(half, verticalArrangement = gap) {
+                    Tile(column, Modifier.weight(1f).fillMaxWidth())
+                    Tile(column + 2, Modifier.weight(1f).fillMaxWidth())
                 }
             }
         }
@@ -454,15 +481,14 @@ private fun Picture(image: PostImage, modifier: Modifier, rounded: Boolean = tru
 private fun VideoPoster(video: PostVideo, postId: String, modifier: Modifier) {
     val app = LocalApp.current
     val ratio = video.width.toFloat() / video.height
-    val shown = ratio.coerceIn(0.75f, 16f / 9f)
+    val shown = ratio.coerceIn(9f / 16f, 16f / 9f)
     val playlist = video.playlists?.all?.let(::mediaFile)
     var started by remember(postId) { mutableStateOf(false) }
     val playing by app.playingVideo.collectAsState()
     val active = started && playing == postId
     Box(
         modifier
-            .fillMaxWidth()
-            .aspectRatio(shown)
+            .mediaFrame(shown)
             .clip(Radii.control)
             .background(Color.Black)
             .border(1.dp, HeyNaija.colors.line, Radii.control),
