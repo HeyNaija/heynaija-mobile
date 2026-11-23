@@ -168,7 +168,7 @@ fun HomeScreen() {
     }
 }
 
-/** The wordmark on the ground, like the web's top bar; Gists and settings sit on the right for members. */
+/** The wordmark on the ground, like the web's top bar; Gists and Games sit on the right for members, and Settings for everyone. */
 @Composable
 private fun WordmarkBar(gists: (@Composable () -> Unit)?, games: Boolean) {
     val app = LocalApp.current
@@ -188,11 +188,10 @@ private fun WordmarkBar(gists: (@Composable () -> Unit)?, games: Boolean) {
                 }
             }
             gists?.invoke()
-            // Visitors on a debug build need it too, to pick the server.
-            if (app.me != null || app.platform.debug) {
-                Box(Modifier.size(44.dp).clickable { app.navigator.push(Route.Settings) }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Gear, "Settings", Modifier.size(22.dp), tint = colors.muted)
-                }
+            // Visitors get Settings too: it is where anyone finds Report a safety concern and the
+            // child safety standards (Google Play's Child Safety Standards), and the server on a debug build.
+            Box(Modifier.size(44.dp).clickable { app.navigator.push(Route.Settings) }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Gear, "Settings", Modifier.size(22.dp), tint = colors.muted)
             }
         }
     }

@@ -81,6 +81,13 @@ sealed interface Route {
 
     val fullScreen: Boolean
         get() = this is Compose || this is Images || this is Video || this is Report || this is ReportConcern || this is SignIn || this is SignUp
+
+    /**
+     * Screens that ask a visitor to sign in, and open again once they have: a Gist, or a
+     * reply in one (GistSignIn), as on the web, and Report a safety concern.
+     */
+    val opensAgainAfterSignIn: Boolean
+        get() = this is Gist || (this is Thread && gist != null) || this is ReportConcern
 }
 
 enum class Motion { Push, Pop, Tab }
