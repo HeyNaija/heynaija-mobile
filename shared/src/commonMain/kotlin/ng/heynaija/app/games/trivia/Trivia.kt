@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -504,7 +505,15 @@ private fun RoundPage(round: TriviaRound, state: TriviaRoundState, viewModel: Tr
     val closesIn = current?.let { (millisOf(it.closesAt) ?: 0) - serverNow } ?: 0
     val open = current != null && current.prompt != null && opensIn <= 0 && closesIn > 0
 
-    LazyColumn(contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(ListGutter)) {
+    // When a question opens, go back to the top: a player scrolled down to the last answer or the
+    // standings would otherwise see only the new picture, with the question above the screen.
+    val list = rememberLazyListState()
+    val openId = if (open) current?.id else null
+    LaunchedEffect(openId) {
+        if (openId != null && (list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 0)) list.animateScrollToItem(0)
+    }
+
+    LazyColumn(state = list, contentPadding = PaddingValues(start = ListGutter, end = ListGutter, top = ListGutter, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(ListGutter)) {
         if (!round.you.canAnswer) {
             item {
                 Card {
@@ -802,8 +811,8 @@ private fun TimeBar(closesAt: Long, offsetMs: Long, totalMs: Long) {
 }
 
 /**
- * A question's picture, as wide as the card and up to about half the screen tall, in its
- * own shape: players answer from it. The 640 version while the clock runs; tap it to see
+ * A question's picture, as wide as the card and at most 40% of the screen tall, in its own
+ * shape: players answer from it, and the question and its choices still fit beside it. The 640 version while the clock runs; tap it to see
  * the large one full screen, to zoom in.
  */
 @Composable
@@ -817,7 +826,7 @@ private fun QuestionPicture(picture: TriviaPicture) {
     val ratio = (if (w > 0 && h > 0) w.toFloat() / h else 4f / 3f).coerceIn(0.4f, 3f)
     // The card's inside: the screen less the list's gutters and the card's padding.
     val wide = screenW - ListGutter * 2 - 32.dp
-    val tall = minOf(wide / ratio, screenH * 0.55f)
+    val tall = minOf(wide / ratio, screenH * 0.4f)
     AsyncImage(
         // A GIF moves, as on the web.
         model = mediaUrl(picture.src, "640"),
