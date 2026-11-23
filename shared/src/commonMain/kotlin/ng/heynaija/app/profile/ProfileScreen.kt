@@ -172,7 +172,7 @@ fun MeScreen() {
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrimaryButton("Sign in", { app.navigator.push(Route.SignIn) }, Modifier.weight(1f))
-                        SecondaryButton("Join with an invite", { app.navigator.push(Route.SignUp) }, Modifier.weight(1f))
+                        SecondaryButton("Join with an invite", { app.navigator.push(Route.SignUp()) }, Modifier.weight(1f))
                     }
                 }
             }

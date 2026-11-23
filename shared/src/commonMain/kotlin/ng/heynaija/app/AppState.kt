@@ -24,14 +24,18 @@ import ng.heynaija.app.api.Me
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.Server
 import ng.heynaija.app.api.Servers
+import ng.heynaija.app.games.chess.LichessReturn
 import ng.heynaija.app.games.chess.chessNotice
 import ng.heynaija.app.games.chess.lichessAnswer
 import ng.heynaija.app.gists.GistRoom
 import ng.heynaija.app.gists.GistRooms
+import ng.heynaija.app.nav.LinkTarget
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.nav.gamesLink
-import ng.heynaija.app.nav.routeOf
+import ng.heynaija.app.nav.linkTarget
+import ng.heynaija.app.nav.needsAccount
+import ng.heynaija.app.nav.sitePath
 import ng.heynaija.app.platform.AgeSignals
 import ng.heynaija.app.platform.KeyValueStore
 import ng.heynaija.app.platform.Platform
@@ -236,11 +240,13 @@ class AppState(val platform: Platform) {
     suspend fun signedIn(newToken: String, via: IdToken? = null) {
         // The screen that asked to sign in first opens again (a Gist, or Report a safety concern).
         val back = navigator.beforeSignIn?.takeIf { it.opensAgainAfterSignIn }
+        // A link that needed an account (openLink) goes on to its page instead.
+        val link = navigator.afterSignIn
         token = newToken
         platform.secure.set(TOKEN, newToken)
         refreshMe(firstLoad = true)
         navigator.reset()
-        back?.let(navigator::openFromLink)
+        if (link != null && me != null) openLink(link) else back?.let(navigator::openFromLink)
         via?.appleCode?.let { code ->
             scope.launch {
                 try {
@@ -354,23 +360,78 @@ class AppState(val platform: Platform) {
         }
     }
 
-    /** A tapped notification's link: opened on the Notifications tab, where it would have been seen. */
-    fun openLink(link: String) {
-        navigator.openFromNotification(screenFor(link) ?: Route.Notifications)
-    }
-
     /**
-     * A link to the site the system opened the app with ([WebLinks]). One the app
-     * has no screen for, or to another server than the one in use (a debug build on
-     * staging given a heynaija.ng link), leaves the app where it was.
+     * Every link to the site, wherever it was tapped: one the system opened the app
+     * with ([WebLinks]: from WhatsApp, Messages or an email), a notification, a link
+     * in a post or its preview, a page from Settings. One rule for all of them
+     * (docs/deployment/app-links.md in the web repository):
+     *
+     * 1. The app has a screen for the page: the screen opens.
+     * 2. Signed out, and the page needs an account: sign in first, then the page opens.
+     * 3. Signed in, but the page is not open to them (Games): a message says why.
+     * 4. The app has no screen for the page yet: the browser opens it.
+     * 5. The page stays on the website (signing in, unsubscribing, downloads): the browser opens it.
+     *
+     * With [fromNotification], a screen opens over the Notifications tab, where the
+     * notification would have been seen. A link to another site is not one of these.
      */
-    fun openWebLink(link: String) {
-        screenFor(link)?.let(navigator::openFromLink)
+    fun openLink(link: String, fromNotification: Boolean = false) {
+        val web = Servers.current.web
+        val path = sitePath(link, web, orSite = platform.debug) ?: return
+        when (val target = linkTarget(path)) {
+            is LinkTarget.Screen -> open(target.route, link, fromNotification)
+            is LinkTarget.Search -> {
+                _searchWords.value = target.words
+                open(Route.Search, link, fromNotification)
+            }
+            is LinkTarget.Quote -> quote(target.postId, link)
+            is LinkTarget.LichessAnswer -> LichessReturn.deliver(target.answer)
+            LinkTarget.Browser -> openInBrowser("$web$path")
+        }
     }
 
-    /** The screen for a link to the site; a Games page only for a member with Games. */
-    fun screenFor(link: String): Route? =
-        routeOf(link, Servers.current.web)?.takeIf { !it.gamesLink || me?.has("games") == true }
+    /** Whether [link] is to this site: [openLink] decides what it does. */
+    fun isSiteLink(link: String): Boolean = sitePath(link, Servers.current.web, orSite = platform.debug) != null
+
+    /** Opens [url] in the phone's browser, never in the app: a page the app has no screen for. */
+    fun openInBrowser(url: String) {
+        if (platform.browser?.open(url) != true) say("There is no web browser on this phone to open that page.")
+    }
+
+    private fun open(route: Route, link: String, fromNotification: Boolean) {
+        val me = me
+        when {
+            me == null && route.needsAccount -> navigator.signInFirst(link)
+            route.gamesLink && me?.has("games") != true -> say(GAMES_NOT_OPEN)
+            route is Route.SignUp && me != null -> say("You are signed in already, so you do not need an invite.")
+            fromNotification -> navigator.openFromNotification(route)
+            else -> navigator.openFromLink(route)
+        }
+    }
+
+    /** A link to quote a post (`/p/:id/quote`): the post loads, then the quote opens to be written. */
+    private fun quote(postId: String, link: String) {
+        if (me == null) return navigator.signInFirst(link)
+        scope.launch {
+            val post = try {
+                api.post(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (post == null || post.unavailable) say("That post cannot be quoted. It may have been removed.")
+            else navigator.openFromLink(Route.Compose(quote = post))
+        }
+    }
+
+    private val _searchWords = MutableStateFlow<String?>(null)
+    /** The words from a search link (`/search?q=…`), until the Search screen has taken them. */
+    val searchWords: StateFlow<String?> = _searchWords.asStateFlow()
+
+    fun searchWordsTaken(words: String) {
+        _searchWords.compareAndSet(words, null)
+    }
 
     // Games: connecting Lichess comes back to the app (LichessReturn), from the browser or iOS's sign-in sheet.
 
@@ -523,6 +584,9 @@ class AppState(val platform: Platform) {
     /** The address of a Gist on the web, to share: the page the web app has for it, which opens the app where it is installed. */
     fun gistLink(id: String) = gistLink(Servers.current.web, id)
 }
+
+/** What a member is told when a link leads to Games and Games is not open to them (the web says the same). */
+const val GAMES_NOT_OPEN = "Games is not open to you yet. Some members are trying it out first."
 
 /** A Gist's page on the site at [web] (`/gists/:id`, as `routeOf` reads it back). */
 fun gistLink(web: String, id: String) = "$web/gists/$id"

@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -65,7 +64,6 @@ import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.Notification
 import ng.heynaija.app.api.NotificationPage
-import ng.heynaija.app.api.Servers
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.PushEvents
 import ng.heynaija.app.posts.ListGutter
@@ -340,7 +338,6 @@ private fun NotificationRow(n: Notification, now: Instant) {
     val (icon, words) = remember(n) { describe(n) }
     val go = target(n)
     val web = webTarget(n)
-    val uri = LocalUriHandler.current
     val ago = remember(n.createdAt, now) { timeAgo(Instant.parse(n.createdAt), now) }
     // As on the web: who and what beside the avatar, then the quoted post and where
     // it leads across the whole card, rather than in a column beside the avatar.
@@ -353,7 +350,7 @@ private fun NotificationRow(n: Notification, now: Instant) {
             .let {
                 when {
                     go != null -> it.clickable { app.navigator.push(go) }
-                    web != null -> it.clickable { runCatching { uri.openUri("${Servers.current.web}$web") } }
+                    web != null -> it.clickable { app.openLink(web) }
                     else -> it
                 }
             }

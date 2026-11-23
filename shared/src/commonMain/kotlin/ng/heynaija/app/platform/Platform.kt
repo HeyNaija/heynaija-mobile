@@ -37,7 +37,19 @@ class Platform(
      * counts Keno XP earned on the web.
      */
     val keno: Boolean = false,
+    /** The phone's own web browser, for pages the app has no screen for; null in tests. */
+    val browser: WebBrowser? = null,
 )
+
+/**
+ * The phone's own web browser, outside the app. The app claims every heynaija.ng
+ * link (App Links on Android, Universal Links on iOS), so asking the system to
+ * view one would hand it straight back here: this asks the browser by name.
+ */
+fun interface WebBrowser {
+    /** Opens [url] in the browser; false when there is no browser to open it in. */
+    fun open(url: String): Boolean
+}
 
 /** A picture chosen to post or to use as a profile photo, ready to upload. */
 class PickedImage(
