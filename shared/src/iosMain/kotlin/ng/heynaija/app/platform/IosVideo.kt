@@ -41,6 +41,16 @@ import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
 import platform.Foundation.NSValue
 
+/**
+ * Seeks to [positionMs] exactly. AVPlayer's plain seek may land on a keyframe up to a
+ * few seconds before it, so a clip carried on from another screen (full screen, the
+ * post opened on its own, the way back) would jump back; Media3 seeks exactly already.
+ */
+private fun AVPlayer.seekExactly(positionMs: Long) {
+    val none = CMTimeMake(value = 0, timescale = 1)
+    seekToTime(CMTimeMake(value = positionMs, timescale = 1000), toleranceBefore = none, toleranceAfter = none)
+}
+
 private class AvHandle(val player: AVPlayer) : VideoHandle {
     private val current = mutableStateOf(VideoState())
     override val state: State<VideoState> = current
@@ -86,7 +96,7 @@ private class AvHandle(val player: AVPlayer) : VideoHandle {
 
     override fun seekTo(positionMs: Long) {
         ended = false
-        player.seekToTime(CMTimeMake(value = positionMs, timescale = 1000))
+        player.seekExactly(positionMs)
         refresh()
     }
 
@@ -100,7 +110,7 @@ private class AvHandle(val player: AVPlayer) : VideoHandle {
 actual fun rememberVideoHandle(url: String, startMs: Long): VideoHandle {
     val handle = remember(url) {
         AvHandle(AVPlayer(uRL = NSURL.URLWithString(url)!!)).apply {
-            if (startMs > 0) player.seekToTime(CMTimeMake(value = startMs, timescale = 1000))
+            if (startMs > 0) player.seekExactly(startMs)
             player.play()
         }
     }

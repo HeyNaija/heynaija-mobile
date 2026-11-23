@@ -503,6 +503,11 @@ private fun VideoPoster(video: PostVideo, postId: String, modifier: Modifier) {
     // The screen this post is on: a player that leaves while it is not the one showing
     // went with its screen (a post opened on top, or this one closed), not out of the list.
     val screen = LocalViewModelStoreOwner.current as? Entry
+    // The moment another screen takes over (a post opened on top, this one closed, another
+    // tab), the clip is handed on, not left playing behind it until the slide ends: the
+    // next screen picks it up as its own slide starts.
+    val onTop = screen == null || app.navigator.top.id == screen.id
+    LaunchedEffect(onTop) { if (!onTop) started = false }
     // It was playing when the screen it was on was left (the feed for this post, the post
     // for the feed, or full screen for the post): it plays on here from the same point.
     val carry = playlist?.let { app.videoPlace(it) }?.carryOn == true
