@@ -639,11 +639,18 @@ class HeyNaijaApi(
     /**
      * A game. With [after], the version the screen has: the server answers at once
      * with anything newer, else waits up to 25 seconds for the next change.
+     *
+     * The game screen gives up sooner on a late reply (ChessWait.kt). These limits are only
+     * a backstop above the server's 25 seconds. The socket limit is set on purpose: OkHttp's
+     * own default of 10 seconds cut every wait short on Android.
      */
     suspend fun chessGame(id: String, after: Long? = null): ChessGame = get("/games/chess/games/${seg(id)}") {
         if (after != null) {
             parameter("after", after)
-            timeout { requestTimeoutMillis = 45_000 }
+            timeout {
+                requestTimeoutMillis = 35_000
+                socketTimeoutMillis = 35_000
+            }
         }
     }
 

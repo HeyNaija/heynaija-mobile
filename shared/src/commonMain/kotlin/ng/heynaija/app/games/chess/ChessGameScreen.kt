@@ -46,7 +46,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.math.min
 import kotlin.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -55,6 +54,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
@@ -121,7 +121,8 @@ data class ChessGameState(
 /**
  * One game, kept up to date by asking the API for the next change: it answers at
  * once if the game moved on since the version the screen has, else waits up to 25
- * seconds. Only while the screen is in front, and never after the game is over.
+ * seconds. A reply that is late was lost on the way, and the screen asks again
+ * (ChessWait.kt). Only while the screen is in front, and never after the game is over.
  * The player's own moves show at once and go back if Lichess refuses them.
  */
 class ChessGameViewModel(private val app: AppState, private val id: String) : ViewModel() {
@@ -132,18 +133,19 @@ class ChessGameViewModel(private val app: AppState, private val id: String) : Vi
     fun start() {
         if (following?.isActive == true) return
         following = viewModelScope.launch {
-            var wait = 1_000L
+            var failures = 0
             while (true) {
                 val have = _state.value.game
                 if (have?.finished == true) return@launch
                 try {
-                    val game = app.api.chessGame(id, after = have?.version ?: -1)
+                    // A reply that is late was lost on the way (patchy data drops them): give up on it and ask again (ChessWait.kt).
+                    val game = withTimeoutOrNull(waitLimit(have)) { app.api.chessGame(id, after = have?.version ?: -1) } ?: continue
                     _state.update {
                         // The move sent is in the game now (or the game ended): it no longer needs showing on its own.
                         val settled = it.pending != null && (game.moves.size > it.pendingAt || game.finished)
                         it.copy(game = game, failed = false, pending = if (settled) null else it.pending)
                     }
-                    wait = 1_000L
+                    failures = 0
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: ApiException) {
@@ -154,12 +156,10 @@ class ChessGameViewModel(private val app: AppState, private val id: String) : Vi
                         return@launch
                     }
                     _state.update { it.copy(failed = it.game == null) }
-                    delay(wait)
-                    wait = min(wait * 2, 30_000L)
+                    delay(retryPause(have, ++failures))
                 } catch (e: Exception) {
                     _state.update { it.copy(failed = it.game == null) }
-                    delay(wait)
-                    wait = min(wait * 2, 30_000L)
+                    delay(retryPause(have, ++failures))
                 }
             }
         }
@@ -199,12 +199,15 @@ class ChessGameViewModel(private val app: AppState, private val id: String) : Vi
                 // Lichess said no, or it never got there: the piece goes back.
                 _state.update { it.copy(pending = null) }
                 app.say(refusal(e))
+                return@launch
             }
+            expectBack(game.version)
         }
     }
 
     private fun act(work: suspend () -> Unit) {
         if (_state.value.busy) return
+        val before = _state.value.game?.version
         _state.update { it.copy(busy = true) }
         viewModelScope.launch {
             try {
@@ -213,10 +216,24 @@ class ChessGameViewModel(private val app: AppState, private val id: String) : Vi
                 throw e
             } catch (e: Exception) {
                 app.say(refusal(e))
+                return@launch
             } finally {
                 _state.update { it.copy(busy = false) }
             }
+            if (before != null) expectBack(before)
         }
+    }
+
+    /**
+     * Lichess took the player's move or decision and sends it back within a moment. If no
+     * reply has brought anything newer than [before] by [LATE_MS] later, that reply was lost
+     * on the way (ChessWait.kt): give up on the request and ask again now.
+     */
+    private suspend fun expectBack(before: Long) {
+        delay(LATE_MS)
+        if (_state.value.game?.version != before || following?.isActive != true) return
+        following?.cancel()
+        start()
     }
 
     fun draw(answer: String) = act { app.api.chessDraw(id, answer) }
