@@ -411,6 +411,13 @@ val MediaMaxHeight = 320.dp
 fun Modifier.mediaFrame(ratio: Float): Modifier = widthIn(max = MediaMaxHeight * ratio).fillMaxWidth().aspectRatio(ratio)
 
 /**
+ * The narrowest a video's frame gets: 3:4, which is 240dp wide at [MediaMaxHeight].
+ * The player's play, time, sound and full-screen controls all fit in that; a taller
+ * clip is letterboxed inside it. Pictures have no controls, so they may be narrower.
+ */
+const val VideoNarrowest = 3f / 4f
+
+/**
  * One picture at its own shape (only beyond 9:16 or 2:1 is it cropped); two to four
  * share a 16:9 frame, as on the web: side by side, the first tall beside two, or two by two.
  */
@@ -481,7 +488,7 @@ private fun Picture(image: PostImage, modifier: Modifier, rounded: Boolean = tru
 private fun VideoPoster(video: PostVideo, postId: String, modifier: Modifier) {
     val app = LocalApp.current
     val ratio = video.width.toFloat() / video.height
-    val shown = ratio.coerceIn(9f / 16f, 16f / 9f)
+    val shown = ratio.coerceIn(VideoNarrowest, 16f / 9f)
     val playlist = video.playlists?.all?.let(::mediaFile)
     var started by remember(postId) { mutableStateOf(false) }
     val playing by app.playingVideo.collectAsState()

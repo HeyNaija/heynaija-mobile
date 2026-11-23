@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +51,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -192,13 +192,18 @@ fun VideoPlayer(
                     BarButton(if (media.playing) Icons.PauseFilled else Icons.PlayFilled, if (media.playing) "Pause" else "Play", shown) {
                         if (media.playing) handle.pause() else handle.play()
                     }
+                    // The buttons keep their size; on a narrow player the time takes what is
+                    // left between them (a Row measures weighted children last), and is cut
+                    // short rather than squeezing the full-screen button off the edge.
                     Text(
                         "${if (media.ended) clock(media.durationMs) else clock(media.positionMs)} / ${clock(media.durationMs)}",
-                        Modifier.padding(start = 4.dp, end = 8.dp),
+                        Modifier.padding(start = 4.dp, end = 8.dp).let { if (narrow) it.weight(1f) else it },
                         style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = OnScrim),
                         maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    if (narrow) Spacer(Modifier.weight(1f)) else seekBar(Modifier.weight(1f))
+                    if (!narrow) seekBar(Modifier.weight(1f))
                     BarButton(if (media.muted) Icons.Muted else Icons.Sound, if (media.muted) "Unmute" else "Mute", shown) {
                         handle.setMuted(!media.muted)
                     }
