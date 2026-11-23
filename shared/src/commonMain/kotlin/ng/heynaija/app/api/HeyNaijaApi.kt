@@ -668,20 +668,24 @@ class HeyNaijaApi(
     suspend fun triviaList(): TriviaList = get("/games/trivia")
 
     /**
-     * A round. With [after], the version the screen has: the server answers at once
-     * with anything newer, else when a question appears or closes, waiting at most 25 seconds.
-     */
-    /**
-     * A round now, or with [after] (the version on screen) once something changes. [has] is the
-     * open question whose text is on screen ("" for none): a question opening is not a new
-     * version, so without it a request that reaches the server just after one opened would
-     * wait until it closed.
+     * A round now, or with [after] (the version on screen) once something changes: the server
+     * answers at once with anything newer, else when a question appears or closes, waiting at
+     * most 25 seconds. [has] is the open question whose text is on screen ("" for none): a
+     * question opening is not a new version, so without it a request that reaches the server
+     * just after one opened would wait until it closed.
+     *
+     * The round screen gives up sooner on a late reply (TriviaWait.kt). These limits are only a
+     * backstop above the server's 25 seconds. The socket limit is set on purpose: OkHttp's own
+     * default of 10 seconds cut every wait short on Android.
      */
     suspend fun triviaRound(id: String, after: Long? = null, has: String? = null): TriviaRound = get("/games/trivia/rounds/${seg(id)}") {
         if (after != null) {
             parameter("after", after)
             if (has != null) parameter("has", has)
-            timeout { requestTimeoutMillis = 45_000 }
+            timeout {
+                requestTimeoutMillis = 35_000
+                socketTimeoutMillis = 35_000
+            }
         }
     }
 

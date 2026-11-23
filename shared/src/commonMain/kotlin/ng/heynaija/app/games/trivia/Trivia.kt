@@ -69,6 +69,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
 import ng.heynaija.app.api.ApiException
@@ -344,7 +345,9 @@ class TriviaRoundViewModel(private val app: AppState, private val id: String) : 
     fun start() {
         if (following?.isActive == true) return
         following = viewModelScope.launch {
-            var wait = 1_000L
+            var failures = 0
+            // Requests given up on in a row (TriviaWait.kt): each next one is given longer.
+            var cuts = 0
             var askedAt = 0L
             // The Arbiter's results post is written a moment after the results: once they are out, look again a few times for it.
             var lookedForPost = 0
@@ -369,8 +372,18 @@ class TriviaRoundViewModel(private val app: AppState, private val id: String) : 
                     val due = c != null && c.prompt == null && (millisOf(c.opensAt) ?: Long.MAX_VALUE) <= nowMillis() + _state.value.offsetMs
                     if (due && nowMillis() - askedAt < 500) delay(500)
                     if (due) askedAt = nowMillis()
-                    take(app.api.triviaRound(id, after = if (due) -1 else have?.version ?: -1, has = c?.takeIf { it.prompt != null }?.id ?: ""))
-                    wait = 1_000L
+                    val limit = have?.let { waitLimit(it, nowMillis() + _state.value.offsetMs, cuts) } ?: HOLD_MS
+                    val next = withTimeoutOrNull(limit) {
+                        app.api.triviaRound(id, after = if (due) -1 else have?.version ?: -1, has = c?.takeIf { it.prompt != null }?.id ?: "")
+                    }
+                    if (next == null) {
+                        // The reply is late, so it was lost on the way (patchy data drops them): ask again now.
+                        cuts++
+                        continue
+                    }
+                    take(next)
+                    failures = 0
+                    cuts = 0
                     if (_state.value.round?.status == "cancelled") return@launch
                 } catch (e: CancellationException) {
                     throw e
@@ -382,12 +395,10 @@ class TriviaRoundViewModel(private val app: AppState, private val id: String) : 
                         return@launch
                     }
                     _state.update { it.copy(failed = it.round == null) }
-                    delay(wait)
-                    wait = min(wait * 2, 30_000L)
+                    delay(retryPause(have, nowMillis() + _state.value.offsetMs, ++failures))
                 } catch (e: Exception) {
                     _state.update { it.copy(failed = it.round == null) }
-                    delay(wait)
-                    wait = min(wait * 2, 30_000L)
+                    delay(retryPause(have, nowMillis() + _state.value.offsetMs, ++failures))
                 }
             }
         }
