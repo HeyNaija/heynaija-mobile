@@ -186,7 +186,6 @@ fun ProfileScreen(handle: String, root: Boolean = false) {
     val viewModel = viewModel(key = "profile-$handle") { ProfileViewModel(app, handle) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     var filter by remember { mutableStateOf(Filter.Posts) }
-    val lists = remember { mutableMapOf<Filter, LazyListState>() }
     val profile = state.profile
 
     Column(Modifier.fillMaxSize()) {
@@ -222,7 +221,7 @@ fun ProfileScreen(handle: String, root: Boolean = false) {
                 }
                 PostList(
                     posts,
-                    list = lists.getOrPut(filter) { LazyListState() },
+                    list = posts.list,
                     empty = when (filter) {
                         Filter.Posts -> if (profile.isSelf) "You have not posted yet." else "@$handle has not posted yet."
                         Filter.Replies -> "No replies yet."

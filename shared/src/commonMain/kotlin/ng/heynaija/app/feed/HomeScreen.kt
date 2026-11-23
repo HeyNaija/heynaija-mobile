@@ -83,7 +83,6 @@ fun HomeScreen() {
     val account by app.account.collectAsStateWithLifecycle()
     val member = account is Account.SignedIn
     val feeds = if (member) Feed.entries else listOf(Feed.Discover, Feed.Latest)
-    val lists = remember { mutableMapOf<Feed, LazyListState>() }
     // Gists, for members on their list (ADR 0017): Live now above every feed, and the Gists button on the bar, which
     // shows the one the member is in and what is live, and starts one for those who may host. A member who may only
     // listen (under 18, or no age on record) still gets both, without starting.
@@ -143,7 +142,7 @@ fun HomeScreen() {
                     }
                     PostList(
                         viewModel,
-                        list = lists.getOrPut(feed) { LazyListState() },
+                        list = viewModel.list,
                         empty = when (feed) {
                             Feed.Following -> "Follow people and join communities, and their posts show here."
                             else -> "Nothing has been posted yet."

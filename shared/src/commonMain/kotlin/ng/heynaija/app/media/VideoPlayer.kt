@@ -28,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.delay
+import ng.heynaija.app.platform.VideoState
 import ng.heynaija.app.platform.VideoSurface
 import ng.heynaija.app.platform.rememberVideoHandle
 import ng.heynaija.app.theme.HeyNaija
@@ -104,9 +106,16 @@ fun VideoPlayer(
     fullScreen: Boolean = false,
     onEnded: () -> Unit = {},
     onFullScreen: ((positionMs: Long) -> Unit)? = null,
+    startMuted: Boolean = false,
+    onLeave: ((VideoState) -> Unit)? = null,
 ) {
     val handle = rememberVideoHandle(url, startMs)
     val media by handle.state
+    LaunchedEffect(handle) { if (startMuted) handle.setMuted(true) }
+    // Told where it got to as it leaves (before the platform's player is let go), so the
+    // next player for the same clip can carry on from there.
+    val leave by rememberUpdatedState(onLeave)
+    DisposableEffect(handle) { onDispose { leave?.invoke(handle.state.value) } }
     val ended by rememberUpdatedState(onEnded)
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { handle.pause() }
     LaunchedEffect(media.ended) { if (media.ended) ended() }
@@ -310,3 +319,12 @@ private fun SeekBar(
         drawCircle(OnScrim, radius = 7.dp.toPx(), center = Offset(inset + width * played, y))
     }
 }
+
+/**
+ * Where a post's video got to, kept by playlist in [ng.heynaija.app.AppState] so the clip
+ * carries on: into full screen and back, and into the post opened on its own and back.
+ * [carryOn]: it was playing when its screen was left, so the next player for it plays on
+ * at once. Otherwise (it was paused, or scrolled out of the list) a tap continues from
+ * [positionMs].
+ */
+data class VideoPlace(val positionMs: Long, val muted: Boolean, val carryOn: Boolean)

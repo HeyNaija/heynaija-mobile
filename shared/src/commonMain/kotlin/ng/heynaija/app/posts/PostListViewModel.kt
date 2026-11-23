@@ -1,5 +1,6 @@
 package ng.heynaija.app.posts
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.coroutines.cancellation.CancellationException
@@ -48,6 +49,13 @@ class PostListViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(PostListState())
     val state: StateFlow<PostListState> = _state.asStateFlow()
+
+    /**
+     * Where the list is scrolled to. It lives here with the posts, not in the screen, so
+     * the place is kept while another screen is on top (a post, a picture, a video full
+     * screen) and the list is where it was on the way back.
+     */
+    val list = LazyListState()
 
     private var job: Job? = null
     private var lastWasFresh = true

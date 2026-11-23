@@ -1,6 +1,7 @@
 package ng.heynaija.app
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -29,6 +30,7 @@ import ng.heynaija.app.games.chess.chessNotice
 import ng.heynaija.app.games.chess.lichessAnswer
 import ng.heynaija.app.gists.GistRoom
 import ng.heynaija.app.gists.GistRooms
+import ng.heynaija.app.media.VideoPlace
 import ng.heynaija.app.nav.LinkTarget
 import ng.heynaija.app.nav.Navigator
 import ng.heynaija.app.nav.Route
@@ -140,6 +142,23 @@ class AppState(val platform: Platform) {
 
     fun playVideo(postId: String) {
         _playing.value = postId
+    }
+
+    private val videoPlaces = mutableStateMapOf<String, VideoPlace>()
+
+    /** Where the video at [url] (its playlist) got to, if it has been played. */
+    fun videoPlace(url: String): VideoPlace? = videoPlaces[url]
+
+    /** Keeps where a video got to; null forgets it, as when it played to the end. */
+    fun keepVideoPlace(url: String, place: VideoPlace?) {
+        if (place == null) videoPlaces.remove(url) else videoPlaces[url] = place
+    }
+
+    /** The place of a video that was playing when its screen was left, once: the first player for it to ask carries on. */
+    fun takeVideoToCarryOn(url: String): VideoPlace? {
+        val place = videoPlaces[url]?.takeIf { it.carryOn } ?: return null
+        videoPlaces[url] = place.copy(carryOn = false)
+        return place
     }
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)

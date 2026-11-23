@@ -115,8 +115,18 @@ private fun Zoomable(image: PostImage) {
 @Composable
 fun VideoScreen(url: String, startMs: Long = 0) {
     val app = LocalApp.current
+    val muted = remember(url) { app.videoPlace(url)?.muted == true }
     Box(Modifier.fillMaxSize().background(Scrim)) {
-        VideoPlayer(url, Modifier.fillMaxSize().statusBarsPadding(), startMs, fullScreen = true, onFullScreen = { app.navigator.pop() })
+        VideoPlayer(
+            url,
+            Modifier.fillMaxSize().statusBarsPadding(),
+            startMs,
+            fullScreen = true,
+            onFullScreen = { app.navigator.pop() },
+            startMuted = muted,
+            // Closing full screen while it plays: the post it came from plays on from here.
+            onLeave = { left -> app.keepVideoPlace(url, if (left.ended) null else VideoPlace(left.positionMs, left.muted, carryOn = left.playing)) },
+        )
         CloseButton(Modifier.align(Alignment.TopStart))
     }
 }
