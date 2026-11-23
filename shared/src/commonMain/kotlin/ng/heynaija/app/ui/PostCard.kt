@@ -26,8 +26,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import coil3.compose.AsyncImage
 import kotlin.time.Instant
 import ng.heynaija.app.AppState
@@ -58,7 +61,9 @@ import ng.heynaija.app.api.QuotedPost
 import ng.heynaija.app.api.mediaFile
 import ng.heynaija.app.api.mediaUrl
 import ng.heynaija.app.launchCatching
+import ng.heynaija.app.media.VideoPlace
 import ng.heynaija.app.media.VideoPlayer
+import ng.heynaija.app.nav.Entry
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.platform.rememberShare
 import ng.heynaija.app.theme.HeyNaija
@@ -491,8 +496,29 @@ private fun VideoPoster(video: PostVideo, postId: String, modifier: Modifier) {
     val shown = ratio.coerceIn(VideoNarrowest, 16f / 9f)
     val playlist = video.playlists?.all?.let(::mediaFile)
     var started by remember(postId) { mutableStateOf(false) }
+    var startAt by remember(postId) { mutableLongStateOf(0L) }
+    var toFullScreen by remember(postId) { mutableStateOf(false) }
     val playing by app.playingVideo.collectAsState()
     val active = started && playing == postId
+    // The screen this post is on: a player that leaves while it is not the one showing
+    // went with its screen (a post opened on top, or this one closed), not out of the list.
+    val screen = LocalViewModelStoreOwner.current as? Entry
+    // The moment another screen takes over (a post opened on top, this one closed, another
+    // tab), the clip is handed on, not left playing behind it until the slide ends: the
+    // next screen picks it up as its own slide starts.
+    val onTop = screen == null || app.navigator.top.id == screen.id
+    LaunchedEffect(onTop) { if (!onTop) started = false }
+    // It was playing when the screen it was on was left (the feed for this post, the post
+    // for the feed, or full screen for the post): it plays on here from the same point.
+    val carry = playlist?.let { app.videoPlace(it) }?.carryOn == true
+    LaunchedEffect(carry) {
+        val place = if (carry) app.takeVideoToCarryOn(playlist) else null
+        if (place != null) {
+            startAt = place.positionMs
+            app.playVideo(postId)
+            started = true
+        }
+    }
     Box(
         modifier
             .mediaFrame(shown)
@@ -504,15 +530,26 @@ private fun VideoPoster(video: PostVideo, postId: String, modifier: Modifier) {
             VideoPlayer(
                 playlist,
                 Modifier.matchParentSize(),
+                startMs = startAt,
                 onEnded = { started = false },
                 onFullScreen = { at ->
+                    toFullScreen = true
                     started = false
                     app.navigator.push(Route.Video(playlist, at))
+                },
+                startMuted = app.videoPlace(playlist)?.muted == true,
+                onLeave = { left ->
+                    // Full screen carries on from here and keeps its own place when it closes.
+                    val screenLeft = !toFullScreen && screen != null && app.navigator.top.id != screen.id
+                    toFullScreen = false
+                    app.keepVideoPlace(playlist, if (left.ended) null else VideoPlace(left.positionMs, left.muted, carryOn = screenLeft && left.playing))
                 },
             )
         } else {
             Box(
                 Modifier.matchParentSize().clickable(enabled = playlist != null) {
+                    // From where it got to before, if it was stopped part of the way through.
+                    startAt = playlist?.let { app.videoPlace(it) }?.positionMs ?: 0L
                     app.playVideo(postId)
                     started = true
                 },
