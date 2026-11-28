@@ -53,6 +53,7 @@ import coil3.compose.AsyncImage
 import kotlin.time.Instant
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.LinkPreview
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.PostImage
@@ -912,6 +913,7 @@ private fun PostMenu(post: Post, gist: GistReplyContext?) {
 fun muteOrBlock(app: AppState, handle: String, block: Boolean) {
     app.scope.launchCatching(app, if (block) "@$handle could not be blocked." else "@$handle could not be muted.") {
         if (block) app.api.setBlock(handle, true) else app.api.setMute(handle, true)
+        app.emit(PostChange.Hidden(handle))
         app.say(if (block) "Blocked @$handle" else "Muted @$handle. Their posts are hidden from you.")
     }
 }

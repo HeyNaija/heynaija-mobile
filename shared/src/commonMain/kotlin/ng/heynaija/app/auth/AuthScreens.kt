@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -37,12 +39,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
@@ -157,6 +172,7 @@ fun SignInScreen() {
     // Which provider's button is waiting: its sheet can be up for a while.
     var providerBusy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var agreed by rememberSaveable { mutableStateOf(false) }
 
     fun run(block: suspend () -> Unit) {
         busy = true
@@ -248,11 +264,12 @@ fun SignInScreen() {
 
     if (!sent) {
         FormPage("Sign in", "We will email you a code. No password needed.", onClose = { app.navigator.pop() }) {
-            Field(email, { email = it }, "Email", placeholder = "you@example.com", keyboardType = KeyboardType.Email, onDone = { if (email.contains('@')) send() })
+            Field(email, { email = it }, "Email", placeholder = "you@example.com", keyboardType = KeyboardType.Email, onDone = { if (email.contains('@') && agreed) send() })
+            TermsAgreement(agreed) { agreed = it }
             FormError(error)
-            PrimaryButton("Email me a code", ::send, Modifier.fillMaxWidth(), enabled = email.contains('@') && !busy, busy = busy && providerBusy == null)
+            PrimaryButton("Email me a code", ::send, Modifier.fillMaxWidth(), enabled = email.contains('@') && agreed && !busy, busy = busy && providerBusy == null)
             if (providers.isNotEmpty()) Or()
-            for (provider in providers) provider.button({ withProvider(provider) }, false, !busy, providerBusy == provider.name)
+            for (provider in providers) provider.button({ withProvider(provider) }, false, agreed && !busy, providerBusy == provider.name)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("New here? ", style = MaterialTheme.typography.bodyMedium, color = HeyNaija.colors.muted)
                 Text(
@@ -315,6 +332,71 @@ private fun GoogleButton(onClick: () -> Unit, enabled: Boolean = true, busy: Boo
     }
 }
 
+/**
+ * The terms, agreed to before signing in or joining: every button that signs in
+ * or joins waits for the tick. App Store guideline 1.2 asks for an agreement (EULA)
+ * shown before registering or logging in. The terms are that agreement, and they and
+ * the rules say abuse is not tolerated.
+ *
+ * A tap on a page's name opens it, and a tap anywhere else ticks the box. The taps
+ * are found here, not with link annotations: Compose stretches a link's tap area to
+ * 48 dp, so "Privacy policy" on the second line took taps meant for the first.
+ */
+@Composable
+private fun TermsAgreement(agreed: Boolean, onChange: (Boolean) -> Unit) {
+    val app = LocalApp.current
+    val colors = HeyNaija.colors
+    val toggle by rememberUpdatedState { onChange(!agreed) }
+    val text = remember(colors) {
+        buildAnnotatedString {
+            fun page(name: String, path: String) {
+                pushStringAnnotation(PAGE, path)
+                withStyle(SpanStyle(color = colors.accentStrong, fontWeight = FontWeight.SemiBold)) { append(name) }
+                pop()
+            }
+            append("I agree to the ")
+            page("Terms of use", "/terms")
+            append(", the ")
+            page("Rules", "/rules")
+            append(" and the ")
+            page("Privacy policy", "/privacy")
+            append(".")
+        }
+    }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(agreed, role = Role.Checkbox, onValueChange = onChange)
+            .semantics {
+                customActions = listOf("Terms of use" to "/terms", "Rules" to "/rules", "Privacy policy" to "/privacy").map { (name, path) ->
+                    CustomAccessibilityAction("Open the ${name.lowercase()}") { app.openLink(path); true }
+                }
+            },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Checkbox(agreed, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = colors.accent, checkmarkColor = colors.accentInk))
+        Text(
+            text,
+            Modifier.padding(top = 2.dp).pointerInput(text) {
+                detectTapGestures { at -> layout?.let { pageAt(it, text, at) }?.let(app::openLink) ?: toggle() }
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.ink,
+            onTextLayout = { layout = it },
+        )
+    }
+}
+
+private const val PAGE = "page"
+
+/** The page whose name is under [at], if any: the character there has to be part of the name. */
+private fun pageAt(layout: TextLayoutResult, text: AnnotatedString, at: Offset): String? {
+    val near = layout.getOffsetForPosition(at)
+    val char = listOf(near, near - 1).firstOrNull { it in text.indices && layout.getBoundingBox(it).contains(at) } ?: return null
+    return text.getStringAnnotations(PAGE, char, char + 1).firstOrNull()?.item
+}
+
 /** Which server a debug build is pointed at, so a tester is never confused about where they are signing in. */
 @Composable
 private fun ServerNote() {
@@ -363,6 +445,7 @@ fun SignUpScreen(initialInvite: String = "") {
     var providerBusy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var fieldErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var agreed by rememberSaveable { mutableStateOf(false) }
     val extras = {
         if (asksBirthDate == true) SignupExtras(invite.trim(), birthDate = birth.iso()) else SignupExtras(invite.trim(), adultDeclared = true)
     }
@@ -497,21 +580,12 @@ fun SignUpScreen(initialInvite: String = "") {
             )
             Text("People find you by @${handle.ifEmpty { "handle" }}. You can change it later on the web.", style = MaterialTheme.typography.labelSmall, color = HeyNaija.colors.muted)
             Field(email, { email = it }, "Email", placeholder = "you@example.com", keyboardType = KeyboardType.Email, error = fieldErrors["traits.email"])
+            TermsAgreement(agreed) { agreed = it }
             FormError(error)
-            Text(
-                "By joining you agree to the terms, the rules and the privacy policy.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = HeyNaija.colors.muted,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Terms", Modifier.clickable { app.openLink("/terms") }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
-                Text("Rules", Modifier.clickable { app.openLink("/rules") }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
-                Text("Privacy policy", Modifier.clickable { app.openLink("/privacy") }, style = MaterialTheme.typography.labelLarge, color = HeyNaija.colors.accentStrong)
-            }
-            PrimaryButton("Email me a code", ::sendCode, Modifier.fillMaxWidth(), enabled = email.contains('@') && handle.length >= 3 && !busy, busy = busy && providerBusy == null)
+            PrimaryButton("Email me a code", ::sendCode, Modifier.fillMaxWidth(), enabled = email.contains('@') && handle.length >= 3 && agreed && !busy, busy = busy && providerBusy == null)
             if (providers.isNotEmpty()) Or()
             for (provider in providers) {
-                provider.button({ joinWith(provider) }, true, handle.length >= 3 && !busy, providerBusy == provider.name)
+                provider.button({ joinWith(provider) }, true, handle.length >= 3 && agreed && !busy, providerBusy == provider.name)
                 Text(provider.note, style = MaterialTheme.typography.labelSmall, color = HeyNaija.colors.muted)
             }
         }
@@ -560,8 +634,12 @@ fun SignUpScreen(initialInvite: String = "") {
 private fun AdultBox(adult: Boolean, onChange: (Boolean) -> Unit) {
     val colors = HeyNaija.colors
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.clickable { onChange(!adult) }, verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(adult, onChange, colors = CheckboxDefaults.colors(checkedColor = colors.accent, checkmarkColor = colors.accentInk))
+        Row(
+            Modifier.fillMaxWidth().toggleable(adult, role = Role.Checkbox, onValueChange = onChange),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(adult, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = colors.accent, checkmarkColor = colors.accentInk))
             Text("I am 18 or older", style = MaterialTheme.typography.bodyLarge, color = colors.ink)
         }
         Text(

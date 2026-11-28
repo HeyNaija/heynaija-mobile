@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import ng.heynaija.app.Account
 import ng.heynaija.app.AppState
 import ng.heynaija.app.LocalApp
+import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.ApiException
 import ng.heynaija.app.api.Profile
 import ng.heynaija.app.launchCatching
@@ -140,6 +141,8 @@ class ProfileViewModel(private val app: AppState, private val handle: String) : 
 
     fun setBlock(on: Boolean) = change({ it.copy(viewerBlocks = on, viewerFollows = false) }, "That did not go through.") {
         app.api.setBlock(handle, on)
+        // Their posts leave the feeds behind this screen too. Muting from here does not: the profile still shows them.
+        if (on) app.emit(PostChange.Hidden(handle))
         app.say(if (on) "Blocked @$handle" else "Unblocked @$handle")
     }
 }

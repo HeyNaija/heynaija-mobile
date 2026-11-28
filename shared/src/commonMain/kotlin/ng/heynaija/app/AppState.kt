@@ -62,7 +62,13 @@ sealed interface PostChange {
     data class Created(val id: String, val replyTo: String? = null) : PostChange
     /** A member changed their name or photo: their posts on every screen show the new ones. */
     data class Author(val id: String, val handle: String, val name: String?, val avatar: String?) : PostChange
+    /** The member blocked or muted [handle]: that member's posts leave every list now, as the server leaves them out from here on. */
+    data class Hidden(val handle: String) : PostChange
 }
+
+/** Whether this post is one [change] takes away: written or reposted by the member just blocked or muted. */
+fun Post.hiddenBy(change: PostChange.Hidden): Boolean =
+    authorHandle.equals(change.handle, ignoreCase = true) || repostedBy?.handle.equals(change.handle, ignoreCase = true)
 
 /** This post with [change]'s name and photo wherever its author appears on it. */
 fun Post.withAuthor(change: PostChange.Author): Post {

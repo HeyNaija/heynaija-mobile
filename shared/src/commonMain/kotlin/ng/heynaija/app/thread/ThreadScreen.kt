@@ -58,6 +58,7 @@ import ng.heynaija.app.api.PostStory
 import ng.heynaija.app.gists.GistSignIn
 import ng.heynaija.app.nav.Route
 import ng.heynaija.app.posts.ListGutter
+import ng.heynaija.app.hiddenBy
 import ng.heynaija.app.withAuthor
 import ng.heynaija.app.theme.HeyNaija
 import ng.heynaija.app.theme.Radii
@@ -161,6 +162,16 @@ class ThreadViewModel(
                     }
                     is PostChange.Created -> posted(change.id, change.replyTo)
                     is PostChange.Author -> _state.update { s -> s.mapPosts { it.withAuthor(change) } }
+                    // The post being read stays where it is; replies and updates by that member go.
+                    is PostChange.Hidden -> _state.update { s ->
+                        s.copy(
+                            replies = s.replies.filterNot { it.hiddenBy(change) },
+                            updates = s.updates.filterNot { it.hiddenBy(change) },
+                            branches = s.branches.mapValues { (_, branch) ->
+                                branch.copy(replies = branch.replies.filterNot { it.hiddenBy(change) }, recent = branch.recent.filterNot { it.hiddenBy(change) })
+                            },
+                        )
+                    }
                 }
             }
         }
