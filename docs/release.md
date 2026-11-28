@@ -46,8 +46,10 @@ Production has to be ready before a reviewer opens the app.
   post and talk to each other (user-generated content, messaging). Social media
   features: **Yes**. Social media turned off for users under 13: **No** (that
   answer is about checking everyone's age with Apple; the app asks only where a
-  law requires it). Age assurance: **Yes**, Apple's Declared Age Range, where a
-  law requires it (see "Age checks" below).
+  law requires it). Age assurance: **None**. The app does use Apple's Declared Age
+  Range, but only where a law requires it (see "Age checks" below), so App Review
+  cannot find it: version 1.0 (3) was refused for that on 27 November 2026
+  (Guideline 2.3.6). In-App Controls do not change the rating.
 - **App Privacy:** privacy policy `https://heynaija.ng/privacy`. Data collected,
   all *linked to the person*, *not used for tracking*, for *App Functionality*:
   Contact Info → Email Address and Name (the display name, if they add one);
@@ -71,6 +73,20 @@ For each version:
   `docs/deployment/store-review.md`. Add: "HeyNaija is invite-only during its
   beta. Members can report posts and accounts, block and mute, and the rules are
   at heynaija.ng/rules. Accounts are deleted from Settings → Delete your account."
+- **User-generated content (Guideline 1.2).** Apple asks for a screen recording
+  from a physical device in the App Review notes of every submission. It shows,
+  in this order:
+  1. The Sign in screen, signed out, with the box "I agree to the Terms of use,
+     the Rules and the Privacy policy". The buttons stay off until the box is
+     ticked. Tap **Terms of use**: the page says it is the EULA ("These terms")
+     and that there is no tolerance for objectionable content or abusive users
+     ("The rules and moderation").
+  2. Reporting: ⋯ on a post → **Report post** → a reason → **Send report**.
+  3. Blocking: ⋯ on a post → **Block @handle** → **Block**. The member's posts
+     leave the feed at once.
+
+  Report and block a post by an account you control. Afterwards, unblock it and
+  dismiss the report.
 - **Audio in the background.** The app declares the audio background mode
   (`UIBackgroundModes` in `iosApp/iosApp/Info.plist`), which App Review checks is
   really used (Guideline 2.5.4). Add to the review note: "HeyNaija plays audio in
