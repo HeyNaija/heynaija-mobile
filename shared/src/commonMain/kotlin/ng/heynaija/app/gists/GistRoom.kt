@@ -28,6 +28,7 @@ import ng.heynaija.app.platform.GistAudio
 import ng.heynaija.app.platform.GistAudioEvents
 import ng.heynaija.app.platform.GistAudioFactory
 import ng.heynaija.app.reasonOf
+import ng.heynaija.app.hiddenBy
 import ng.heynaija.app.withAuthor
 
 /**
@@ -162,6 +163,10 @@ class GistRoom internal constructor(
                     // A reply was posted, here or under one of these: show it.
                     is PostChange.Created -> loadReplies()
                     is PostChange.Author -> updateReplies { r -> r.copy(posts = r.posts.map { it.withAuthor(change) }) }
+                    is PostChange.Hidden -> updateReplies { r ->
+                        val left = r.posts.filterNot { it.hiddenBy(change) }
+                        if (left.size == r.posts.size) r else r.copy(posts = left, count = (r.count - (r.posts.size - left.size)).coerceAtLeast(0))
+                    }
                 }
             }
         }

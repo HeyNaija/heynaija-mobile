@@ -16,6 +16,7 @@ import ng.heynaija.app.PostChange
 import ng.heynaija.app.api.FeedPage
 import ng.heynaija.app.api.Post
 import ng.heynaija.app.api.QuotedPost
+import ng.heynaija.app.api.Reposter
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PostListViewModelTest {
@@ -63,6 +64,18 @@ class PostListViewModelTest {
 
         assertEquals(listOf("a"), vm.state.value.posts.map { it.id })
         assertTrue(vm.state.value.posts.single().viewerLiked)
+    }
+
+    @Test
+    fun blockingTakesTheMembersPostsAndRepostsAwayAtOnce() = runTest {
+        val changes = MutableSharedFlow<PostChange>(extraBufferCapacity = 4)
+        val theirs = Post(id = "t", authorHandle = "troll", createdAt = "2026-11-06T11:00:00Z")
+        val reposted = post("r").copy(repostedBy = Reposter(id = "u1", handle = "troll"))
+        val vm = PostListViewModel(load = { FeedPage(listOf(post("a"), theirs, reposted), null) }, changes = changes)
+
+        changes.emit(PostChange.Hidden("Troll"))
+
+        assertEquals(listOf("a"), vm.state.value.posts.map { it.id })
     }
 
     @Test
